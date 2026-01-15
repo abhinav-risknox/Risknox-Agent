@@ -1,0 +1,12 @@
+{
+  "name": "resolute-pulse",
+  "version": "1.0.0",
+  "description": "Windows Log Collection Agent",
+  "dependencies": [
+    "nlohmann-json",
+    "cpp-httplib",
+    "sqlite3",
+    "spdlog",
+    "openssl"
+  ]
+}

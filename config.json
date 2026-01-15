@@ -1,0 +1,215 @@
+{
+    "manager_http_url": "http://localhost:8443/events",
+    "agent_id": "windows-agent-001",
+    "auth_token": "change-me-in-production",
+    "tls": {
+        "verify_peer": false,
+        "ca_cert_path": "",
+        "client_cert_path": "",
+        "client_key_path": ""
+    },
+    "buffer": {
+        "max_events": 50000,
+        "flush_interval_sec": 10,
+        "db_path": "events_buffer.db"
+    },
+    "critical_channels": [
+        "Security",
+        "System"
+    ],
+    "event_channels": [
+        "Security",
+        "Microsoft-Windows-Sysmon/Operational",
+        "Microsoft-Windows-PowerShell/Operational",
+        "Windows PowerShell",
+        "Microsoft-Windows-WMI-Activity/Operational",
+        "Microsoft-Windows-Windows Defender/Operational",
+        "Microsoft-Windows-DNS-Client/Operational",
+        "Microsoft-Windows-TaskScheduler/Operational",
+        "Microsoft-Windows-TerminalServices-LocalSessionManager/Operational",
+        "Microsoft-Windows-TerminalServices-RemoteConnectionManager/Operational",
+        "Microsoft-Windows-CodeIntegrity/Operational",
+        "Microsoft-Windows-AppLocker/EXE and DLL",
+        "Microsoft-Windows-AppLocker/MSI and Script",
+        "Microsoft-Windows-NTLM/Operational",
+        "Microsoft-Windows-SMBServer/Security",
+        "Microsoft-Windows-Bits-Client/Operational",
+        "System",
+        "Application"
+    ],
+    "event_filters": {
+        "Security": [
+            4624,
+            4625,
+            4634,
+            4647,
+            4648,
+            4672,
+            4688,
+            4689,
+            4697,
+            4698,
+            4700,
+            4720,
+            4722,
+            4723,
+            4724,
+            4725,
+            4726,
+            4728,
+            4729,
+            4730,
+            4732,
+            4733,
+            4734,
+            4735,
+            4737,
+            4738,
+            4740,
+            4756,
+            4757,
+            4663,
+            4656,
+            4658,
+            4660,
+            4657,
+            5140,
+            5145,
+            5156,
+            5158,
+            5061
+        ],
+        "System": [
+            7045,
+            7030,
+            7036,
+            104,
+            7040
+        ],
+        "Microsoft-Windows-Sysmon/Operational": [
+            1,
+            2,
+            3,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26
+        ],
+        "Microsoft-Windows-PowerShell/Operational": [
+            4103,
+            4104,
+            4105,
+            4106
+        ],
+        "Windows PowerShell": [
+            400,
+            403,
+            500,
+            501,
+            600,
+            800
+        ],
+        "Microsoft-Windows-TaskScheduler/Operational": [
+            106,
+            140,
+            141,
+            200,
+            201,
+            4698,
+            4699,
+            4700,
+            4701,
+            4702
+        ],
+        "Microsoft-Windows-WMI-Activity/Operational": [
+            5857,
+            5858,
+            5859,
+            5860,
+            5861
+        ],
+        "Microsoft-Windows-Windows Defender/Operational": [
+            1006,
+            1007,
+            1116,
+            1117,
+            1118,
+            1119,
+            5001,
+            5004,
+            5007,
+            5010,
+            5012
+        ],
+        "Microsoft-Windows-TerminalServices-LocalSessionManager/Operational": [
+            21,
+            22,
+            23,
+            24,
+            25,
+            39,
+            40
+        ],
+        "Microsoft-Windows-TerminalServices-RemoteConnectionManager/Operational": [
+            1149
+        ],
+        "Microsoft-Windows-DNS-Client/Operational": [
+            3008
+        ],
+        "Microsoft-Windows-CodeIntegrity/Operational": [
+            3033,
+            3076,
+            3089
+        ],
+        "Microsoft-Windows-AppLocker/EXE and DLL": [
+            8003,
+            8004,
+            8005,
+            8006,
+            8007
+        ],
+        "Microsoft-Windows-AppLocker/MSI and Script": [
+            8005,
+            8006,
+            8007
+        ],
+        "Microsoft-Windows-NTLM/Operational": [
+            8001,
+            8002,
+            8003,
+            8004
+        ],
+        "Microsoft-Windows-SMBServer/Security": [
+            1009
+        ],
+        "Microsoft-Windows-Bits-Client/Operational": [
+            59,
+            60,
+            61
+        ]
+    },
+    "event_collection": {
+        "collect_historical_on_startup": false,
+        "historical_hours_back": 24,
+        "max_historical_events_per_channel": 10000
+    },
+    "log_level": "info"
+}
