@@ -38,6 +38,12 @@ set(SOURCES
     src/service/ServiceMain.cpp
     src/utils/Logger.cpp
     src/utils/Base64.cpp
+    # FIM module
+    src/fim/FimDatabase.cpp
+    src/fim/FileHasher.cpp
+    src/fim/BaselineScanner.cpp
+    src/fim/UsnJournalReader.cpp
+    src/fim/FimMonitor.cpp
 )
 
 # Header files
@@ -54,6 +60,13 @@ set(HEADERS
     src/service/ServiceMain.h
     src/utils/Logger.h
     src/utils/Base64.h
+    # FIM module
+    src/fim/FimDatabase.h
+    src/fim/FileHasher.h
+    src/fim/BaselineScanner.h
+    src/fim/UsnJournalReader.h
+    src/fim/FimMonitor.h
+    src/fim/FimEvent.h
 )
 
 # Main executable
@@ -80,6 +93,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     wevtapi
     advapi32
     ws2_32
+    bcrypt      # For SHA256 hashing in FIM
 )
 
 # Add OpenSSL if found (for HTTPS support)

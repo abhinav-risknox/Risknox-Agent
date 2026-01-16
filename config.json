@@ -2,6 +2,22 @@
     "manager_http_url": "http://localhost:8443/events",
     "agent_id": "windows-agent-001",
     "auth_token": "change-me-in-production",
+    "fim": {
+        "enabled": true,
+        "directories": [
+            "C:\\Windows\\System32\\drivers",
+            "C:\\Windows\\System32\\config"
+        ],
+        "exclude_patterns": [
+            "*.log",
+            "*.tmp",
+            "*.etl",
+            "*.evtx"
+        ],
+        "max_file_size_mb": 100,
+        "baseline_interval_hours": 24,
+        "db_path": "fim_baseline.db"
+    },
     "tls": {
         "verify_peer": false,
         "ca_cert_path": "",
@@ -19,8 +35,8 @@
     ],
     "event_channels": [
         "Security",
-        "Microsoft-Windows-Sysmon/Operational",
         "Microsoft-Windows-PowerShell/Operational",
+        "Microsoft-Windows-Sysmon/Operational",
         "Windows PowerShell",
         "Microsoft-Windows-WMI-Activity/Operational",
         "Microsoft-Windows-Windows Defender/Operational",
