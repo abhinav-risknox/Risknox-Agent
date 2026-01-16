@@ -27,6 +27,15 @@ struct EventCollectionConfig {
     size_t max_historical_events_per_channel = 10000;
 };
 
+struct FimConfigData {
+    bool enabled = false;
+    std::vector<std::string> directories;
+    std::vector<std::string> exclude_patterns;
+    uint64_t max_file_size_mb = 100;
+    int baseline_interval_hours = 24;
+    std::string db_path = "fim_baseline.db";
+};
+
 class ConfigManager {
 public:
     static ConfigManager& instance();
@@ -47,6 +56,7 @@ public:
     const std::map<std::string, std::set<int>>& getEventFilters() const { return eventFilters_; }
     
     const std::string& getLogLevel() const { return logLevel_; }
+    const FimConfigData& getFimConfig() const { return fimConfig_; }
     
     // Check if an event should be collected
     bool shouldCollectEvent(const std::string& channel, int eventId) const;
@@ -64,6 +74,7 @@ private:
     TlsConfig tlsConfig_;
     BufferConfig bufferConfig_;
     EventCollectionConfig eventCollectionConfig_;
+    FimConfigData fimConfig_;
     
     std::vector<std::string> criticalChannels_;
     std::vector<std::string> eventChannels_;

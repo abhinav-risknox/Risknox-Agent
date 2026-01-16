@@ -96,12 +96,30 @@ bool ConfigManager::load(const std::string& configPath) {
         // Log level (optional)
         logLevel_ = config.value("log_level", "info");
         
+        // FIM config (optional)
+        if (config.contains("fim")) {
+            auto& fim = config["fim"];
+            fimConfig_.enabled = fim.value("enabled", false);
+            if (fim.contains("directories")) {
+                fimConfig_.directories = fim["directories"].get<std::vector<std::string>>();
+            }
+            if (fim.contains("exclude_patterns")) {
+                fimConfig_.exclude_patterns = fim["exclude_patterns"].get<std::vector<std::string>>();
+            }
+            fimConfig_.max_file_size_mb = fim.value("max_file_size_mb", 100);
+            fimConfig_.baseline_interval_hours = fim.value("baseline_interval_hours", 24);
+            fimConfig_.db_path = fim.value("db_path", "fim_baseline.db");
+        }
+        
         loaded_ = true;
         LOG_INFO("Configuration loaded successfully from: {}", configPath);
         LOG_INFO("Agent ID: {}", agentId_);
         LOG_INFO("Manager URL: {}", managerHttpUrl_);
         LOG_INFO("Event channels configured: {}", eventChannels_.size());
         LOG_INFO("Critical channels: {}", criticalChannels_.size());
+        if (fimConfig_.enabled) {
+            LOG_INFO("FIM enabled: {} directories", fimConfig_.directories.size());
+        }
         
         return true;
         

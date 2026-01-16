@@ -7,6 +7,7 @@
 #include "buffer/EventBuffer.h"
 #include "network/HttpSender.h"
 #include "sender/BatchSender.h"
+#include "fim/FimMonitor.h"
 
 #include <memory>
 #include <atomic>
@@ -43,6 +44,7 @@ private:
     std::unique_ptr<HttpSender> sender_;
     std::unique_ptr<EventCollector> collector_;
     std::unique_ptr<BatchSender> batchSender_;
+    std::unique_ptr<FimMonitor> fimMonitor_;
     
     std::atomic<bool> running_{false};
     std::atomic<bool> stopRequested_{false};

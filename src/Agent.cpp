@@ -1,6 +1,7 @@
 #include "Agent.h"
 #include "utils/Logger.h"
 #include "service/ServiceMain.h"
+#include "fim/FimEvent.h"
 
 #include <thread>
 #include <chrono>
@@ -97,10 +98,45 @@ bool Agent::initialize(const std::string& configPath) {
         config.getBufferConfig().flush_interval_sec
     );
     
+    // Initialize FIM if enabled
+    const auto& fimCfg = config.getFimConfig();
+    if (fimCfg.enabled && !fimCfg.directories.empty()) {
+        LOG_INFO("Initializing File Integrity Monitoring...");
+        
+        FimConfig fimConfig;
+        fimConfig.directories = fimCfg.directories;
+        fimConfig.excludePatterns = fimCfg.exclude_patterns;
+        fimConfig.maxFileSizeMb = fimCfg.max_file_size_mb;
+        fimConfig.hashFiles = true;
+        
+        fimMonitor_ = std::make_unique<FimMonitor>();
+        if (!fimMonitor_->initialize(fimConfig, fimCfg.db_path)) {
+            LOG_WARN("Failed to initialize FIM - continuing without FIM");
+            fimMonitor_.reset();
+        } else {
+            // FIM events go to the same queue as event log events
+            fimMonitor_->setEventCallback([this, &config](const FimEvent& fimEvent) {
+                // Convert FimEvent to Event for the queue
+                Event event;
+                event.channel = "FIM";
+                event.eventId = 0;  // FIM events don't have Windows Event IDs
+                event.timestamp = fimEvent.timestamp;
+                event.xml = fimEvent.toJson().dump();  // Store FIM data as JSON in xml field
+                
+                queue_->push(std::move(event));
+                LOG_DEBUG("FIM event queued: {} {}", 
+                         changeTypeToString(fimEvent.changeType), fimEvent.path);
+            });
+        }
+    }
+    
     LOG_INFO("Agent initialized successfully");
     LOG_INFO("  Agent ID: {}", config.getAgentId());
     LOG_INFO("  Server: {}", config.getManagerHttpUrl());
     LOG_INFO("  Channels: {}", discovery.available.size());
+    if (fimMonitor_) {
+        LOG_INFO("  FIM: enabled ({} directories)", fimCfg.directories.size());
+    }
     
     return true;
 }
@@ -123,6 +159,12 @@ int Agent::run() {
     }
     
     batchSender_->start();
+    
+    // Start FIM if enabled
+    if (fimMonitor_) {
+        fimMonitor_->start();
+        LOG_INFO("FIM monitoring started");
+    }
     
     LOG_INFO("Agent running. Press Ctrl+C to stop (console mode).");
     
@@ -147,6 +189,9 @@ int Agent::run() {
     LOG_INFO("Stopping agent...");
     
     // Stop components in order
+    if (fimMonitor_) {
+        fimMonitor_->stop();
+    }
     collector_->stop();
     batchSender_->stop();
     
