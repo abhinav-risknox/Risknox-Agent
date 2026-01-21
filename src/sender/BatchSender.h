@@ -2,6 +2,7 @@
 
 #include "queue/EventQueue.h"
 #include "network/HttpSender.h"
+#include "network/OpenSearchSender.h"
 #include "buffer/EventBuffer.h"
 #include <thread>
 #include <atomic>
@@ -26,6 +27,9 @@ public:
     // Stop the sender thread
     void stop();
     
+    // Set optional OpenSearch sender (call before start)
+    void setOpenSearchSender(OpenSearchSender* ossSender);
+    
     // Check if running
     bool isRunning() const { return running_.load(); }
     
@@ -33,6 +37,7 @@ public:
     uint64_t getBatchesSent() const { return batchesSent_.load(); }
     uint64_t getEventsSent() const { return eventsSent_.load(); }
     uint64_t getEventsBuffered() const { return eventsBuffered_.load(); }
+    uint64_t getOpenSearchEventsSent() const { return openSearchEventsSent_.load(); }
     
 private:
     // Main sender loop
@@ -41,12 +46,17 @@ private:
     // Try to drain buffered events
     void drainBuffer();
     
+    // Send batch to OpenSearch if configured
+    void sendToOpenSearch(const std::vector<Event>& events);
+    
     EventQueue& queue_;
     HttpSender& sender_;
     EventBuffer& buffer_;
     std::string agentId_;
     size_t batchSize_;
     std::chrono::seconds flushInterval_;
+    
+    OpenSearchSender* openSearchSender_ = nullptr;
     
     std::thread senderThread_;
     std::atomic<bool> running_{false};
@@ -55,6 +65,7 @@ private:
     std::atomic<uint64_t> batchesSent_{0};
     std::atomic<uint64_t> eventsSent_{0};
     std::atomic<uint64_t> eventsBuffered_{0};
+    std::atomic<uint64_t> openSearchEventsSent_{0};
     
     // Retry configuration
     static constexpr int MAX_RETRIES = 3;

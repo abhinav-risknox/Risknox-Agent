@@ -18,6 +18,10 @@ BatchSender::BatchSender(EventQueue& queue,
 {
 }
 
+void BatchSender::setOpenSearchSender(OpenSearchSender* ossSender) {
+    openSearchSender_ = ossSender;
+}
+
 BatchSender::~BatchSender() {
     stop();
 }
@@ -96,6 +100,8 @@ void BatchSender::senderLoop() {
                     batchesSent_++;
                     eventsSent_ += events.size();
                     sent = true;
+                    // Also send to OpenSearch if configured
+                    sendToOpenSearch(events);
                     break;
                     
                 case SendResult::AuthError:
@@ -188,6 +194,19 @@ void BatchSender::drainBuffer() {
             LOG_DEBUG("Buffer drain failed, will retry later");
             break;
         }
+    }
+}
+
+void BatchSender::sendToOpenSearch(const std::vector<Event>& events) {
+    if (!openSearchSender_ || events.empty()) {
+        return;
+    }
+    
+    if (openSearchSender_->sendBulk(events)) {
+        openSearchEventsSent_ += events.size();
+        LOG_DEBUG("Sent {} events to OpenSearch", events.size());
+    } else {
+        LOG_WARN("Failed to send {} events to OpenSearch", events.size());
     }
 }
 

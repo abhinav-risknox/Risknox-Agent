@@ -111,6 +111,17 @@ bool ConfigManager::load(const std::string& configPath) {
             fimConfig_.db_path = fim.value("db_path", "fim_baseline.db");
         }
         
+        // OpenSearch config (optional)
+        if (config.contains("opensearch")) {
+            auto& os = config["opensearch"];
+            openSearchConfig_.enabled = os.value("enabled", false);
+            openSearchConfig_.url = os.value("url", "");
+            openSearchConfig_.indexPrefix = os.value("index_prefix", "windows-logs");
+            openSearchConfig_.username = os.value("username", "");
+            openSearchConfig_.password = os.value("password", "");
+            openSearchConfig_.tlsVerify = os.value("tls_verify", false);
+        }
+        
         loaded_ = true;
         LOG_INFO("Configuration loaded successfully from: {}", configPath);
         LOG_INFO("Agent ID: {}", agentId_);
@@ -119,6 +130,9 @@ bool ConfigManager::load(const std::string& configPath) {
         LOG_INFO("Critical channels: {}", criticalChannels_.size());
         if (fimConfig_.enabled) {
             LOG_INFO("FIM enabled: {} directories", fimConfig_.directories.size());
+        }
+        if (openSearchConfig_.enabled) {
+            LOG_INFO("OpenSearch enabled: {}", openSearchConfig_.url);
         }
         
         return true;

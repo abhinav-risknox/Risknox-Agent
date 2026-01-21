@@ -36,6 +36,15 @@ struct FimConfigData {
     std::string db_path = "fim_baseline.db";
 };
 
+struct OpenSearchConfigData {
+    bool enabled = false;
+    std::string url;
+    std::string indexPrefix = "windows-logs";
+    std::string username;
+    std::string password;
+    bool tlsVerify = false;
+};
+
 class ConfigManager {
 public:
     static ConfigManager& instance();
@@ -57,6 +66,7 @@ public:
     
     const std::string& getLogLevel() const { return logLevel_; }
     const FimConfigData& getFimConfig() const { return fimConfig_; }
+    const OpenSearchConfigData& getOpenSearchConfig() const { return openSearchConfig_; }
     
     // Check if an event should be collected
     bool shouldCollectEvent(const std::string& channel, int eventId) const;
@@ -75,6 +85,7 @@ private:
     BufferConfig bufferConfig_;
     EventCollectionConfig eventCollectionConfig_;
     FimConfigData fimConfig_;
+    OpenSearchConfigData openSearchConfig_;
     
     std::vector<std::string> criticalChannels_;
     std::vector<std::string> eventChannels_;

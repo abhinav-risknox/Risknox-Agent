@@ -98,6 +98,29 @@ bool Agent::initialize(const std::string& configPath) {
         config.getBufferConfig().flush_interval_sec
     );
     
+    // Initialize OpenSearch if enabled
+    const auto& osCfg = config.getOpenSearchConfig();
+    if (osCfg.enabled && !osCfg.url.empty()) {
+        LOG_INFO("Initializing OpenSearch sender...");
+        
+        OpenSearchConfig osConfig;
+        osConfig.enabled = osCfg.enabled;
+        osConfig.url = osCfg.url;
+        osConfig.indexPrefix = osCfg.indexPrefix;
+        osConfig.username = osCfg.username;
+        osConfig.password = osCfg.password;
+        osConfig.tlsVerify = osCfg.tlsVerify;
+        
+        openSearchSender_ = std::make_unique<OpenSearchSender>();
+        if (openSearchSender_->initialize(osConfig)) {
+            batchSender_->setOpenSearchSender(openSearchSender_.get());
+            LOG_INFO("OpenSearch enabled: {}", osCfg.url);
+        } else {
+            LOG_WARN("Failed to initialize OpenSearch sender");
+            openSearchSender_.reset();
+        }
+    }
+    
     // Initialize FIM if enabled
     const auto& fimCfg = config.getFimConfig();
     if (fimCfg.enabled && !fimCfg.directories.empty()) {

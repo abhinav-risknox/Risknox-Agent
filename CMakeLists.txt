@@ -34,6 +34,7 @@ set(SOURCES
     src/buffer/EventBuffer.cpp
     src/queue/EventQueue.cpp
     src/network/HttpSender.cpp
+    src/network/OpenSearchSender.cpp
     src/sender/BatchSender.cpp
     src/service/ServiceMain.cpp
     src/utils/Logger.cpp
@@ -56,6 +57,7 @@ set(HEADERS
     src/buffer/EventBuffer.h
     src/queue/EventQueue.h
     src/network/HttpSender.h
+    src/network/OpenSearchSender.h
     src/sender/BatchSender.h
     src/service/ServiceMain.h
     src/utils/Logger.h

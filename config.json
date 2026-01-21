@@ -18,6 +18,14 @@
         "baseline_interval_hours": 24,
         "db_path": "fim_baseline.db"
     },
+    "opensearch": {
+        "enabled": true,
+        "url": "http://localhost:9200",
+        "index_prefix": "windows-logs",
+        "username": "",
+        "password": "",
+        "tls_verify": false
+    },
     "tls": {
         "verify_peer": false,
         "ca_cert_path": "",
