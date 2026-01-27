@@ -44,7 +44,6 @@
     "event_channels": [
         "Security",
         "Microsoft-Windows-PowerShell/Operational",
-        "Microsoft-Windows-Sysmon/Operational",
         "Windows PowerShell",
         "Microsoft-Windows-WMI-Activity/Operational",
         "Microsoft-Windows-Windows Defender/Operational",
