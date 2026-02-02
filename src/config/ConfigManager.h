@@ -8,12 +8,7 @@
 
 namespace ResolutePulse {
 
-struct TlsConfig {
-    bool verify_peer = false;
-    std::string ca_cert_path;
-    std::string client_cert_path;
-    std::string client_key_path;
-};
+// TlsConfig removed - TCP does not use TLS
 
 struct BufferConfig {
     size_t max_events = 50000;
@@ -44,10 +39,9 @@ public:
     bool isLoaded() const { return loaded_; }
     
     // Getters
-    const std::string& getManagerHttpUrl() const { return managerHttpUrl_; }
+    const std::string& getFluentBitHost() const { return fluentBitHost_; }
+    int getFluentBitPort() const { return fluentBitPort_; }
     const std::string& getAgentId() const { return agentId_; }
-    const std::string& getAuthToken() const { return authToken_; }
-    const TlsConfig& getTlsConfig() const { return tlsConfig_; }
     const BufferConfig& getBufferConfig() const { return bufferConfig_; }
     const EventCollectionConfig& getEventCollectionConfig() const { return eventCollectionConfig_; }
     
@@ -68,10 +62,9 @@ private:
     
     bool loaded_ = false;
     
-    std::string managerHttpUrl_;
+    std::string fluentBitHost_ = "localhost";
+    int fluentBitPort_ = 5170;
     std::string agentId_;
-    std::string authToken_;
-    TlsConfig tlsConfig_;
     BufferConfig bufferConfig_;
     EventCollectionConfig eventCollectionConfig_;
     FimConfigData fimConfig_;

@@ -1,7 +1,7 @@
 {
-    "manager_http_url": "http://localhost:8443/events",
+    "fluent_bit_host": "localhost",
+    "fluent_bit_port": 5170,
     "agent_id": "windows-agent-001",
-    "auth_token": "change-me-in-production",
     "fim": {
         "enabled": true,
         "directories": [

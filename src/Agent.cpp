@@ -61,12 +61,11 @@ bool Agent::initialize(const std::string& configPath) {
         return false;
     }
     
-    sender_ = std::make_unique<HttpSender>();
+    sender_ = std::make_unique<TcpSender>();
     if (!sender_->initialize(
-            config.getManagerHttpUrl(),
-            config.getAuthToken(),
-            config.getTlsConfig())) {
-        LOG_ERROR("Failed to initialize HTTP sender");
+            config.getFluentBitHost(),
+            config.getFluentBitPort())) {
+        LOG_ERROR("Failed to initialize TCP sender");
         return false;
     }
     
@@ -132,7 +131,7 @@ bool Agent::initialize(const std::string& configPath) {
     
     LOG_INFO("Agent initialized successfully");
     LOG_INFO("  Agent ID: {}", config.getAgentId());
-    LOG_INFO("  Server: {}", config.getManagerHttpUrl());
+    LOG_INFO("  Fluent Bit: {}:{}", config.getFluentBitHost(), config.getFluentBitPort());
     LOG_INFO("  Channels: {}", discovery.available.size());
     if (fimMonitor_) {
         LOG_INFO("  FIM: enabled ({} directories)", fimCfg.directories.size());

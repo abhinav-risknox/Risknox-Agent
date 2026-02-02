@@ -4,7 +4,7 @@
 namespace ResolutePulse {
 
 BatchSender::BatchSender(EventQueue& queue,
-                        HttpSender& sender,
+                        TcpSender& sender,
                         EventBuffer& buffer,
                         const std::string& agentId,
                         size_t batchSize,
@@ -89,7 +89,7 @@ void BatchSender::senderLoop() {
                 std::this_thread::sleep_for(std::chrono::milliseconds(RETRY_DELAY_MS * retry));
             }
             
-            SendResult result = sender_.sendBatch(events, agentId_);
+            SendResult result = sender_.sendBatch(events);
             
             switch (result) {
                 case SendResult::Success:
@@ -139,7 +139,7 @@ void BatchSender::senderLoop() {
         auto events = queue_.popBatch(batchSize_, std::chrono::milliseconds(100));
         if (events.empty()) break;
         
-        SendResult result = sender_.sendBatch(events, agentId_);
+        SendResult result = sender_.sendBatch(events);
         if (result != SendResult::Success) {
             LOG_WARN("Final flush failed, buffering {} events", events.size());
             buffer_.addEvents(events);
@@ -167,7 +167,7 @@ void BatchSender::drainBuffer() {
             break;
         }
         
-        SendResult result = sender_.sendBatch(events, agentId_);
+        SendResult result = sender_.sendBatch(events);
         
         if (result == SendResult::Success) {
             // Remove sent events from buffer

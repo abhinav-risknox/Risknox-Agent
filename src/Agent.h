@@ -5,7 +5,7 @@
 #include "collector/EventCollector.h"
 #include "queue/EventQueue.h"
 #include "buffer/EventBuffer.h"
-#include "network/HttpSender.h"
+#include "network/TcpSender.h"
 #include "sender/BatchSender.h"
 #include "fim/FimMonitor.h"
 
@@ -41,7 +41,7 @@ private:
     
     std::unique_ptr<EventQueue> queue_;
     std::unique_ptr<EventBuffer> buffer_;
-    std::unique_ptr<HttpSender> sender_;
+    std::unique_ptr<TcpSender> sender_;
     std::unique_ptr<EventCollector> collector_;
     std::unique_ptr<BatchSender> batchSender_;
     std::unique_ptr<FimMonitor> fimMonitor_;

@@ -18,6 +18,19 @@ services:
     networks:
       - opensearch-net
 
+  fluent-bit:
+    image: fluent/fluent-bit:3.2
+    container_name: fluent-bit
+    ports:
+      - "5170:5170"
+    volumes:
+      - ./fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+      - ./fluent-bit-scripts:/fluent-bit/scripts:ro
+    networks:
+      - opensearch-net
+    depends_on:
+      - opensearch
+
   opensearch-dashboards:
     image: opensearchproject/opensearch-dashboards:latest
     container_name: opensearch-dashboards

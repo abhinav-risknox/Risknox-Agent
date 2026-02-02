@@ -1,7 +1,7 @@
 #pragma once
 
 #include "queue/EventQueue.h"
-#include "network/HttpSender.h"
+#include "network/TcpSender.h"
 #include "buffer/EventBuffer.h"
 #include <thread>
 #include <atomic>
@@ -12,7 +12,7 @@ namespace ResolutePulse {
 class BatchSender {
 public:
     BatchSender(EventQueue& queue,
-               HttpSender& sender,
+               TcpSender& sender,
                EventBuffer& buffer,
                const std::string& agentId,
                size_t batchSize,
@@ -42,7 +42,7 @@ private:
     void drainBuffer();
     
     EventQueue& queue_;
-    HttpSender& sender_;
+    TcpSender& sender_;
     EventBuffer& buffer_;
     std::string agentId_;
     size_t batchSize_;

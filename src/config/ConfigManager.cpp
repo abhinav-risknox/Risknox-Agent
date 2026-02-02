@@ -19,34 +19,22 @@ bool ConfigManager::load(const std::string& configPath) {
         
         nlohmann::json config = nlohmann::json::parse(file);
         
-        // Required fields
-        if (!config.contains("manager_http_url")) {
-            LOG_ERROR("Config missing required field: manager_http_url");
+        // TCP configuration (optional - has defaults)
+        fluentBitHost_ = config.value("fluent_bit_host", "localhost");
+        fluentBitPort_ = config.value("fluent_bit_port", 5170);
+        
+        // Validate port
+        if (fluentBitPort_ < 1 || fluentBitPort_ > 65535) {
+            LOG_ERROR("Invalid fluent_bit_port: {}", fluentBitPort_);
             return false;
         }
-        managerHttpUrl_ = config["manager_http_url"].get<std::string>();
         
+        // Agent ID (required)
         if (!config.contains("agent_id")) {
             LOG_ERROR("Config missing required field: agent_id");
             return false;
         }
         agentId_ = config["agent_id"].get<std::string>();
-        
-        // Auth token (required)
-        if (!config.contains("auth_token")) {
-            LOG_ERROR("Config missing required field: auth_token");
-            return false;
-        }
-        authToken_ = config["auth_token"].get<std::string>();
-        
-        // TLS config (optional)
-        if (config.contains("tls")) {
-            auto& tls = config["tls"];
-            tlsConfig_.verify_peer = tls.value("verify_peer", false);
-            tlsConfig_.ca_cert_path = tls.value("ca_cert_path", "");
-            tlsConfig_.client_cert_path = tls.value("client_cert_path", "");
-            tlsConfig_.client_key_path = tls.value("client_key_path", "");
-        }
         
         // Buffer config (optional)
         if (config.contains("buffer")) {
@@ -114,7 +102,7 @@ bool ConfigManager::load(const std::string& configPath) {
         loaded_ = true;
         LOG_INFO("Configuration loaded successfully from: {}", configPath);
         LOG_INFO("Agent ID: {}", agentId_);
-        LOG_INFO("Manager URL: {}", managerHttpUrl_);
+        LOG_INFO("Fluent Bit: {}:{}", fluentBitHost_, fluentBitPort_);
         LOG_INFO("Event channels configured: {}", eventChannels_.size());
         LOG_INFO("Critical channels: {}", criticalChannels_.size());
         if (fimConfig_.enabled) {
