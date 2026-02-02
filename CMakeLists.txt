@@ -16,7 +16,7 @@ endif()
 # Include directories for header-only libraries
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty)
 
-# Find OpenSSL
+# Find OpenSSL (needed for TLS support)
 find_package(OpenSSL QUIET)
 
 # Build SQLite3 as a static library first
@@ -96,13 +96,18 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     bcrypt      # For SHA256 hashing in FIM
 )
 
-# Add OpenSSL if found (for HTTPS support)
+# Add OpenSSL if found (for TLS support)
 if(OpenSSL_FOUND)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE 
+        CPPHTTPLIB_OPENSSL_SUPPORT 
+        TLS_SUPPORT_ENABLED)
     target_link_libraries(${PROJECT_NAME} PRIVATE OpenSSL::SSL OpenSSL::Crypto)
-    message(STATUS "OpenSSL found - HTTPS enabled")
+    message(STATUS "OpenSSL found - TLS 1.2/1.3 encryption ENABLED")
 else()
-    message(STATUS "OpenSSL not found - HTTP only mode")
+    message(WARNING "OpenSSL not found - TLS encryption DISABLED!")
+    message(WARNING "  Install OpenSSL for production use:")
+    message(WARNING "  - Windows: choco install openssl OR download from https://slproweb.com/products/Win32OpenSSL.html")
+    message(WARNING "  - Set OPENSSL_ROOT_DIR environment variable to installation path")
 endif()
 
 # Install target

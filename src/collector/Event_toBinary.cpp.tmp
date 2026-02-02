@@ -1,0 +1,7 @@
+
+BinaryMessage Event::toBinary(const std::string& agentId) const {
+    BinaryMessage msg;
+    msg.agentId = agentId;
+    msg.xmlData = xml;  // Direct XML, no JSON conversion needed
+    return msg;
+}
