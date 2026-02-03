@@ -7,6 +7,9 @@
 
 namespace ResolutePulse {
 
+// Forward declaration for binary protocol
+struct BinaryMessage;
+
 struct Event {
     int64_t id = 0;             // Database ID (for buffer operations)
     std::string channel;        // Event log channel name
@@ -23,6 +26,9 @@ struct Event {
             {"xml", xml}
         };
     }
+    
+    // Convert to binary message (efficient transmission)
+    BinaryMessage toBinary(const std::string& agentId) const;
     
     // Create from JSON (for deserialization)
     static Event fromJson(const nlohmann::json& j) {

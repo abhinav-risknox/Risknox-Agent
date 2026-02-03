@@ -1,8 +1,9 @@
 -- Lua script to parse Windows Event Log XML to ECS (Elastic Common Schema) format
 -- This creates winlog.* fields compatible with Sigma rules and Elastic/OpenSearch Security
 
-function parse_event_xml(tag, timestamp, record)
-    local xml = record["raw_xml"]
+function parse_windows_event_xml(tag, timestamp, record)
+    -- Read from compact JSON field 'x' (xml)
+    local xml = record["x"]
     
     if not xml then
         return 0, 0, 0

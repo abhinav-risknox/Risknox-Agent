@@ -1,6 +1,7 @@
 #pragma once
 
 #include "collector/Event.h"
+#include "network/BinaryProtocol.h"
 #include <string>
 #include <vector>
 #include <atomic>
@@ -35,6 +36,11 @@ public:
     // @param events - Events to send
     // @return SendResult indicating success or type of failure
     SendResult sendBatch(const std::vector<Event>& events);
+    
+    // Send a binary message (length-prefixed protocol)
+    // @param msg - Binary message to send
+    // @return SendResult indicating success or type of failure
+    SendResult sendBinary(const BinaryMessage& msg);
     
     // Check if connected to Fluent Bit
     bool isConnected() const { return connected_.load(); }

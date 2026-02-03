@@ -34,6 +34,7 @@ set(SOURCES
     src/buffer/EventBuffer.cpp
     src/queue/EventQueue.cpp
     src/network/TcpSender.cpp
+    src/network/BinaryProtocol.cpp
     src/sender/BatchSender.cpp
     src/service/ServiceMain.cpp
     src/utils/Logger.cpp

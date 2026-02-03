@@ -3,6 +3,7 @@
 
 #include <nlohmann/json.hpp>
 #include <sstream>
+#include <thread>
 
 #ifdef _WIN32
 #include <ws2tcpip.h>

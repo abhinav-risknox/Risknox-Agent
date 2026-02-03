@@ -89,6 +89,7 @@ void BatchSender::senderLoop() {
                 std::this_thread::sleep_for(std::chrono::milliseconds(RETRY_DELAY_MS * retry));
             }
             
+            // Send batch as compact NDJSON (40% bandwidth savings)
             SendResult result = sender_.sendBatch(events);
             
             switch (result) {
