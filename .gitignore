@@ -1,28 +1,76 @@
-# Dependencies
-node_modules/
-
-# Environment variables
-.env
-.env.*
-
-# Build output
-dist/
+# Build output (CMake)
 build/
+dist/
+out/
 
-# Logs
+# C++ compiled files
+*.exe
+*.obj
+*.o
+*.a
+*.lib
+*.dll
+*.so
+*.dylib
+
+# CMake cache and generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake.in
+
+# Test executables and binaries
+test_*.exe
+test_*.cpp
+*.out
+
+# SQLite databases (runtime state)
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+events_buffer.*
+fim_baseline.*
+
+# Logs and debug files
 logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+build_log*.txt
 events.json
-event_buffer.db
-fim_baseline.db
+
+# CSV data files
+*.csv
+FIM_Data_Collected.csv
+
+# Dependencies
+node_modules/
+vcpkg_installed/
+
+# Environment variables
+.env
+.env.*
+
+# Certificates (if auto-generated)
+certs/*.pem
+certs/*.key
+certs/*.crt
 
 # OS files
 .DS_Store
 Thumbs.db
+Desktop.ini
 
 # Editor configs
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+.vs/
+
+# Docker volumes
+filebeat-logs/
