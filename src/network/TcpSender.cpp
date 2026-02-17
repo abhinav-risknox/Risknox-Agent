@@ -146,7 +146,7 @@ SendResult TcpSender::sendBatch(const std::vector<Event>& events) {
         j["c"] = event.channel;      // c = channel
         j["e"] = event.eventId;       // e = event_id
         j["t"] = event.timestamp;     // t = timestamp
-        j["x"] = event.xml;           // x = xml (raw, no parsing)
+        j["x"] = event.data;          // x = data (generic payload)
         
         batch << j.dump() << "\n";
     }

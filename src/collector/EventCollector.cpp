@@ -204,7 +204,7 @@ void EventCollector::processEvent(EVT_HANDLE hEvent) {
     event.channel = channelName;
     event.eventId = eventId;
     event.timestamp = getCurrentTimestamp();
-    event.xml = std::move(xmlUtf8);
+    event.data = std::move(xmlUtf8);
     
     eventsCollected_++;
     

@@ -12,7 +12,7 @@ struct Event {
     std::string channel;        // Event log channel name
     uint32_t eventId = 0;       // Windows Event ID
     std::string timestamp;      // ISO 8601 timestamp
-    std::string xml;            // Decoded XML content (UTF-8)
+    std::string data;           // Event data (XML for Windows events, JSON for FIM/SysInfo)
     
     // Convert to JSON for HTTP transmission
     nlohmann::json toJson() const {
@@ -20,7 +20,7 @@ struct Event {
             {"channel", channel},
             {"event_id", eventId},
             {"timestamp", timestamp},
-            {"xml", xml}
+            {"data", data}
         };
     }
     
@@ -30,7 +30,7 @@ struct Event {
         e.channel = j.value("channel", "");
         e.eventId = j.value("event_id", 0);
         e.timestamp = j.value("timestamp", "");
-        e.xml = j.value("xml", "");
+        e.data = j.value("data", "");
         return e;
     }
     

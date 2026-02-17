@@ -99,6 +99,28 @@ bool ConfigManager::load(const std::string& configPath) {
             fimConfig_.db_path = fim.value("db_path", "fim_baseline.db");
         }
         
+        // System info config (optional)
+        if (config.contains("system_info")) {
+            auto& sysInfo = config["system_info"];
+            sysInfoConfig_.enabled = sysInfo.value("enabled", true);
+            sysInfoConfig_.collect_on_startup = sysInfo.value("collect_on_startup", true);
+            sysInfoConfig_.collection_interval_hours = sysInfo.value("collection_interval_hours", 24);
+            
+            if (sysInfo.contains("installed_apps")) {
+                auto& apps = sysInfo["installed_apps"];
+                sysInfoConfig_.apps.include_install_date = apps.value("include_install_date", true);
+                sysInfoConfig_.apps.include_install_location = apps.value("include_install_location", true);
+                sysInfoConfig_.apps.include_size = apps.value("include_size", true);
+            }
+            
+            if (sysInfo.contains("open_ports")) {
+                auto& ports = sysInfo["open_ports"];
+                sysInfoConfig_.ports.include_listening = ports.value("include_listening", true);
+                sysInfoConfig_.ports.include_established = ports.value("include_established", true);
+                sysInfoConfig_.ports.include_process_info = ports.value("include_process_info", true);
+            }
+        }
+        
         loaded_ = true;
         LOG_INFO("Configuration loaded successfully from: {}", configPath);
         LOG_INFO("Agent ID: {}", agentId_);
@@ -107,6 +129,11 @@ bool ConfigManager::load(const std::string& configPath) {
         LOG_INFO("Critical channels: {}", criticalChannels_.size());
         if (fimConfig_.enabled) {
             LOG_INFO("FIM enabled: {} directories", fimConfig_.directories.size());
+        }
+        if (sysInfoConfig_.enabled) {
+            LOG_INFO("System Info enabled: collect on startup={}, interval={}h", 
+                     sysInfoConfig_.collect_on_startup, 
+                     sysInfoConfig_.collection_interval_hours);
         }
         
         return true;

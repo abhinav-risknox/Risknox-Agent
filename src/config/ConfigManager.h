@@ -31,6 +31,24 @@ struct FimConfigData {
     std::string db_path = "fim_baseline.db";
 };
 
+struct SystemInfoConfig {
+    bool enabled = true;
+    bool collect_on_startup = true;
+    int collection_interval_hours = 24;
+    
+    struct AppsConfig {
+        bool include_install_date = true;
+        bool include_install_location = true;
+        bool include_size = true;
+    } apps;
+    
+    struct PortsConfig {
+        bool include_listening = true;
+        bool include_established = true;
+        bool include_process_info = true;
+    } ports;
+};
+
 class ConfigManager {
 public:
     static ConfigManager& instance();
@@ -51,6 +69,7 @@ public:
     
     const std::string& getLogLevel() const { return logLevel_; }
     const FimConfigData& getFimConfig() const { return fimConfig_; }
+    const SystemInfoConfig& getSysInfoConfig() const { return sysInfoConfig_; }
     
     // Check if an event should be collected
     bool shouldCollectEvent(const std::string& channel, int eventId) const;
@@ -68,6 +87,7 @@ private:
     BufferConfig bufferConfig_;
     EventCollectionConfig eventCollectionConfig_;
     FimConfigData fimConfig_;
+    SystemInfoConfig sysInfoConfig_;
     
     std::vector<std::string> criticalChannels_;
     std::vector<std::string> eventChannels_;

@@ -8,6 +8,7 @@
 #include "network/TcpSender.h"
 #include "sender/BatchSender.h"
 #include "fim/FimMonitor.h"
+#include "sysinfo/SystemInfoCollector.h"
 
 #include <memory>
 #include <atomic>
@@ -45,9 +46,18 @@ private:
     std::unique_ptr<EventCollector> collector_;
     std::unique_ptr<BatchSender> batchSender_;
     std::unique_ptr<FimMonitor> fimMonitor_;
+    std::unique_ptr<SystemInfoCollector> sysInfoCollector_;
     
     std::atomic<bool> running_{false};
     std::atomic<bool> stopRequested_{false};
+    
+    // System info thread and configuration
+    std::thread sysInfoThread_;
+    std::chrono::hours sysInfoInterval_{24};
+    bool collectSysInfoOnStartup_{true};
+    
+    // System info collection loop
+    void sysInfoLoop();
 };
 
 } // namespace ResolutePulse

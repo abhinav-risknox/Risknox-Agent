@@ -66,7 +66,7 @@ bool EventBuffer::createSchema() {
             channel TEXT NOT NULL,
             event_id INTEGER NOT NULL,
             timestamp TEXT NOT NULL,
-            xml TEXT NOT NULL,
+            data TEXT NOT NULL,
             created_at INTEGER DEFAULT (strftime('%s', 'now'))
         );
         CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at);
@@ -85,10 +85,10 @@ bool EventBuffer::createSchema() {
 
 bool EventBuffer::prepareStatements() {
     const char* insertSql = 
-        "INSERT INTO events (channel, event_id, timestamp, xml) VALUES (?, ?, ?, ?);";
+        "INSERT INTO events (channel, event_id, timestamp, data) VALUES (?, ?, ?, ?);";
     
     const char* selectSql = 
-        "SELECT id, channel, event_id, timestamp, xml FROM events "
+        "SELECT id, channel, event_id, timestamp, data FROM events "
         "ORDER BY created_at ASC LIMIT ?";
     
     const char* deleteSql = 
@@ -140,7 +140,7 @@ bool EventBuffer::addEvent(const Event& event) {
     sqlite3_bind_text(stmtInsert_, 1, event.channel.c_str(), -1, SQLITE_TRANSIENT);
     sqlite3_bind_int(stmtInsert_, 2, static_cast<int>(event.eventId));
     sqlite3_bind_text(stmtInsert_, 3, event.timestamp.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmtInsert_, 4, event.xml.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmtInsert_, 4, event.data.c_str(), -1, SQLITE_TRANSIENT);
     
     int rc = sqlite3_step(stmtInsert_);
     if (rc != SQLITE_DONE) {
@@ -165,7 +165,7 @@ bool EventBuffer::addEvents(const std::vector<Event>& events) {
         sqlite3_bind_text(stmtInsert_, 1, event.channel.c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_int(stmtInsert_, 2, static_cast<int>(event.eventId));
         sqlite3_bind_text(stmtInsert_, 3, event.timestamp.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmtInsert_, 4, event.xml.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmtInsert_, 4, event.data.c_str(), -1, SQLITE_TRANSIENT);
         
         int rc = sqlite3_step(stmtInsert_);
         if (rc != SQLITE_DONE) {
@@ -202,9 +202,9 @@ std::vector<Event> EventBuffer::getEvents(size_t count) {
         event.eventId = static_cast<uint32_t>(sqlite3_column_int(stmtSelect_, 2));
         event.timestamp = reinterpret_cast<const char*>(sqlite3_column_text(stmtSelect_, 3));
         
-        const char* xmlText = reinterpret_cast<const char*>(sqlite3_column_text(stmtSelect_, 4));
-        if (xmlText) {
-            event.xml = xmlText;
+        const char* dataText = reinterpret_cast<const char*>(sqlite3_column_text(stmtSelect_, 4));
+        if (dataText) {
+            event.data = dataText;
         }
         
         events.push_back(std::move(event));

@@ -24,6 +24,21 @@
         "client_cert_path": "",
         "client_key_path": ""
     },
+    "system_info": {
+        "enabled": true,
+        "collect_on_startup": true,
+        "collection_interval_hours": 24,
+        "installed_apps": {
+            "include_install_date": true,
+            "include_install_location": true,
+            "include_size": true
+        },
+        "open_ports": {
+            "include_listening": true,
+            "include_established": true,
+            "include_process_info": true
+        }
+    },
     "buffer": {
         "max_events": 50000,
         "flush_interval_sec": 10,
@@ -36,7 +51,6 @@
     "event_channels": [
         "Security",
         "Microsoft-Windows-PowerShell/Operational",
-        "Microsoft-Windows-Sysmon/Operational",
         "Windows PowerShell",
         "Microsoft-Windows-WMI-Activity/Operational",
         "Microsoft-Windows-Windows Defender/Operational",

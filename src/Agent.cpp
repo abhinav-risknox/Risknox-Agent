@@ -120,12 +120,32 @@ bool Agent::initialize(const std::string& configPath) {
                 event.channel = "FIM";
                 event.eventId = 0;  // FIM events don't have Windows Event IDs
                 event.timestamp = fimEvent.timestamp;
-                event.xml = fimEvent.toJson().dump();  // Store FIM data as JSON in xml field
+                event.data = fimEvent.toJson().dump();  // Store FIM data as JSON in data field
                 
                 queue_->push(std::move(event));
                 LOG_DEBUG("FIM event queued: {} {}", 
                          changeTypeToString(fimEvent.changeType), fimEvent.path);
             });
+        }
+    }
+    
+    // Initialize System Info if enabled
+    const auto& sysInfoCfg = config.getSysInfoConfig();
+    if (sysInfoCfg.enabled) {
+        LOG_INFO("Initializing System Information Collection...");
+        
+        sysInfoCollector_ = std::make_unique<SystemInfoCollector>();
+        SystemInfoCollectionConfig collectionCfg;
+        collectionCfg.collectOS = true;
+        collectionCfg.collectApps = true;
+        collectionCfg.collectPorts = true;
+        
+        if (!sysInfoCollector_->initialize(collectionCfg)) {
+            LOG_WARN("Failed to initialize System Info Collector - continuing without system info");
+            sysInfoCollector_.reset();
+        } else {
+            collectSysInfoOnStartup_ = sysInfoCfg.collect_on_startup;
+            sysInfoInterval_ = std::chrono::hours(sysInfoCfg.collection_interval_hours);
         }
     }
     
@@ -135,6 +155,10 @@ bool Agent::initialize(const std::string& configPath) {
     LOG_INFO("  Channels: {}", discovery.available.size());
     if (fimMonitor_) {
         LOG_INFO("  FIM: enabled ({} directories)", fimCfg.directories.size());
+    }
+    if (sysInfoCollector_) {
+        LOG_INFO("  System Info: enabled (startup={}, interval={}h)", 
+                 collectSysInfoOnStartup_, sysInfoInterval_.count());
     }
     
     return true;
@@ -165,6 +189,32 @@ int Agent::run() {
         LOG_INFO("FIM monitoring started");
     }
     
+    // Collect system info once at startup if enabled
+    if (sysInfoCollector_ && collectSysInfoOnStartup_) {
+        LOG_INFO("Collecting system information at startup...");
+        try {
+            auto sysInfoData = sysInfoCollector_->collectAll();
+            
+            // Convert to Event and queue it
+            Event event;
+            event.channel = "SystemInfo";
+            event.eventId = 0;
+            event.timestamp = sysInfoData.timestamp;
+            event.data = sysInfoData.toJson().dump();
+            
+            queue_->push(std::move(event));
+            LOG_INFO("System information collected and queued");
+        } catch (const std::exception& e) {
+            LOG_ERROR("Error collecting system info at startup: {}", e.what());
+        }
+    }
+    
+    // Start periodic system info collection thread if enabled
+    if (sysInfoCollector_ && sysInfoInterval_.count() > 0) {
+        sysInfoThread_ = std::thread(&Agent::sysInfoLoop, this);
+        LOG_INFO("System info periodic collection started ({}h interval)", sysInfoInterval_.count());
+    }
+    
     LOG_INFO("Agent running. Press Ctrl+C to stop (console mode).");
     
     // Main loop - just wait for stop signal
@@ -186,6 +236,11 @@ int Agent::run() {
     }
     
     LOG_INFO("Stopping agent...");
+    
+    // Stop system info thread if running
+    if (sysInfoThread_.joinable()) {
+        sysInfoThread_.join();
+    }
     
     // Stop components in order
     if (fimMonitor_) {
@@ -224,6 +279,44 @@ bool Agent::shouldStop() const {
     }
     
     return false;
+}
+
+void Agent::sysInfoLoop() {
+    LOG_DEBUG("System info collection thread started");
+    
+    while (!shouldStop()) {
+        // Wait for the interval or until stop is requested
+        auto waitStart = std::chrono::steady_clock::now();
+        auto waitEnd = waitStart + sysInfoInterval_;
+        
+        while (std::chrono::steady_clock::now() < waitEnd && !shouldStop()) {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+        
+        if (shouldStop()) {
+            break;
+        }
+        
+        // Collect system info
+        LOG_INFO("Periodic system information collection triggered");
+        try {
+            auto sysInfoData = sysInfoCollector_->collectAll();
+            
+            // Convert to Event and queue it
+            Event event;
+            event.channel = "SystemInfo";
+            event.eventId = 0;
+            event.timestamp = sysInfoData.timestamp;
+            event.data = sysInfoData.toJson().dump();
+            
+            queue_->push(std::move(event));
+            LOG_INFO("System information collected and queued");
+        } catch (const std::exception& e) {
+            LOG_ERROR("Error during periodic system info collection: {}", e.what());
+        }
+    }
+    
+    LOG_DEBUG("System info collection thread stopped");
 }
 
 } // namespace ResolutePulse

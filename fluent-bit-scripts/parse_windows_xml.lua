@@ -2,13 +2,80 @@
 -- This creates winlog.* fields compatible with Sigma rules and Elastic/OpenSearch Security
 
 function parse_event_xml(tag, timestamp, record)
-    local xml = record["raw_xml"]
+    local data = record["data"]
     
-    if not xml then
+    if not data then
         return 0, 0, 0
     end
     
-    -- ========== System Section Fields (winlog.*) ==========
+    -- Detect if it's JSON (FIM or System Info)
+    if data:sub(1,1) == "{" then
+        -- It's JSON, attempt to parse (using a simple pattern extractor if cjson not present)
+        -- In Fluent Bit, we usually have cjson available via require
+        local status, json = pcall(function() return require("cjson").decode(data) end)
+        
+        if status and json then
+            -- Map JSON fields to record
+            if json.type == "fim" then
+                record["event.category"] = "file"
+                record["event.type"] = "change"
+                record["file.path"] = json.path
+                record["file.name"] = json.path:match("([^\\]+)$") or json.path
+                record["winlog.channel"] = "FIM"
+                record["message"] = "File " .. (json.change_type or "changed") .. ": " .. json.path
+                
+                if json.new_hash then record["hash.sha256"] = json.new_hash end
+                if json.old_hash then record["hash.old_sha256"] = json.old_hash end
+            elseif json.type == "system_info" then
+                record["event.category"] = "host"
+                record["winlog.channel"] = "SystemInfo"
+                
+                -- Map OS Info to ECS
+                if json.os_info then
+                    local os = json.os_info
+                    record["host.os.name"] = os.os_name
+                    record["host.os.version"] = os.version
+                    record["host.os.build"] = os.build
+                    record["host.os.full"] = (os.os_name or "") .. " " .. (os.version or "")
+                    record["host.hostname"] = os.hostname
+                    record["host.architecture"] = os.architecture
+                    record["host.domain"] = os.domain
+                    record["host.uptime"] = os.uptime_seconds
+                    record["host.manufacturer"] = os.manufacturer
+                    record["host.model"] = os.model
+                    
+                    -- Also set host.name for general ECS compatibility
+                    if os.hostname then record["host.name"] = os.hostname end
+                end
+                
+                -- Store applications and connections
+                if json.installed_applications then 
+                    record["host.installed_apps"] = json.installed_applications 
+                end
+                
+                if json.network_connections then
+                    -- These are already split into listening and established in the agent
+                    record["host.network.listening"] = json.network_connections.listening_ports
+                    record["host.network.established"] = json.network_connections.established_connections
+                end
+                
+                record["message"] = "System information collected for " .. (record["host.hostname"] or "unknown host")
+            end
+            
+            -- Set common fields
+            if json.timestamp or json.collected_at then
+                record["@timestamp"] = json.timestamp or json.collected_at
+            end
+            
+            record["event.original"] = data
+            record["event.kind"] = "event"
+            
+            return 1, timestamp, record
+        end
+    end
+
+    -- ========== XML Parsing logic (existing) ==========
+    local xml = data
     
     -- Provider Name
     local provider_name = xml:match("Provider%s+Name='([^']+)'")

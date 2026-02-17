@@ -44,6 +44,11 @@ set(SOURCES
     src/fim/BaselineScanner.cpp
     src/fim/UsnJournalReader.cpp
     src/fim/FimMonitor.cpp
+    # System Info module
+    src/sysinfo/SystemInfoCollector.cpp
+    src/sysinfo/OSInfoCollector.cpp
+    src/sysinfo/InstalledAppsCollector.cpp
+    src/sysinfo/OpenPortsCollector.cpp
 )
 
 # Header files
@@ -67,6 +72,11 @@ set(HEADERS
     src/fim/UsnJournalReader.h
     src/fim/FimMonitor.h
     src/fim/FimEvent.h
+    # System Info module
+    src/sysinfo/SystemInfoCollector.h
+    src/sysinfo/OSInfoCollector.h
+    src/sysinfo/InstalledAppsCollector.h
+    src/sysinfo/OpenPortsCollector.h
 )
 
 # Main executable
@@ -94,6 +104,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     advapi32
     ws2_32
     bcrypt      # For SHA256 hashing in FIM
+    iphlpapi    # For network info (system info)
+    netapi32    # For domain info (system info)
 )
 
 # Add OpenSSL if found (for HTTPS support)
