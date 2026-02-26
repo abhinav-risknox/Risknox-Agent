@@ -2,6 +2,14 @@
     "fluent_bit_host": "localhost",
     "fluent_bit_port": 5170,
     "agent_id": "windows-agent-001",
+    "manager": {
+        "enabled": true,
+        "host": "localhost",
+        "port": 1514,
+        "certs_dir": "certs",
+        "registration_retry_interval": 30,
+        "heartbeat_interval": 60
+    },
     "fim": {
         "enabled": true,
         "directories": [
