@@ -60,10 +60,10 @@ set(AGENT_SOURCES
     src/sysinfo/InstalledAppsCollector.cpp
     src/sysinfo/OpenPortsCollector.cpp
     # Registration module
-    src/agent/registration/CertificateStore.cpp
-    src/agent/registration/RegistrationClient.cpp
+    # src/agent/registration/CertificateStore.cpp
+    # src/agent/registration/RegistrationClient.cpp
     # TLS Sender module
-    src/agent/network/TlsSender.cpp
+    # src/agent/network/TlsSender.cpp
 )
 
 set(AGENT_HEADERS
@@ -92,9 +92,9 @@ set(AGENT_HEADERS
     src/sysinfo/InstalledAppsCollector.h
     src/sysinfo/OpenPortsCollector.h
     # Registration module
-    src/agent/registration/CertificateStore.h
-    src/agent/registration/RegistrationClient.h
-    src/agent/network/TlsSender.h
+    # src/agent/registration/CertificateStore.h
+    # src/agent/registration/RegistrationClient.h
+    # src/agent/network/TlsSender.h
     # Common
     ${COMMON_HEADERS}
 )
@@ -134,28 +134,29 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 # =============================================================================
 
 # Find PostgreSQL
-find_library(LIBPQ_LIBRARY NAMES pq libpq HINTS "C:/Program Files/PostgreSQL/*/lib")
-find_path(LIBPQ_INCLUDE_DIR libpq-fe.h HINTS "C:/Program Files/PostgreSQL/*/include")
+set(PG_ROOT "C:/Program Files/PostgreSQL/18")
+find_path(LIBPQ_INCLUDE_DIR libpq-fe.h HINTS "${PG_ROOT}/include")
+set(LIBPQ_DLL "${PG_ROOT}/bin/libpq.dll")
 
-if(LIBPQ_LIBRARY AND LIBPQ_INCLUDE_DIR)
+if(EXISTS "${LIBPQ_DLL}" AND LIBPQ_INCLUDE_DIR)
     set(MANAGER_SOURCES
         src/manager/main.cpp
         src/manager/ca/CertificateAuthority.cpp
         src/manager/db/PostgresClient.cpp
-        src/manager/server/ManagerServer.cpp
-        src/manager/server/AgentHandler.cpp
-        src/manager/registry/AgentRegistry.cpp
-        src/manager/registry/LicenseManager.cpp
+        # src/manager/server/ManagerServer.cpp
+        # src/manager/server/AgentHandler.cpp
+        # src/manager/registry/AgentRegistry.cpp
+        # src/manager/registry/LicenseManager.cpp
         src/utils/Logger.cpp
     )
 
     set(MANAGER_HEADERS
         src/manager/ca/CertificateAuthority.h
         src/manager/db/PostgresClient.h
-        src/manager/server/ManagerServer.h
-        src/manager/server/AgentHandler.h
-        src/manager/registry/AgentRegistry.h
-        src/manager/registry/LicenseManager.h
+        # src/manager/server/ManagerServer.h
+        # src/manager/server/AgentHandler.h
+        # src/manager/registry/AgentRegistry.h
+        # src/manager/registry/LicenseManager.h
         src/utils/Logger.h
         ${COMMON_HEADERS}
     )
@@ -179,13 +180,15 @@ if(LIBPQ_LIBRARY AND LIBPQ_INCLUDE_DIR)
     target_link_libraries(ResolutePulseManager PRIVATE
         OpenSSL::SSL
         OpenSSL::Crypto
-        ${LIBPQ_LIBRARY}
+        ${LIBPQ_DLL}
         ws2_32
         advapi32
+        secur32
+        crypt32
     )
 
-    message(STATUS "PostgreSQL found - Manager target enabled")
-    message(STATUS "  libpq: ${LIBPQ_LIBRARY}")
+    message(STATUS "PostgreSQL found - Manager target enabled (DLL linking)")
+    message(STATUS "  libpq DLL: ${LIBPQ_DLL}")
     message(STATUS "  include: ${LIBPQ_INCLUDE_DIR}")
 else()
     message(STATUS "PostgreSQL not found - Manager target disabled")

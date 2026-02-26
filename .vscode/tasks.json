@@ -12,7 +12,8 @@
                 ".",
                 "-G",
                 "MinGW Makefiles",
-                "-DCMAKE_BUILD_TYPE=Debug"
+                "-DCMAKE_BUILD_TYPE=Debug",
+                "-DOPENSSL_ROOT_DIR=C:/msys64/mingw64"
             ],
             "group": "build",
             "problemMatcher": []

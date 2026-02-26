@@ -5,7 +5,8 @@
             "includePath": [
                 "${workspaceFolder}/src",
                 "${workspaceFolder}/thirdparty",
-                "${workspaceFolder}/thirdparty/sqlite3"
+                "${workspaceFolder}/thirdparty/sqlite3",
+                "C:/msys64/mingw64/include"
             ],
             "defines": [
                 "_WIN32_WINNT=0x0602",
