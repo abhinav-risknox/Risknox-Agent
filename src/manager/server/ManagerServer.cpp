@@ -1,0 +1,297 @@
+#include "ManagerServer.h"
+#include "AgentHandler.h"
+#include "utils/Logger.h"
+
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+
+#ifdef _WIN32
+#include <ws2tcpip.h>
+#endif
+
+#include <filesystem>
+
+namespace ResolutePulse {
+
+ManagerServer::ManagerServer() = default;
+
+ManagerServer::~ManagerServer() {
+    stop();
+    if (sslCtx_) SSL_CTX_free(sslCtx_);
+#ifdef _WIN32
+    if (listenSocket_ != INVALID_SOCKET) closesocket(listenSocket_);
+    if (wsaInitialized_) WSACleanup();
+#endif
+}
+
+bool ManagerServer::initialize(int port,
+                                CertificateAuthority& ca,
+                                PostgresClient& db)
+{
+    port_ = port;
+    ca_ = &ca;
+    db_ = &db;
+
+    LOG_INFO("Initializing Manager Server on port {}", port_);
+
+#ifdef _WIN32
+    WSADATA wsaData;
+    int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
+    if (result != 0) {
+        LOG_ERROR("WSAStartup failed: {}", result);
+        return false;
+    }
+    wsaInitialized_ = true;
+#endif
+
+    // Issue a server certificate for the Manager itself
+    serverCertPath_ = ca.getCADir() + "/manager.crt";
+    serverKeyPath_  = ca.getCADir() + "/manager.key";
+
+    if (!std::filesystem::exists(serverCertPath_) ||
+        !std::filesystem::exists(serverKeyPath_)) {
+        LOG_INFO("Generating Manager server certificate...");
+
+        // Generate a key pair for the manager
+        EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, nullptr);
+        EVP_PKEY_keygen_init(ctx);
+        EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, 2048);
+        EVP_PKEY* serverKey = nullptr;
+        EVP_PKEY_keygen(ctx, &serverKey);
+        EVP_PKEY_CTX_free(ctx);
+
+        // Extract public key PEM
+        BIO* bio = BIO_new(BIO_s_mem());
+        PEM_write_bio_PUBKEY(bio, serverKey);
+        char* pubData = nullptr;
+        long pubLen = BIO_get_mem_data(bio, &pubData);
+        std::string pubKeyPem(pubData, pubLen);
+        BIO_free(bio);
+
+        // Issue cert through CA
+        auto issued = ca.issueCertificate("ResolutePulse-Manager", pubKeyPem, 365);
+        if (issued.certificatePem.empty()) {
+            LOG_ERROR("Failed to issue server certificate");
+            EVP_PKEY_free(serverKey);
+            return false;
+        }
+
+        // Save server cert
+        FILE* certFile = fopen(serverCertPath_.c_str(), "w");
+        if (certFile) {
+            fwrite(issued.certificatePem.c_str(), 1, issued.certificatePem.size(), certFile);
+            fclose(certFile);
+        }
+
+        // Save server private key
+        FILE* keyFile = fopen(serverKeyPath_.c_str(), "w");
+        if (keyFile) {
+            PEM_write_PrivateKey(keyFile, serverKey, nullptr, nullptr, 0, nullptr, nullptr);
+            fclose(keyFile);
+        }
+
+        EVP_PKEY_free(serverKey);
+        LOG_INFO("Manager server certificate generated");
+    }
+
+    if (!createSSLContext()) {
+        LOG_ERROR("Failed to create SSL context");
+        return false;
+    }
+
+    if (!loadCertificates()) {
+        LOG_ERROR("Failed to load certificates");
+        return false;
+    }
+
+    LOG_INFO("Manager Server initialized");
+    return true;
+}
+
+bool ManagerServer::createSSLContext() {
+    const SSL_METHOD* method = TLS_server_method();
+    sslCtx_ = SSL_CTX_new(method);
+    if (!sslCtx_) {
+        LOG_ERROR("Unable to create SSL context");
+        return false;
+    }
+
+    // Set minimum TLS version
+    SSL_CTX_set_min_proto_version(sslCtx_, TLS1_2_VERSION);
+
+    // Request client certificate but don't require it (for registration)
+    // During registration, agents don't have certificates yet
+    SSL_CTX_set_verify(sslCtx_, SSL_VERIFY_PEER, nullptr);
+
+    // Load CRL for revocation checking
+    std::string crlPath = ca_->getCADir() + "/crl.pem";
+    if (std::filesystem::exists(crlPath)) {
+        X509_STORE* store = SSL_CTX_get_cert_store(sslCtx_);
+        X509_STORE_set_flags(store, X509_V_FLAG_CRL_CHECK);
+
+        FILE* crlFile = fopen(crlPath.c_str(), "r");
+        if (crlFile) {
+            X509_CRL* crl = PEM_read_X509_CRL(crlFile, nullptr, nullptr, nullptr);
+            fclose(crlFile);
+            if (crl) {
+                X509_STORE_add_crl(store, crl);
+                X509_CRL_free(crl);
+            }
+        }
+    }
+
+    return true;
+}
+
+bool ManagerServer::loadCertificates() {
+    // Load manager certificate
+    if (SSL_CTX_use_certificate_file(sslCtx_, serverCertPath_.c_str(), SSL_FILETYPE_PEM) <= 0) {
+        LOG_ERROR("Failed to load server certificate: {}", serverCertPath_);
+        ERR_print_errors_fp(stderr);
+        return false;
+    }
+
+    // Load manager private key
+    if (SSL_CTX_use_PrivateKey_file(sslCtx_, serverKeyPath_.c_str(), SSL_FILETYPE_PEM) <= 0) {
+        LOG_ERROR("Failed to load server private key: {}", serverKeyPath_);
+        ERR_print_errors_fp(stderr);
+        return false;
+    }
+
+    // Load CA certificate for client verification
+    std::string caCertPath = ca_->getCADir() + "/ca.crt";
+    if (SSL_CTX_load_verify_locations(sslCtx_, caCertPath.c_str(), nullptr) <= 0) {
+        LOG_ERROR("Failed to load CA certificate for verification");
+        return false;
+    }
+
+    return true;
+}
+
+bool ManagerServer::startListening() {
+    listenSocket_ = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (listenSocket_ == INVALID_SOCKET) {
+        LOG_ERROR("Failed to create listen socket");
+        return false;
+    }
+
+    // Allow reuse of address
+    int opt = 1;
+    setsockopt(listenSocket_, SOL_SOCKET, SO_REUSEADDR, 
+               reinterpret_cast<const char*>(&opt), sizeof(opt));
+
+    struct sockaddr_in addr = {};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = INADDR_ANY;
+    addr.sin_port = htons(static_cast<uint16_t>(port_));
+
+    if (bind(listenSocket_, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) == SOCKET_ERROR) {
+        LOG_ERROR("Failed to bind to port {}", port_);
+        return false;
+    }
+
+    if (listen(listenSocket_, 10) == SOCKET_ERROR) {
+        LOG_ERROR("Failed to listen on port {}", port_);
+        return false;
+    }
+
+    LOG_INFO("Manager listening on port {}", port_);
+    return true;
+}
+
+bool ManagerServer::start() {
+    if (!startListening()) {
+        return false;
+    }
+
+    running_ = true;
+    acceptThread_ = std::thread(&ManagerServer::acceptLoop, this);
+    return true;
+}
+
+void ManagerServer::stop() {
+    running_ = false;
+
+#ifdef _WIN32
+    if (listenSocket_ != INVALID_SOCKET) {
+        closesocket(listenSocket_);
+        listenSocket_ = INVALID_SOCKET;
+    }
+#endif
+
+    if (acceptThread_.joinable()) {
+        acceptThread_.join();
+    }
+
+    // Wait for all client threads
+    std::lock_guard<std::mutex> lock(threadsMutex_);
+    for (auto& t : clientThreads_) {
+        if (t.joinable()) t.join();
+    }
+    clientThreads_.clear();
+
+    LOG_INFO("Manager Server stopped");
+}
+
+void ManagerServer::acceptLoop() {
+    LOG_INFO("Accept loop started");
+
+    while (running_.load()) {
+        struct sockaddr_in clientAddr = {};
+        int addrLen = sizeof(clientAddr);
+
+        SOCKET clientSocket = accept(listenSocket_,
+            reinterpret_cast<struct sockaddr*>(&clientAddr), &addrLen);
+
+        if (clientSocket == INVALID_SOCKET) {
+            if (running_.load()) {
+                LOG_WARN("Accept failed");
+            }
+            continue;
+        }
+
+        // Get client IP
+        char ipStr[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &clientAddr.sin_addr, ipStr, sizeof(ipStr));
+        std::string clientIp(ipStr);
+
+        LOG_INFO("New connection from {}", clientIp);
+
+        // Spawn a thread to handle this client
+        std::lock_guard<std::mutex> lock(threadsMutex_);
+        clientThreads_.emplace_back(&ManagerServer::handleClient, this, clientSocket, clientIp);
+    }
+}
+
+void ManagerServer::handleClient(SOCKET clientSocket, const std::string& clientAddr) {
+    // Create SSL connection
+    SSL* ssl = SSL_new(sslCtx_);
+    SSL_set_fd(ssl, static_cast<int>(clientSocket));
+
+    if (SSL_accept(ssl) <= 0) {
+        LOG_WARN("TLS handshake failed from {}", clientAddr);
+        ERR_print_errors_fp(stderr);
+        SSL_free(ssl);
+        closesocket(clientSocket);
+        return;
+    }
+
+    LOG_INFO("TLS connection established with {}", clientAddr);
+
+    // Check if client presented a certificate (mTLS)
+    X509* clientCert = SSL_get_peer_certificate(ssl);
+    bool hasClientCert = (clientCert != nullptr);
+    if (clientCert) X509_free(clientCert);
+
+    // Create handler and process
+    AgentHandler handler(*ca_, *db_);
+    handler.handleConnection(ssl, clientAddr, hasClientCert);
+
+    // Cleanup
+    SSL_shutdown(ssl);
+    SSL_free(ssl);
+    closesocket(clientSocket);
+    LOG_DEBUG("Connection closed: {}", clientAddr);
+}
+
+} // namespace ResolutePulse
