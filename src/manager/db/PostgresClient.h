@@ -117,11 +117,12 @@ public:
     const std::string& getLastError() const { return lastError_; }
 
 private:
-    // Execute a query and check for errors
-    bool executeQuery(const std::string& query);
+    // Attempt to reconnect using the stored connection string
+    bool reconnect();
 
-    PGconn*     conn_ = nullptr;
+    PGconn*     conn_       = nullptr;
     std::string lastError_;
+    std::string connString_; // stored for auto-reconnect
 };
 
 } // namespace ResolutePulse

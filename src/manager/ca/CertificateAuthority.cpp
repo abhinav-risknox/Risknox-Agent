@@ -64,11 +64,15 @@ bool CertificateAuthority::initializeCA(const std::string& caDir) {
 
     // Generate initial CRL if it doesn't exist
     std::string crlPath = caDir_ + "/crl.pem";
+
+    // Set initialized_ = true BEFORE calling generateCRL() so that any
+    // future initialized_ guard inside generateCRL() won't block execution.
+    initialized_ = true;
+
     if (!std::filesystem::exists(crlPath)) {
         generateCRL();
     }
 
-    initialized_ = true;
     LOG_INFO("Certificate Authority initialized");
     return true;
 }
@@ -170,13 +174,21 @@ bool CertificateAuthority::loadCA() {
     std::string keyPath  = caDir_ + "/ca.key";
     std::string certPath = caDir_ + "/ca.crt";
 
-    // Load CA private key (using BIO to avoid OPENSSL_Applink issues on Windows)
+    // Load CA private key; passphrase is used when the key is AES-256-CBC encrypted
     BIO* keyBio = BIO_new_file(keyPath.c_str(), "r");
     if (!keyBio) {
         LOG_ERROR("Cannot open CA key file: {}", keyPath);
         return false;
     }
-    caKey_ = PEM_read_bio_PrivateKey(keyBio, nullptr, nullptr, nullptr);
+    // Provide passphrase via callback so OpenSSL doesn't prompt stdin
+    caKey_ = PEM_read_bio_PrivateKey(keyBio, nullptr,
+        [](char* buf, int size, int /*rwflag*/, void* /*u*/) -> int {
+            const char* pw = CA_KEY_PASSPHRASE;
+            int len = static_cast<int>(strlen(pw));
+            if (len > size) len = size;
+            memcpy(buf, pw, len);
+            return len;
+        }, nullptr);
     BIO_free(keyBio);
 
     if (!caKey_) {
@@ -198,6 +210,14 @@ bool CertificateAuthority::loadCA() {
         return false;
     }
 
+    // Expiry check — reject a loaded CA certificate that has already expired
+    if (X509_cmp_current_time(X509_get0_notAfter(caCert_)) <= 0) {
+        LOG_ERROR("Loaded CA certificate has expired — refusing to use it");
+        X509_free(caCert_);
+        caCert_ = nullptr;
+        return false;
+    }
+
     LOG_INFO("CA loaded from existing files");
     return true;
 }
@@ -206,14 +226,24 @@ bool CertificateAuthority::saveCA() {
     std::string keyPath  = caDir_ + "/ca.key";
     std::string certPath = caDir_ + "/ca.crt";
 
-    // Save CA private key (using BIO to avoid OPENSSL_Applink issues on Windows)
+    // Save CA private key — encrypted with AES-256-CBC using the hardcoded passphrase.
+    // In production this passphrase should come from an env-var or HSM.
     BIO* keyBio = BIO_new_file(keyPath.c_str(), "w");
     if (!keyBio) {
         LOG_ERROR("Cannot create CA key file: {}", keyPath);
         return false;
     }
-    PEM_write_bio_PrivateKey(keyBio, caKey_, nullptr, nullptr, 0, nullptr, nullptr);
+    int writeOk = PEM_write_bio_PrivateKey(
+        keyBio, caKey_,
+        EVP_aes_256_cbc(),
+        reinterpret_cast<const unsigned char*>(CA_KEY_PASSPHRASE),
+        static_cast<int>(strlen(CA_KEY_PASSPHRASE)),
+        nullptr, nullptr);
     BIO_free(keyBio);
+    if (!writeOk) {
+        LOG_ERROR("Failed to write encrypted CA private key");
+        return false;
+    }
 
     // Save CA certificate
     BIO* certBio = BIO_new_file(certPath.c_str(), "w");
@@ -283,12 +313,13 @@ IssuedCertificate CertificateAuthority::issueCertificate(
     X509_gmtime_adj(X509_getm_notAfter(cert), 
                     static_cast<long>(validDays) * 86400L);
 
-    // Calculate expiry date for return value
+    // Calculate expiry date for return value — use gmtime_s (thread-safe, Windows/MinGW)
     time_t now = time(nullptr);
     time_t expiry = now + static_cast<long>(validDays) * 86400L;
-    struct tm* expiryTm = gmtime(&expiry);
+    struct tm expiryTm {};
+    gmtime_s(&expiryTm, &expiry);  // thread-safe alternative to gmtime()
     char expiryStr[64];
-    strftime(expiryStr, sizeof(expiryStr), "%Y-%m-%dT%H:%M:%SZ", expiryTm);
+    strftime(expiryStr, sizeof(expiryStr), "%Y-%m-%dT%H:%M:%SZ", &expiryTm);
 
     // Set subject — CN = agent_id
     X509_NAME* subjectName = X509_get_subject_name(cert);
@@ -331,6 +362,20 @@ IssuedCertificate CertificateAuthority::issueCertificate(
     // Authority Key Identifier
     ext = X509V3_EXT_conf_nid(nullptr, &v3ctx,
         NID_authority_key_identifier, const_cast<char*>("keyid:always"));
+    if (ext) { X509_add_ext(cert, ext, -1); X509_EXTENSION_free(ext); }
+
+    // Subject Alternative Name — required by modern TLS stacks that ignore CN
+    // Use URI:agent:<agentId> as the identity for this agent certificate.
+    std::string sanValue = "URI:agent:" + agentId;
+    ext = X509V3_EXT_conf_nid(nullptr, &v3ctx,
+        NID_subject_alt_name, const_cast<char*>(sanValue.c_str()));
+    if (ext) { X509_add_ext(cert, ext, -1); X509_EXTENSION_free(ext); }
+
+    // CRL Distribution Point — allows TLS clients to automatically locate
+    // the CRL for revocation checking.
+    std::string cdpValue = "URI:file://" + caDir_ + "/crl.pem";
+    ext = X509V3_EXT_conf_nid(nullptr, &v3ctx,
+        NID_crl_distribution_points, const_cast<char*>(cdpValue.c_str()));
     if (ext) { X509_add_ext(cert, ext, -1); X509_EXTENSION_free(ext); }
 
     // Sign the certificate with CA's private key using SHA-384

@@ -31,7 +31,8 @@ struct MessageHeader {
     uint32_t payloadLength = 0;                  // Length of JSON payload following this header
 };
 
-static constexpr size_t MESSAGE_HEADER_SIZE = 12;  // 4 + 1 + 1 + 2 + 4
+static constexpr size_t   MESSAGE_HEADER_SIZE = 12;           // 4 + 1 + 1 + 2 + 4
+static constexpr uint32_t MAX_PAYLOAD_SIZE    = 64u * 1024u * 1024u; // 64 MB — receiver must reject frames that exceed this
 
 // ─────────────────────────────────────────────────────────────
 // Registration Messages

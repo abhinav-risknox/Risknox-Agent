@@ -4,6 +4,7 @@
 #include <vector>
 #include <memory>
 #include <mutex>
+#include <cstring>
 
 // Forward declarations for OpenSSL types
 typedef struct evp_pkey_st EVP_PKEY;
@@ -83,9 +84,12 @@ private:
     bool        initialized_ = false;
     std::mutex  mutex_;
 
-    static constexpr int CA_KEY_BITS = 4096;          // RSA key size for CA
-    static constexpr int CA_VALIDITY_DAYS = 3650;     // 10 years
-    static constexpr int CRL_VALIDITY_DAYS = 30;
+    static constexpr int  CA_KEY_BITS       = 4096;      // RSA key size for CA
+    static constexpr int  CA_VALIDITY_DAYS  = 3650;      // 10 years
+    static constexpr int  CRL_VALIDITY_DAYS = 30;
+    // Passphrase used to encrypt/decrypt the CA private key on disk.
+    // TODO: replace with env-var / HSM in production.
+    static constexpr const char* CA_KEY_PASSPHRASE = "RPCAKey2025";
 };
 
 } // namespace ResolutePulse

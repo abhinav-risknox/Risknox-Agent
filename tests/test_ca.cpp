@@ -7,6 +7,7 @@
 #include <openssl/x509v3.h>
 
 #include <iostream>
+#include <fstream>
 #include <filesystem>
 #include <cassert>
 
@@ -140,6 +141,18 @@ int main() {
         X509* caCert = localPemToX509(ca3.getCACertPem());
         X509_NAME* caName = X509_get_subject_name(caCert);
         assert(X509_NAME_cmp(issuerName, caName) == 0 && "Issuer mismatch");
+
+        // 6. Verify Subject Alternative Name extension is present (required by modern TLS)
+        GENERAL_NAMES* sans = reinterpret_cast<GENERAL_NAMES*>(
+            X509_get_ext_d2i(cert, NID_subject_alt_name, nullptr, nullptr));
+        assert(sans != nullptr && "SAN extension must be present in issued cert");
+        GENERAL_NAMES_free(sans);
+
+        // 7. Verify CRL Distribution Points extension is present
+        CRL_DIST_POINTS* cdp = reinterpret_cast<CRL_DIST_POINTS*>(
+            X509_get_ext_d2i(cert, NID_crl_distribution_points, nullptr, nullptr));
+        assert(cdp != nullptr && "CRL Distribution Points extension must be present in issued cert");
+        CRL_DIST_POINTS_free(cdp);
 
         X509_free(caCert);
         X509_free(cert);
@@ -288,6 +301,191 @@ int main() {
 
         std::cout << "[PASS] CRL updated (re-generated) successfully after revocation\n";
         std::cout << "[INFO] Revoked serial: " << issued.serialNumber << "\n";
+    }
+
+    // ─── Test 7: CA private key is AES-256-CBC encrypted on disk ───
+    std::cout << "\n========== TEST 7: CA Key Encrypted on Disk ==========\n";
+    {
+        // Re-generate the CA so we verify saveCA() encrypted the file
+        std::string freshDir = testDir + "_encrypted";
+        if (std::filesystem::exists(freshDir)) std::filesystem::remove_all(freshDir);
+
+        CertificateAuthority ca7;
+        bool initOk = ca7.initializeCA(freshDir);
+        assert(initOk && "initializeCA must succeed for encryption test");
+
+        // Read the raw key file content and confirm it carries the ENCRYPTED header
+        std::ifstream keyFile(freshDir + "/ca.key");
+        assert(keyFile.is_open() && "ca.key must exist after initializeCA");
+        std::string keyContent((std::istreambuf_iterator<char>(keyFile)),
+                                std::istreambuf_iterator<char>());
+        keyFile.close();
+
+        assert(keyContent.find("ENCRYPTED") != std::string::npos &&
+               "ca.key must be AES-256-CBC encrypted (PEM ENCRYPTED header expected)");
+
+        std::filesystem::remove_all(freshDir);
+        std::cout << "[PASS] ca.key is AES-256-CBC encrypted on disk\n";
+    }
+
+    // ─── Test 8: SAN URI contains the agent ID ───
+    std::cout << "\n========== TEST 8: SAN URI Contains Agent ID ==========\n";
+    {
+        CertificateAuthority ca8;
+        ca8.initializeCA(testDir);
+
+        EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, nullptr);
+        EVP_PKEY_keygen_init(ctx);
+        EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, 2048);
+        EVP_PKEY* agentKey = nullptr;
+        EVP_PKEY_keygen(ctx, &agentKey);
+        EVP_PKEY_CTX_free(ctx);
+
+        BIO* bio = BIO_new(BIO_s_mem());
+        PEM_write_bio_PUBKEY(bio, agentKey);
+        char* data = nullptr;
+        long len = BIO_get_mem_data(bio, &data);
+        std::string agentPubPem(data, len);
+        BIO_free(bio);
+        EVP_PKEY_free(agentKey);
+
+        const std::string agentId = "agent-san-check-001";
+        IssuedCertificate issued = ca8.issueCertificate(agentId, agentPubPem, 365);
+        assert(!issued.certificatePem.empty() && "Certificate must be issued");
+
+        BIO* certBio = BIO_new_mem_buf(issued.certificatePem.data(),
+                                       static_cast<int>(issued.certificatePem.size()));
+        X509* cert = PEM_read_bio_X509(certBio, nullptr, nullptr, nullptr);
+        BIO_free(certBio);
+        assert(cert != nullptr && "Must parse issued certificate");
+
+        // Decode the SAN extension and verify the URI contains the agent ID
+        GENERAL_NAMES* sans = reinterpret_cast<GENERAL_NAMES*>(
+            X509_get_ext_d2i(cert, NID_subject_alt_name, nullptr, nullptr));
+        assert(sans != nullptr && "SAN extension must be present");
+
+        bool foundAgentUri = false;
+        for (int i = 0; i < sk_GENERAL_NAME_num(sans); ++i) {
+            GENERAL_NAME* gn = sk_GENERAL_NAME_value(sans, i);
+            if (gn->type == GEN_URI) {
+                const char* uriStr = reinterpret_cast<const char*>(
+                    ASN1_STRING_get0_data(gn->d.uniformResourceIdentifier));
+                std::string uri(uriStr);
+                if (uri.find("agent:" + agentId) != std::string::npos) {
+                    foundAgentUri = true;
+                    std::cout << "[INFO] SAN URI: " << uri << "\n";
+                    break;
+                }
+            }
+        }
+        GENERAL_NAMES_free(sans);
+        X509_free(cert);
+
+        assert(foundAgentUri && "SAN URI must contain 'agent:<agentId>'");
+        std::cout << "[PASS] SAN URI correctly contains the agent ID\n";
+    }
+
+    // ─── Test 9: CRL Distribution Point URI contains crl.pem ───
+    std::cout << "\n========== TEST 9: CRL Distribution Point URI ==========\n";
+    {
+        CertificateAuthority ca9;
+        ca9.initializeCA(testDir);
+
+        EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, nullptr);
+        EVP_PKEY_keygen_init(ctx);
+        EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, 2048);
+        EVP_PKEY* agentKey = nullptr;
+        EVP_PKEY_keygen(ctx, &agentKey);
+        EVP_PKEY_CTX_free(ctx);
+
+        BIO* bio = BIO_new(BIO_s_mem());
+        PEM_write_bio_PUBKEY(bio, agentKey);
+        char* data = nullptr;
+        long len = BIO_get_mem_data(bio, &data);
+        std::string agentPubPem(data, len);
+        BIO_free(bio);
+        EVP_PKEY_free(agentKey);
+
+        IssuedCertificate issued = ca9.issueCertificate("agent-cdp-check-001", agentPubPem, 365);
+        assert(!issued.certificatePem.empty() && "Certificate must be issued");
+
+        BIO* certBio = BIO_new_mem_buf(issued.certificatePem.data(),
+                                       static_cast<int>(issued.certificatePem.size()));
+        X509* cert = PEM_read_bio_X509(certBio, nullptr, nullptr, nullptr);
+        BIO_free(certBio);
+        assert(cert != nullptr && "Must parse issued certificate");
+
+        // Decode CRL Distribution Points and verify the URI references crl.pem
+        CRL_DIST_POINTS* cdp = reinterpret_cast<CRL_DIST_POINTS*>(
+            X509_get_ext_d2i(cert, NID_crl_distribution_points, nullptr, nullptr));
+        assert(cdp != nullptr && "CRL Distribution Points extension must be present");
+
+        bool foundCrlUri = false;
+        for (int i = 0; i < sk_DIST_POINT_num(cdp); ++i) {
+            DIST_POINT* dp = sk_DIST_POINT_value(cdp, i);
+            if (dp->distpoint && dp->distpoint->type == 0) { // fullName
+                GENERAL_NAMES* gns = dp->distpoint->name.fullname;
+                for (int j = 0; j < sk_GENERAL_NAME_num(gns); ++j) {
+                    GENERAL_NAME* gn = sk_GENERAL_NAME_value(gns, j);
+                    if (gn->type == GEN_URI) {
+                        const char* uriStr = reinterpret_cast<const char*>(
+                            ASN1_STRING_get0_data(gn->d.uniformResourceIdentifier));
+                        std::string uri(uriStr);
+                        if (uri.find("crl.pem") != std::string::npos) {
+                            foundCrlUri = true;
+                            std::cout << "[INFO] CRL DP URI: " << uri << "\n";
+                        }
+                    }
+                }
+            }
+        }
+        CRL_DIST_POINTS_free(cdp);
+        X509_free(cert);
+
+        assert(foundCrlUri && "CRL DP URI must reference 'crl.pem'");
+        std::cout << "[PASS] CRL Distribution Point URI correctly references crl.pem\n";
+    }
+
+    // ─── Test 10: Serial numbers increment monotonically ───
+    std::cout << "\n========== TEST 10: Serial Number Monotonicity ==========\n";
+    {
+        CertificateAuthority ca10;
+        ca10.initializeCA(testDir);
+
+        // Generate one throwaway agent key pair and reuse public key for all issuances
+        EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, nullptr);
+        EVP_PKEY_keygen_init(ctx);
+        EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, 2048);
+        EVP_PKEY* agentKey = nullptr;
+        EVP_PKEY_keygen(ctx, &agentKey);
+        EVP_PKEY_CTX_free(ctx);
+
+        BIO* bio = BIO_new(BIO_s_mem());
+        PEM_write_bio_PUBKEY(bio, agentKey);
+        char* data = nullptr;
+        long len = BIO_get_mem_data(bio, &data);
+        std::string agentPubPem(data, len);
+        BIO_free(bio);
+        EVP_PKEY_free(agentKey);
+
+        // Issue several certs and collect serial numbers
+        const int N = 5;
+        std::vector<uint64_t> serials;
+        for (int i = 0; i < N; ++i) {
+            std::string id = "agent-serial-" + std::to_string(i);
+            IssuedCertificate issued = ca10.issueCertificate(id, agentPubPem, 30);
+            assert(!issued.serialNumber.empty() && "Serial must be non-empty");
+            serials.push_back(std::stoull(issued.serialNumber));
+        }
+
+        // Every subsequent serial must be strictly greater than the previous one
+        for (int i = 1; i < N; ++i) {
+            assert(serials[i] > serials[i - 1] &&
+                   "Each serial number must be strictly greater than the previous");
+        }
+
+        std::cout << "[PASS] Serial numbers increment monotonically ("
+                  << serials.front() << " → " << serials.back() << ")\n";
     }
 
     // ─── Cleanup ───

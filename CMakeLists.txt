@@ -143,20 +143,20 @@ if(EXISTS "${LIBPQ_DLL}" AND LIBPQ_INCLUDE_DIR)
         src/manager/main.cpp
         src/manager/ca/CertificateAuthority.cpp
         src/manager/db/PostgresClient.cpp
-        # src/manager/server/ManagerServer.cpp
-        # src/manager/server/AgentHandler.cpp
-        # src/manager/registry/AgentRegistry.cpp
-        # src/manager/registry/LicenseManager.cpp
+        src/manager/server/ManagerServer.cpp
+        src/manager/server/AgentHandler.cpp
+        src/manager/registry/AgentRegistry.cpp
+        src/manager/registry/LicenseManager.cpp
         src/utils/Logger.cpp
     )
 
     set(MANAGER_HEADERS
         src/manager/ca/CertificateAuthority.h
         src/manager/db/PostgresClient.h
-        # src/manager/server/ManagerServer.h
-        # src/manager/server/AgentHandler.h
-        # src/manager/registry/AgentRegistry.h
-        # src/manager/registry/LicenseManager.h
+        src/manager/server/ManagerServer.h
+        src/manager/server/AgentHandler.h
+        src/manager/registry/AgentRegistry.h
+        src/manager/registry/LicenseManager.h
         src/utils/Logger.h
         ${COMMON_HEADERS}
     )

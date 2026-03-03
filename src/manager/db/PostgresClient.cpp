@@ -13,7 +13,8 @@ PostgresClient::~PostgresClient() {
 }
 
 bool PostgresClient::connect(const std::string& connString) {
-    conn_ = PQconnectdb(connString.c_str());
+    connString_ = connString; // store for auto-reconnect
+    conn_ = PQconnectdb(connString_.c_str());
     
     if (PQstatus(conn_) != CONNECTION_OK) {
         lastError_ = "PostgreSQL connection failed: " + std::string(PQerrorMessage(conn_));
@@ -39,23 +40,26 @@ bool PostgresClient::isConnected() const {
     return conn_ != nullptr && PQstatus(conn_) == CONNECTION_OK;
 }
 
-bool PostgresClient::executeQuery(const std::string& query) {
-    if (!isConnected()) {
-        lastError_ = "Not connected to PostgreSQL";
-        return false;
-    }
-    
-    PGresult* res = PQexec(conn_, query.c_str());
-    ExecStatusType status = PQresultStatus(res);
-    
-    if (status != PGRES_COMMAND_OK && status != PGRES_TUPLES_OK) {
-        lastError_ = "Query failed: " + std::string(PQerrorMessage(conn_));
+bool PostgresClient::reconnect() {
+    if (connString_.empty()) {
+        lastError_ = "Cannot reconnect: no connection string stored";
         LOG_ERROR("{}", lastError_);
-        PQclear(res);
         return false;
     }
-    
-    PQclear(res);
+    LOG_INFO("PostgreSQL connection lost — attempting reconnect...");
+    if (conn_) {
+        PQfinish(conn_);
+        conn_ = nullptr;
+    }
+    conn_ = PQconnectdb(connString_.c_str());
+    if (PQstatus(conn_) != CONNECTION_OK) {
+        lastError_ = "Reconnect failed: " + std::string(PQerrorMessage(conn_));
+        LOG_ERROR("{}", lastError_);
+        PQfinish(conn_);
+        conn_ = nullptr;
+        return false;
+    }
+    LOG_INFO("Reconnected to PostgreSQL successfully");
     return true;
 }
 
@@ -64,7 +68,7 @@ bool PostgresClient::executeQuery(const std::string& query) {
 // ─────────────────────────────────────────────────────────────
 
 bool PostgresClient::insertAgent(const AgentRecord& agent) {
-    if (!isConnected()) {
+    if (!isConnected() && !reconnect()) {
         lastError_ = "Not connected";
         return false;
     }
@@ -96,7 +100,7 @@ bool PostgresClient::insertAgent(const AgentRecord& agent) {
 }
 
 std::optional<AgentRecord> PostgresClient::getAgent(const std::string& agentId) {
-    if (!isConnected()) return std::nullopt;
+    if (!isConnected() && !reconnect()) return std::nullopt;
 
     const char* paramValues[1] = { agentId.c_str() };
 
@@ -129,7 +133,7 @@ std::optional<AgentRecord> PostgresClient::getAgent(const std::string& agentId) 
 }
 
 bool PostgresClient::updateAgentStatus(const std::string& agentId, const std::string& status) {
-    if (!isConnected()) return false;
+    if (!isConnected() && !reconnect()) return false;
 
     const char* paramValues[2] = { status.c_str(), agentId.c_str() };
 
@@ -147,7 +151,7 @@ bool PostgresClient::updateAgentStatus(const std::string& agentId, const std::st
 }
 
 bool PostgresClient::updateAgentCertSerial(const std::string& agentId, const std::string& certSerial) {
-    if (!isConnected()) return false;
+    if (!isConnected() && !reconnect()) return false;
 
     const char* paramValues[2] = { certSerial.c_str(), agentId.c_str() };
 
@@ -164,7 +168,7 @@ bool PostgresClient::updateAgentCertSerial(const std::string& agentId, const std
 }
 
 bool PostgresClient::updateLastSeen(const std::string& agentId) {
-    if (!isConnected()) return false;
+    if (!isConnected() && !reconnect()) return false;
 
     const char* paramValues[1] = { agentId.c_str() };
 
@@ -178,7 +182,7 @@ bool PostgresClient::updateLastSeen(const std::string& agentId) {
 }
 
 bool PostgresClient::agentExists(const std::string& agentId) {
-    if (!isConnected()) return false;
+    if (!isConnected() && !reconnect()) return false;
 
     const char* paramValues[1] = { agentId.c_str() };
 
@@ -196,7 +200,7 @@ bool PostgresClient::agentExists(const std::string& agentId) {
 // ─────────────────────────────────────────────────────────────
 
 bool PostgresClient::insertCertificate(const CertificateRecord& cert) {
-    if (!isConnected()) return false;
+    if (!isConnected() && !reconnect()) return false;
 
     const char* paramValues[4] = {
         cert.serialNumber.c_str(),
@@ -223,7 +227,7 @@ bool PostgresClient::insertCertificate(const CertificateRecord& cert) {
 }
 
 std::optional<CertificateRecord> PostgresClient::getCertificate(const std::string& agentId) {
-    if (!isConnected()) return std::nullopt;
+    if (!isConnected() && !reconnect()) return std::nullopt;
 
     const char* paramValues[1] = { agentId.c_str() };
 
@@ -255,7 +259,7 @@ std::optional<CertificateRecord> PostgresClient::getCertificate(const std::strin
 }
 
 std::optional<CertificateRecord> PostgresClient::getCertificateBySerial(const std::string& serialNumber) {
-    if (!isConnected()) return std::nullopt;
+    if (!isConnected() && !reconnect()) return std::nullopt;
 
     const char* paramValues[1] = { serialNumber.c_str() };
 
@@ -286,7 +290,7 @@ std::optional<CertificateRecord> PostgresClient::getCertificateBySerial(const st
 }
 
 bool PostgresClient::revokeCertificate(const std::string& serialNumber, const std::string& reason) {
-    if (!isConnected()) return false;
+    if (!isConnected() && !reconnect()) return false;
 
     const char* paramValues[2] = { reason.c_str(), serialNumber.c_str() };
 
@@ -308,7 +312,7 @@ bool PostgresClient::revokeCertificate(const std::string& serialNumber, const st
 
 std::vector<std::string> PostgresClient::getRevokedSerials() {
     std::vector<std::string> serials;
-    if (!isConnected()) return serials;
+    if (!isConnected() && !reconnect()) return serials;
 
     PGresult* res = PQexec(conn_,
         "SELECT serial_number FROM certificates WHERE revoked = TRUE");
@@ -330,7 +334,7 @@ std::vector<std::string> PostgresClient::getRevokedSerials() {
 // ─────────────────────────────────────────────────────────────
 
 std::optional<LicenseRecord> PostgresClient::getLicense(const std::string& agentId) {
-    if (!isConnected()) return std::nullopt;
+    if (!isConnected() && !reconnect()) return std::nullopt;
 
     const char* paramValues[1] = { agentId.c_str() };
 
