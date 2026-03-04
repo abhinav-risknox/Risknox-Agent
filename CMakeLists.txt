@@ -254,6 +254,111 @@ target_link_libraries(test_postgres_client PRIVATE
 )
 
 # =============================================================================
+# Test: Manager Server (Integration — mock libpq, real CA + TLS)
+# =============================================================================
+add_executable(test_manager_server
+    tests/test_manager_server.cpp
+    src/manager/server/ManagerServer.cpp
+    src/manager/server/AgentHandler.cpp
+    src/manager/ca/CertificateAuthority.cpp
+    src/manager/db/PostgresClient.cpp
+    src/utils/Logger.cpp
+)
+
+target_include_directories(test_manager_server PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
+    ${LIBPQ_INCLUDE_DIR}
+)
+
+target_compile_definitions(test_manager_server PRIVATE
+    _WIN32_WINNT=0x0602
+    NOMINMAX
+    WIN32_LEAN_AND_MEAN
+    SPDLOG_HEADER_ONLY
+    FMT_HEADER_ONLY
+)
+
+target_link_libraries(test_manager_server PRIVATE
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    ws2_32
+    advapi32
+)
+
+# =============================================================================
+# Test: Agent Registry (Unit — mock libpq)
+# =============================================================================
+add_executable(test_agent_registry
+    tests/test_agent_registry.cpp
+    src/manager/registry/AgentRegistry.cpp
+    src/manager/db/PostgresClient.cpp
+    src/utils/Logger.cpp
+)
+
+target_include_directories(test_agent_registry PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
+    ${LIBPQ_INCLUDE_DIR}
+)
+
+target_compile_definitions(test_agent_registry PRIVATE
+    _WIN32_WINNT=0x0602 NOMINMAX WIN32_LEAN_AND_MEAN SPDLOG_HEADER_ONLY FMT_HEADER_ONLY
+)
+
+target_link_libraries(test_agent_registry PRIVATE ws2_32 advapi32)
+
+# =============================================================================
+# Test: License Manager (Unit — mock libpq)
+# =============================================================================
+add_executable(test_license_manager
+    tests/test_license_manager.cpp
+    src/manager/registry/LicenseManager.cpp
+    src/manager/db/PostgresClient.cpp
+    src/utils/Logger.cpp
+)
+
+target_include_directories(test_license_manager PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
+    ${LIBPQ_INCLUDE_DIR}
+)
+
+target_compile_definitions(test_license_manager PRIVATE
+    _WIN32_WINNT=0x0602 NOMINMAX WIN32_LEAN_AND_MEAN SPDLOG_HEADER_ONLY FMT_HEADER_ONLY
+)
+
+target_link_libraries(test_license_manager PRIVATE ws2_32 advapi32)
+
+# =============================================================================
+# Test: Agent Handler (Integration — mock libpq, real CA + OpenSSL)
+# =============================================================================
+add_executable(test_agent_handler
+    tests/test_agent_handler.cpp
+    src/manager/server/AgentHandler.cpp
+    src/manager/ca/CertificateAuthority.cpp
+    src/manager/db/PostgresClient.cpp
+    src/utils/Logger.cpp
+)
+
+target_include_directories(test_agent_handler PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
+    ${LIBPQ_INCLUDE_DIR}
+)
+
+target_compile_definitions(test_agent_handler PRIVATE
+    _WIN32_WINNT=0x0602 NOMINMAX WIN32_LEAN_AND_MEAN SPDLOG_HEADER_ONLY FMT_HEADER_ONLY
+)
+
+target_link_libraries(test_agent_handler PRIVATE
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    ws2_32
+    advapi32
+)
+
+# =============================================================================
 # Install targets
 # =============================================================================
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)

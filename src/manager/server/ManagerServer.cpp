@@ -4,12 +4,15 @@
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+#include <openssl/pem.h>
 
 #ifdef _WIN32
 #include <ws2tcpip.h>
 #endif
 
 #include <filesystem>
+#include <fstream>
+#include <sstream>
 
 namespace ResolutePulse {
 
@@ -76,18 +79,21 @@ bool ManagerServer::initialize(int port,
             return false;
         }
 
-        // Save server cert
-        FILE* certFile = fopen(serverCertPath_.c_str(), "w");
-        if (certFile) {
-            fwrite(issued.certificatePem.c_str(), 1, issued.certificatePem.size(), certFile);
-            fclose(certFile);
+        // Save server cert using C++ fstream (avoids OPENSSL_Applink)
+        {
+            std::ofstream ofs(serverCertPath_, std::ios::binary);
+            if (ofs) ofs.write(issued.certificatePem.c_str(), issued.certificatePem.size());
         }
 
-        // Save server private key
-        FILE* keyFile = fopen(serverKeyPath_.c_str(), "w");
-        if (keyFile) {
-            PEM_write_PrivateKey(keyFile, serverKey, nullptr, nullptr, 0, nullptr, nullptr);
-            fclose(keyFile);
+        // Save server private key using memory BIO + fstream
+        {
+            BIO* keyBio = BIO_new(BIO_s_mem());
+            PEM_write_bio_PrivateKey(keyBio, serverKey, nullptr, nullptr, 0, nullptr, nullptr);
+            char* keyData = nullptr;
+            long keyLen = BIO_get_mem_data(keyBio, &keyData);
+            std::ofstream ofs(serverKeyPath_, std::ios::binary);
+            if (ofs) ofs.write(keyData, keyLen);
+            BIO_free(keyBio);
         }
 
         EVP_PKEY_free(serverKey);
@@ -123,16 +129,19 @@ bool ManagerServer::createSSLContext() {
     // During registration, agents don't have certificates yet
     SSL_CTX_set_verify(sslCtx_, SSL_VERIFY_PEER, nullptr);
 
-    // Load CRL for revocation checking
+    // Load CRL for revocation checking (memory BIO avoids OPENSSL_Applink)
     std::string crlPath = ca_->getCADir() + "/crl.pem";
     if (std::filesystem::exists(crlPath)) {
         X509_STORE* store = SSL_CTX_get_cert_store(sslCtx_);
         X509_STORE_set_flags(store, X509_V_FLAG_CRL_CHECK);
 
-        FILE* crlFile = fopen(crlPath.c_str(), "r");
-        if (crlFile) {
-            X509_CRL* crl = PEM_read_X509_CRL(crlFile, nullptr, nullptr, nullptr);
-            fclose(crlFile);
+        std::ifstream ifs(crlPath, std::ios::binary);
+        if (ifs) {
+            std::string crlPem((std::istreambuf_iterator<char>(ifs)),
+                                std::istreambuf_iterator<char>());
+            BIO* crlBio = BIO_new_mem_buf(crlPem.data(), static_cast<int>(crlPem.size()));
+            X509_CRL* crl = PEM_read_bio_X509_CRL(crlBio, nullptr, nullptr, nullptr);
+            BIO_free(crlBio);
             if (crl) {
                 X509_STORE_add_crl(store, crl);
                 X509_CRL_free(crl);
@@ -144,25 +153,66 @@ bool ManagerServer::createSSLContext() {
 }
 
 bool ManagerServer::loadCertificates() {
-    // Load manager certificate
-    if (SSL_CTX_use_certificate_file(sslCtx_, serverCertPath_.c_str(), SSL_FILETYPE_PEM) <= 0) {
-        LOG_ERROR("Failed to load server certificate: {}", serverCertPath_);
-        ERR_print_errors_fp(stderr);
-        return false;
+    // Load manager certificate from file into memory, then into SSL context
+    {
+        std::ifstream ifs(serverCertPath_, std::ios::binary);
+        if (!ifs) {
+            LOG_ERROR("Cannot open server certificate: {}", serverCertPath_);
+            return false;
+        }
+        std::string certPem((std::istreambuf_iterator<char>(ifs)),
+                             std::istreambuf_iterator<char>());
+        BIO* bio = BIO_new_mem_buf(certPem.data(), static_cast<int>(certPem.size()));
+        X509* cert = PEM_read_bio_X509(bio, nullptr, nullptr, nullptr);
+        BIO_free(bio);
+        if (!cert || SSL_CTX_use_certificate(sslCtx_, cert) <= 0) {
+            LOG_ERROR("Failed to load server certificate: {}", serverCertPath_);
+            if (cert) X509_free(cert);
+            return false;
+        }
+        X509_free(cert);
     }
 
-    // Load manager private key
-    if (SSL_CTX_use_PrivateKey_file(sslCtx_, serverKeyPath_.c_str(), SSL_FILETYPE_PEM) <= 0) {
-        LOG_ERROR("Failed to load server private key: {}", serverKeyPath_);
-        ERR_print_errors_fp(stderr);
-        return false;
+    // Load manager private key from file into memory, then into SSL context
+    {
+        std::ifstream ifs(serverKeyPath_, std::ios::binary);
+        if (!ifs) {
+            LOG_ERROR("Cannot open server private key: {}", serverKeyPath_);
+            return false;
+        }
+        std::string keyPem((std::istreambuf_iterator<char>(ifs)),
+                            std::istreambuf_iterator<char>());
+        BIO* bio = BIO_new_mem_buf(keyPem.data(), static_cast<int>(keyPem.size()));
+        EVP_PKEY* key = PEM_read_bio_PrivateKey(bio, nullptr, nullptr, nullptr);
+        BIO_free(bio);
+        if (!key || SSL_CTX_use_PrivateKey(sslCtx_, key) <= 0) {
+            LOG_ERROR("Failed to load server private key: {}", serverKeyPath_);
+            if (key) EVP_PKEY_free(key);
+            return false;
+        }
+        EVP_PKEY_free(key);
     }
 
-    // Load CA certificate for client verification
-    std::string caCertPath = ca_->getCADir() + "/ca.crt";
-    if (SSL_CTX_load_verify_locations(sslCtx_, caCertPath.c_str(), nullptr) <= 0) {
-        LOG_ERROR("Failed to load CA certificate for verification");
-        return false;
+    // Load CA certificate for client verification (memory-based)
+    {
+        std::string caCertPath = ca_->getCADir() + "/ca.crt";
+        std::ifstream ifs(caCertPath, std::ios::binary);
+        if (!ifs) {
+            LOG_ERROR("Cannot open CA certificate: {}", caCertPath);
+            return false;
+        }
+        std::string caPem((std::istreambuf_iterator<char>(ifs)),
+                           std::istreambuf_iterator<char>());
+        BIO* bio = BIO_new_mem_buf(caPem.data(), static_cast<int>(caPem.size()));
+        X509* caCert = PEM_read_bio_X509(bio, nullptr, nullptr, nullptr);
+        BIO_free(bio);
+        if (!caCert) {
+            LOG_ERROR("Failed to parse CA certificate");
+            return false;
+        }
+        X509_STORE* store = SSL_CTX_get_cert_store(sslCtx_);
+        X509_STORE_add_cert(store, caCert);
+        X509_free(caCert);
     }
 
     return true;
