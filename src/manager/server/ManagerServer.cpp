@@ -321,7 +321,17 @@ void ManagerServer::handleClient(SOCKET clientSocket, const std::string& clientA
 
     if (SSL_accept(ssl) <= 0) {
         LOG_WARN("TLS handshake failed from {}", clientAddr);
-        ERR_print_errors_fp(stderr);
+        
+        // Log OpenSSL errors without using _fp (to avoid OPENSSL_Applink issues)
+        BIO* errBio = BIO_new(BIO_s_mem());
+        ERR_print_errors(errBio);
+        char* errData = nullptr;
+        long errLen = BIO_get_mem_data(errBio, &errData);
+        if (errLen > 0) {
+            LOG_ERROR("OpenSSL Errors: {}", std::string(errData, errLen));
+        }
+        BIO_free(errBio);
+
         SSL_free(ssl);
         closesocket(clientSocket);
         return;

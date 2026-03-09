@@ -60,10 +60,10 @@ set(AGENT_SOURCES
     src/sysinfo/InstalledAppsCollector.cpp
     src/sysinfo/OpenPortsCollector.cpp
     # Registration module
-    # src/agent/registration/CertificateStore.cpp
-    # src/agent/registration/RegistrationClient.cpp
+    src/agent/registration/CertificateStore.cpp
+    src/agent/registration/RegistrationClient.cpp
     # TLS Sender module
-    # src/agent/network/TlsSender.cpp
+    src/agent/network/TlsSender.cpp
 )
 
 set(AGENT_HEADERS
@@ -92,9 +92,9 @@ set(AGENT_HEADERS
     src/sysinfo/InstalledAppsCollector.h
     src/sysinfo/OpenPortsCollector.h
     # Registration module
-    # src/agent/registration/CertificateStore.h
-    # src/agent/registration/RegistrationClient.h
-    # src/agent/network/TlsSender.h
+    src/agent/registration/CertificateStore.h
+    src/agent/registration/RegistrationClient.h
+    src/agent/network/TlsSender.h
     # Common
     ${COMMON_HEADERS}
 )
@@ -356,6 +356,41 @@ target_link_libraries(test_agent_handler PRIVATE
     OpenSSL::Crypto
     ws2_32
     advapi32
+)
+
+# =============================================================================
+# Test: Agent TLS (Unit + Integration — CertificateStore, RegistrationClient, TlsSender)
+# =============================================================================
+add_executable(test_agent_tls
+    tests/test_agent_tls.cpp
+    src/agent/registration/CertificateStore.cpp
+    src/agent/registration/RegistrationClient.cpp
+    src/agent/network/TlsSender.cpp
+    src/manager/ca/CertificateAuthority.cpp
+    src/utils/Logger.cpp
+    src/utils/Base64.cpp
+)
+
+target_include_directories(test_agent_tls PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
+)
+
+target_compile_definitions(test_agent_tls PRIVATE
+    _WIN32_WINNT=0x0602
+    NOMINMAX
+    WIN32_LEAN_AND_MEAN
+    SPDLOG_HEADER_ONLY
+    FMT_HEADER_ONLY
+)
+
+target_link_libraries(test_agent_tls PRIVATE
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    ws2_32
+    advapi32
+    crypt32
+    secur32
 )
 
 # =============================================================================

@@ -9,6 +9,9 @@
 #include "sender/BatchSender.h"
 #include "fim/FimMonitor.h"
 #include "sysinfo/SystemInfoCollector.h"
+#include "agent/registration/CertificateStore.h"
+#include "agent/registration/RegistrationClient.h"
+#include "agent/network/TlsSender.h"
 
 #include <memory>
 #include <atomic>
@@ -40,16 +43,24 @@ private:
     // Check for stop signal (console or service)
     bool shouldStop() const;
     
+    // Registration flow
+    bool performRegistration();
+    
     std::unique_ptr<EventQueue> queue_;
     std::unique_ptr<EventBuffer> buffer_;
     std::unique_ptr<TcpSender> sender_;
+    std::unique_ptr<TlsSender> tlsSender_;
     std::unique_ptr<EventCollector> collector_;
     std::unique_ptr<BatchSender> batchSender_;
     std::unique_ptr<FimMonitor> fimMonitor_;
     std::unique_ptr<SystemInfoCollector> sysInfoCollector_;
     
+    // Registration components
+    std::unique_ptr<CertificateStore> certStore_;
+    
     std::atomic<bool> running_{false};
     std::atomic<bool> stopRequested_{false};
+    bool useRegistration_ = false;  // True when manager registration is configured
     
     // System info thread and configuration
     std::thread sysInfoThread_;

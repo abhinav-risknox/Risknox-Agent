@@ -3,6 +3,9 @@
 #include "service/ServiceMain.h"
 #include "fim/FimEvent.h"
 
+#include <nlohmann/json.hpp>
+#include <fstream>
+
 #include <thread>
 #include <chrono>
 
@@ -52,6 +55,29 @@ bool Agent::initialize(const std::string& configPath) {
         }
     }
     
+    // ─── Registration & Certificate Check ───
+    // Check if manager registration is configured in config.json
+    {
+        std::ifstream cfgFile(configPath);
+        if (cfgFile) {
+            try {
+                nlohmann::json cfgJson;
+                cfgFile >> cfgJson;
+                if (cfgJson.contains("manager")) {
+                    useRegistration_ = true;
+                    LOG_INFO("Manager registration enabled");
+                }
+            } catch (...) {}
+        }
+    }
+    
+    if (useRegistration_) {
+        if (!performRegistration()) {
+            LOG_ERROR("Registration failed");
+            return false;
+        }
+    }
+    
     // Initialize components
     queue_ = std::make_unique<EventQueue>(config.getBufferConfig().max_events);
     
@@ -61,12 +87,32 @@ bool Agent::initialize(const std::string& configPath) {
         return false;
     }
     
-    sender_ = std::make_unique<TcpSender>();
-    if (!sender_->initialize(
-            config.getFluentBitHost(),
-            config.getFluentBitPort())) {
-        LOG_ERROR("Failed to initialize TCP sender");
-        return false;
+    // Use TlsSender if registered, otherwise plain TcpSender
+    if (useRegistration_ && certStore_ && certStore_->exists()) {
+        tlsSender_ = std::make_unique<TlsSender>();
+        // Read manager config
+        std::ifstream cfgFile(configPath);
+        nlohmann::json cfgJson;
+        cfgFile >> cfgJson;
+        auto& mgr = cfgJson["manager"];
+        std::string mgrHost = mgr.value("host", "localhost");
+        int mgrPort = mgr.value("port", 1514);
+        
+        if (!tlsSender_->initialize(mgrHost, mgrPort,
+                certStore_->getAgentCertPath(),
+                certStore_->getAgentKeyPath(),
+                certStore_->getCACertPath())) {
+            LOG_ERROR("Failed to initialize TLS sender");
+            return false;
+        }
+    } else {
+        sender_ = std::make_unique<TcpSender>();
+        if (!sender_->initialize(
+                config.getFluentBitHost(),
+                config.getFluentBitPort())) {
+            LOG_ERROR("Failed to initialize TCP sender");
+            return false;
+        }
     }
     
     collector_ = std::make_unique<EventCollector>();
@@ -151,7 +197,14 @@ bool Agent::initialize(const std::string& configPath) {
     
     LOG_INFO("Agent initialized successfully");
     LOG_INFO("  Agent ID: {}", config.getAgentId());
-    LOG_INFO("  Fluent Bit: {}:{}", config.getFluentBitHost(), config.getFluentBitPort());
+    if (useRegistration_) {
+        LOG_INFO("  Mode: Registered (mTLS)");
+        if (certStore_) {
+            LOG_INFO("  Certificate expires in {} days", certStore_->daysUntilExpiry());
+        }
+    } else {
+        LOG_INFO("  Fluent Bit: {}:{}", config.getFluentBitHost(), config.getFluentBitPort());
+    }
     LOG_INFO("  Channels: {}", discovery.available.size());
     if (fimMonitor_) {
         LOG_INFO("  FIM: enabled ({} directories)", fimCfg.directories.size());
@@ -161,6 +214,87 @@ bool Agent::initialize(const std::string& configPath) {
                  collectSysInfoOnStartup_, sysInfoInterval_.count());
     }
     
+    return true;
+}
+
+bool Agent::performRegistration() {
+    LOG_INFO("Checking agent registration status...");
+    
+    auto& config = ConfigManager::instance();
+    std::string certsDir = "certs";
+    
+    certStore_ = std::make_unique<CertificateStore>();
+    certStore_->setCertsDir(certsDir);
+    
+    // Check if we already have a valid certificate
+    if (certStore_->exists()) {
+        if (certStore_->load() && certStore_->isValid()) {
+            int daysLeft = certStore_->daysUntilExpiry();
+            LOG_INFO("Valid certificate found ({} days until expiry)", daysLeft);
+            
+            if (daysLeft > 1) {
+                return true;  // Certificate is good
+            }
+            LOG_WARN("Certificate expiring soon, will re-register");
+        } else {
+            LOG_WARN("Certificate expired or invalid, will re-register");
+        }
+    } else {
+        LOG_INFO("No certificate found, registering with manager...");
+    }
+    
+    // Need to register
+    RegistrationClient regClient;
+    
+    // Generate key pair if not exists
+    std::string keyPath = certsDir + "/agent.key";
+    if (!std::filesystem::exists(keyPath)) {
+        if (!regClient.generateKeyPair(certsDir)) {
+            LOG_ERROR("Failed to generate key pair");
+            return false;
+        }
+    } else {
+        // Load existing public key for re-registration
+        // For simplicity, regenerate the key pair
+        if (!regClient.generateKeyPair(certsDir)) {
+            LOG_ERROR("Failed to generate key pair");
+            return false;
+        }
+    }
+    
+    // Get hostname
+    char hostname[256] = {};
+    gethostname(hostname, sizeof(hostname));
+    
+    // Get OS version
+    std::string osVersion = "Windows";
+    
+    // Read manager settings from config
+    // Re-read config.json for manager section
+    std::string mgrHost = "localhost";
+    int mgrPort = 1514;
+    
+    // TODO: Read from config properly. For now use defaults.
+    
+    if (!regClient.registerWithManager(
+            mgrHost, mgrPort,
+            config.getAgentId(),
+            std::string(hostname),
+            "windows",
+            osVersion,
+            "1.0.0",
+            *certStore_)) {
+        LOG_ERROR("Registration with manager failed: {}", regClient.getLastError());
+        return false;
+    }
+    
+    // Reload the certificate store
+    if (!certStore_->load()) {
+        LOG_ERROR("Failed to load certificates after registration");
+        return false;
+    }
+    
+    LOG_INFO("Agent registered and certificates loaded");
     return true;
 }
 

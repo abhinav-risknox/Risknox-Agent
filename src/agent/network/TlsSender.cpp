@@ -1,0 +1,319 @@
+#include "TlsSender.h"
+#include "common/Protocol.h"
+#include "utils/Logger.h"
+
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+#include <openssl/pem.h>
+
+#ifdef _WIN32
+#include <ws2tcpip.h>
+#endif
+
+#include <nlohmann/json.hpp>
+#include <sstream>
+#include <thread>
+#include <chrono>
+
+namespace ResolutePulse {
+
+TlsSender::TlsSender() = default;
+
+TlsSender::~TlsSender() {
+    disconnect();
+    if (sslCtx_) SSL_CTX_free(sslCtx_);
+#ifdef _WIN32
+    if (wsaInitialized_) WSACleanup();
+#endif
+}
+
+bool TlsSender::initialize(const std::string& host, int port,
+                            const std::string& certPath,
+                            const std::string& keyPath,
+                            const std::string& caCertPath) {
+    host_ = host;
+    port_ = port;
+    certPath_ = certPath;
+    keyPath_ = keyPath;
+    caCertPath_ = caCertPath;
+
+    LOG_INFO("Initializing TLS sender: host='{}', port={}", host_, port_);
+
+#ifdef _WIN32
+    WSADATA wsaData;
+    int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
+    if (result != 0) {
+        lastError_ = "WSAStartup failed: " + std::to_string(result);
+        LOG_ERROR("{}", lastError_);
+        return false;
+    }
+    wsaInitialized_ = true;
+#endif
+
+    if (!createSSLContext()) {
+        LOG_ERROR("Failed to create SSL context");
+        return false;
+    }
+
+    // Try initial connection
+    if (!connectWithMutualTLS()) {
+        LOG_WARN("Initial mTLS connection failed, will retry on first send");
+        return true;
+    }
+
+    LOG_INFO("TLS sender initialized with mTLS");
+    return true;
+}
+
+bool TlsSender::createSSLContext() {
+    const SSL_METHOD* method = TLS_client_method();
+    sslCtx_ = SSL_CTX_new(method);
+    if (!sslCtx_) {
+        lastError_ = "Failed to create SSL context";
+        return false;
+    }
+
+    SSL_CTX_set_min_proto_version(sslCtx_, TLS1_2_VERSION);
+
+    // Load client certificate (agent.crt)
+    if (SSL_CTX_use_certificate_file(sslCtx_, certPath_.c_str(), SSL_FILETYPE_PEM) <= 0) {
+        lastError_ = "Failed to load agent certificate: " + certPath_;
+        LOG_ERROR("{}", lastError_);
+        return false;
+    }
+
+    // Load client private key (agent.key) with passphrase
+    SSL_CTX_set_default_passwd_cb_userdata(sslCtx_,
+        const_cast<void*>(static_cast<const void*>("ResolutePulse2024")));
+    SSL_CTX_set_default_passwd_cb(sslCtx_, [](char* buf, int size, int, void* userdata) -> int {
+        const char* pass = static_cast<const char*>(userdata);
+        int len = static_cast<int>(strlen(pass));
+        if (len > size) len = size;
+        memcpy(buf, pass, len);
+        return len;
+    });
+
+    if (SSL_CTX_use_PrivateKey_file(sslCtx_, keyPath_.c_str(), SSL_FILETYPE_PEM) <= 0) {
+        lastError_ = "Failed to load agent private key: " + keyPath_;
+        LOG_ERROR("{}", lastError_);
+        return false;
+    }
+
+    // Verify private key matches certificate
+    if (!SSL_CTX_check_private_key(sslCtx_)) {
+        lastError_ = "Agent private key does not match certificate";
+        LOG_ERROR("{}", lastError_);
+        return false;
+    }
+
+    // Load CA certificate for server verification
+    if (SSL_CTX_load_verify_locations(sslCtx_, caCertPath_.c_str(), nullptr) <= 0) {
+        lastError_ = "Failed to load CA certificate: " + caCertPath_;
+        LOG_ERROR("{}", lastError_);
+        return false;
+    }
+
+    // Enable server certificate verification
+    SSL_CTX_set_verify(sslCtx_, SSL_VERIFY_PEER, nullptr);
+
+    return true;
+}
+
+bool TlsSender::connectWithMutualTLS() {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    // Close existing connection
+    if (ssl_) {
+        SSL_shutdown(ssl_);
+        SSL_free(ssl_);
+        ssl_ = nullptr;
+    }
+    if (socket_ != INVALID_SOCKET) {
+        closesocket(socket_);
+        socket_ = INVALID_SOCKET;
+    }
+    connected_ = false;
+
+    // Create TCP socket
+    socket_ = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (socket_ == INVALID_SOCKET) {
+        lastError_ = "Failed to create socket";
+        LOG_ERROR("{}", lastError_);
+        return false;
+    }
+
+    LOG_INFO("Attempting mTLS connection to host='{}', port={}", host_, port_);
+
+    // Set timeout
+#ifdef _WIN32
+    DWORD timeout = CONNECT_TIMEOUT_MS;
+    setsockopt(socket_, SOL_SOCKET, SO_SNDTIMEO, (const char*)&timeout, sizeof(timeout));
+    setsockopt(socket_, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
+#endif
+
+    // Resolve host
+    struct addrinfo hints = {}, *result = nullptr;
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+
+    std::string portStr = std::to_string(port_);
+    if (getaddrinfo(host_.c_str(), portStr.c_str(), &hints, &result) != 0) {
+        lastError_ = "Failed to resolve host: " + host_;
+        LOG_ERROR("{}", lastError_);
+        closesocket(socket_);
+        socket_ = INVALID_SOCKET;
+        return false;
+    }
+
+    if (::connect(socket_, result->ai_addr, static_cast<int>(result->ai_addrlen)) != 0) {
+        freeaddrinfo(result);
+        lastError_ = "TCP connection failed to " + host_ + ":" + portStr;
+        LOG_ERROR("{}", lastError_);
+        closesocket(socket_);
+        socket_ = INVALID_SOCKET;
+        return false;
+    }
+    freeaddrinfo(result);
+
+    // TLS handshake with mTLS
+    ssl_ = SSL_new(sslCtx_);
+    SSL_set_fd(ssl_, static_cast<int>(socket_));
+
+    if (SSL_connect(ssl_) <= 0) {
+        lastError_ = "mTLS handshake failed";
+        LOG_ERROR("{}", lastError_);
+        
+        BIO* errBio = BIO_new(BIO_s_mem());
+        ERR_print_errors(errBio);
+        char* errData = nullptr;
+        long errLen = BIO_get_mem_data(errBio, &errData);
+        if (errLen > 0) {
+            LOG_ERROR("OpenSSL Errors: {}", std::string(errData, errLen));
+        }
+        BIO_free(errBio);
+
+        SSL_free(ssl_);
+        ssl_ = nullptr;
+        closesocket(socket_);
+        socket_ = INVALID_SOCKET;
+        return false;
+    }
+
+    connected_ = true;
+    reconnections_++;
+    LOG_INFO("mTLS connection established to {}:{}", host_, port_);
+    return true;
+}
+
+void TlsSender::disconnect() {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (ssl_) {
+        SSL_shutdown(ssl_);
+        SSL_free(ssl_);
+        ssl_ = nullptr;
+    }
+    if (socket_ != INVALID_SOCKET) {
+        closesocket(socket_);
+        socket_ = INVALID_SOCKET;
+    }
+    connected_ = false;
+}
+
+TlsSendResult TlsSender::sendBatch(const std::vector<Event>& events) {
+    if (events.empty()) return TlsSendResult::Success;
+
+    if (!sslCtx_) {
+        lastError_ = "TLS sender not initialized (SSL context is null)";
+        failedSends_ += events.size();
+        return TlsSendResult::NetworkError;
+    }
+
+    // Build NDJSON batch (same format as TcpSender for Fluent Bit compatibility)
+    std::ostringstream batch;
+    for (const auto& event : events) {
+        nlohmann::json j;
+        j["c"] = event.channel;
+        j["e"] = event.eventId;
+        j["t"] = event.timestamp;
+        j["x"] = event.data;
+        batch << j.dump() << "\n";
+    }
+
+    std::string batchData = batch.str();
+
+    // Build protocol message
+    MessageHeader header;
+    header.type = static_cast<uint8_t>(MessageType::EVENT_BATCH);
+    header.payloadLength = static_cast<uint32_t>(batchData.size());
+
+    uint8_t headerBuf[MESSAGE_HEADER_SIZE];
+    serializeHeader(header, headerBuf);
+
+    // Try to send with reconnection
+    int attempts = 0;
+    while (attempts < MAX_RECONNECT_ATTEMPTS) {
+        if (!connected_.load()) {
+            LOG_DEBUG("Not connected, attempting mTLS connection (attempt {})", attempts + 1);
+            if (!connectWithMutualTLS()) {
+                attempts++;
+                std::this_thread::sleep_for(std::chrono::milliseconds(1000 * attempts));
+                continue;
+            }
+        }
+
+        // Send header
+        if (!sslSendRaw(headerBuf, MESSAGE_HEADER_SIZE)) {
+            LOG_WARN("Failed to send header, will retry");
+            disconnect();
+            attempts++;
+            continue;
+        }
+
+        // Send payload
+        if (!sslSendRaw(batchData.c_str(), batchData.size())) {
+            LOG_WARN("Failed to send payload, will retry");
+            disconnect();
+            attempts++;
+            continue;
+        }
+
+        eventsSent_ += events.size();
+        bytesSent_ += MESSAGE_HEADER_SIZE + batchData.size();
+        batchesSent_++;
+        return TlsSendResult::Success;
+    }
+
+    failedSends_ += events.size();
+    lastError_ = "Failed to send batch after " + std::to_string(MAX_RECONNECT_ATTEMPTS) + " attempts";
+    LOG_ERROR("{}", lastError_);
+    return TlsSendResult::NetworkError;
+}
+
+bool TlsSender::sslSendRaw(const void* data, size_t length) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (!ssl_ || !connected_.load()) {
+        lastError_ = "Not connected";
+        return false;
+    }
+
+    size_t totalSent = 0;
+    const auto* buf = static_cast<const char*>(data);
+
+    while (totalSent < length) {
+        int sent = SSL_write(ssl_, buf + totalSent, static_cast<int>(length - totalSent));
+        if (sent <= 0) {
+            int err = SSL_get_error(ssl_, sent);
+            lastError_ = "SSL_write error: " + std::to_string(err);
+            LOG_ERROR("{}", lastError_);
+            connected_ = false;
+            return false;
+        }
+        totalSent += sent;
+    }
+
+    return true;
+}
+
+} // namespace ResolutePulse
