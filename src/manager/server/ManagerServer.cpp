@@ -71,8 +71,9 @@ bool ManagerServer::initialize(int port,
         std::string pubKeyPem(pubData, pubLen);
         BIO_free(bio);
 
-        // Issue cert through CA
-        auto issued = ca.issueCertificate("ResolutePulse-Manager", pubKeyPem, 365);
+        // Issue cert through CA — must use CertType::Server for serverAuth EKU
+        auto issued = ca.issueCertificate("ResolutePulse-Manager", pubKeyPem, 365,
+                                           CertType::Server);
         if (issued.certificatePem.empty()) {
             LOG_ERROR("Failed to issue server certificate");
             EVP_PKEY_free(serverKey);

@@ -265,7 +265,8 @@ bool CertificateAuthority::saveCA() {
 IssuedCertificate CertificateAuthority::issueCertificate(
     const std::string& agentId,
     const std::string& publicKeyPem,
-    int validDays)
+    int validDays,
+    CertType type)
 {
     std::lock_guard<std::mutex> lock(mutex_);
     IssuedCertificate result;
@@ -349,9 +350,10 @@ IssuedCertificate CertificateAuthority::issueCertificate(
         NID_key_usage, const_cast<char*>("critical,digitalSignature"));
     if (ext) { X509_add_ext(cert, ext, -1); X509_EXTENSION_free(ext); }
 
-    // Extended Key Usage: TLS Client Authentication
+    // Extended Key Usage: serverAuth for manager server cert, clientAuth for agents
+    const char* ekuValue = (type == CertType::Server) ? "serverAuth" : "clientAuth";
     ext = X509V3_EXT_conf_nid(nullptr, &v3ctx,
-        NID_ext_key_usage, const_cast<char*>("clientAuth"));
+        NID_ext_key_usage, const_cast<char*>(ekuValue));
     if (ext) { X509_add_ext(cert, ext, -1); X509_EXTENSION_free(ext); }
 
     // Subject Key Identifier

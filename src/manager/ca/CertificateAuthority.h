@@ -19,6 +19,12 @@ struct IssuedCertificate {
     std::string expiresAt;       // ISO 8601
 };
 
+// Controls the Extended Key Usage on issued certificates
+enum class CertType {
+    AgentClient,  // id-kp-clientAuth  — for agent leaf certs
+    Server        // id-kp-serverAuth  — for the manager's own TLS cert
+};
+
 class CertificateAuthority {
 public:
     CertificateAuthority();
@@ -35,7 +41,8 @@ public:
     // @return IssuedCertificate with PEM, serial, and expiry
     IssuedCertificate issueCertificate(const std::string& agentId,
                                         const std::string& publicKeyPem,
-                                        int validDays);
+                                        int validDays,
+                                        CertType type = CertType::AgentClient);
 
     // Revoke a certificate by serial number
     bool revokeCertificate(const std::string& serialNumber);

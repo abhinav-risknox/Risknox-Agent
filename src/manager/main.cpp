@@ -30,7 +30,7 @@ int main(int argc, char* argv[]) {
     LOG_INFO("===========================================");
 
     // Configuration defaults
-    std::string dbConnString = "host=localhost dbname=risknox user=postgres password=postgres";
+    std::string dbConnString = "host=localhost dbname=risknox user=postgres password=abhi1243";
     std::string caDir = "ca";
     int port = 1514;
 
