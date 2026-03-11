@@ -7,12 +7,14 @@
 #include <atomic>
 #include <chrono>
 
+#include "network/SenderInterface.h"
+
 namespace ResolutePulse {
 
 class BatchSender {
 public:
     BatchSender(EventQueue& queue,
-               TcpSender& sender,
+               SenderInterface& sender,
                EventBuffer& buffer,
                const std::string& agentId,
                size_t batchSize,
@@ -42,7 +44,7 @@ private:
     void drainBuffer();
     
     EventQueue& queue_;
-    TcpSender& sender_;
+    SenderInterface& sender_;
     EventBuffer& buffer_;
     std::string agentId_;
     size_t batchSize_;

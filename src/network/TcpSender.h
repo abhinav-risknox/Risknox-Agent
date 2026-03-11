@@ -11,17 +11,11 @@
 #include <winsock2.h>
 #endif
 
+#include "SenderInterface.h"
+
 namespace ResolutePulse {
 
-enum class SendResult {
-    Success,        // Events sent successfully
-    NetworkError,   // Network/connection error (should retry)
-    ServerError,    // Server error (should retry)
-    ClientError,    // Client error (don't retry)
-    AuthError       // Authentication failed (kept for compatibility)
-};
-
-class TcpSender {
+class TcpSender : public SenderInterface {
 public:
     TcpSender();
     ~TcpSender();
@@ -34,16 +28,16 @@ public:
     // Send a batch of events as NDJSON lines (no agentId parameter)
     // @param events - Events to send
     // @return SendResult indicating success or type of failure
-    SendResult sendBatch(const std::vector<Event>& events);
+    SendResult sendBatch(const std::vector<Event>& events) override;
     
     // Check if connected to Fluent Bit
-    bool isConnected() const { return connected_.load(); }
+    bool isConnected() const override { return connected_.load(); }
     
     // Disconnect from Fluent Bit
     void disconnect();
     
     // Get last error message
-    const std::string& getLastError() const { return lastError_; }
+    const std::string& getLastError() const override { return lastError_; }
     
     // Get statistics
     uint64_t getEventsSent() const { return eventsSent_.load(); }

@@ -48,8 +48,7 @@ private:
     
     std::unique_ptr<EventQueue> queue_;
     std::unique_ptr<EventBuffer> buffer_;
-    std::unique_ptr<TcpSender> sender_;
-    std::unique_ptr<TlsSender> tlsSender_;
+    std::unique_ptr<SenderInterface> sender_;
     std::unique_ptr<EventCollector> collector_;
     std::unique_ptr<BatchSender> batchSender_;
     std::unique_ptr<FimMonitor> fimMonitor_;

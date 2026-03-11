@@ -4,7 +4,7 @@
 namespace ResolutePulse {
 
 BatchSender::BatchSender(EventQueue& queue,
-                        TcpSender& sender,
+                        SenderInterface& sender,
                         EventBuffer& buffer,
                         const std::string& agentId,
                         size_t batchSize,

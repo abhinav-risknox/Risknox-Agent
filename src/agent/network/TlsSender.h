@@ -15,18 +15,11 @@ typedef struct ssl_st SSL;
 #include <winsock2.h>
 #endif
 
+#include "network/SenderInterface.h"
+
 namespace ResolutePulse {
 
-// Reuse the same SendResult enum from TcpSender
-enum class TlsSendResult {
-    Success,
-    NetworkError,
-    ServerError,
-    ClientError,
-    AuthError
-};
-
-class TlsSender {
+class TlsSender : public SenderInterface {
 public:
     TlsSender();
     ~TlsSender();
@@ -43,10 +36,10 @@ public:
                     const std::string& caCertPath);
 
     // Send a batch of events over mTLS
-    TlsSendResult sendBatch(const std::vector<Event>& events);
+    SendResult sendBatch(const std::vector<Event>& events) override;
 
     // Check if connected via mTLS
-    bool isConnected() const { return connected_.load(); }
+    bool isConnected() const override { return connected_.load(); }
 
     // Disconnect
     void disconnect();
@@ -58,7 +51,7 @@ public:
     uint64_t getFailedSends() const { return failedSends_.load(); }
     uint64_t getReconnections() const { return reconnections_.load(); }
 
-    const std::string& getLastError() const { return lastError_; }
+    const std::string& getLastError() const override { return lastError_; }
 
 private:
     // Create SSL context with mutual TLS

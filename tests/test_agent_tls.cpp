@@ -296,8 +296,8 @@ int main() {
         e.timestamp = "2026-03-09T10:00:00Z";
         e.data     = "{\"test\":true}";
 
-        TlsSendResult result = sender.sendBatch({e});
-        assert(result == TlsSendResult::NetworkError
+        SendResult result = sender.sendBatch({e});
+        assert(result == SendResult::NetworkError
                && "sendBatch() on uninitialized sender must return NetworkError");
         assert(sender.getEventsSent() == 0 && "No events must be counted on failure");
         assert(sender.getFailedSends() == 1 && "failedSends must be incremented");
@@ -352,9 +352,9 @@ int main() {
                 e2.timestamp = "2026-03-09T10:00:01Z";
                 e2.data      = R"({"EventID":7045,"service":"TestSvc"})";
 
-                TlsSendResult result = sender.sendBatch({e1, e2});
+                SendResult result = sender.sendBatch({e1, e2});
 
-                if (result != TlsSendResult::Success) {
+                if (result != SendResult::Success) {
                     std::cout << "[SKIP] Test 6 skipped — manager rejected mTLS send: "
                               << sender.getLastError() << "\n";
                 } else {

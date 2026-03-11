@@ -220,13 +220,13 @@ void TlsSender::disconnect() {
     connected_ = false;
 }
 
-TlsSendResult TlsSender::sendBatch(const std::vector<Event>& events) {
-    if (events.empty()) return TlsSendResult::Success;
+SendResult TlsSender::sendBatch(const std::vector<Event>& events) {
+    if (events.empty()) return SendResult::Success;
 
     if (!sslCtx_) {
         lastError_ = "TLS sender not initialized (SSL context is null)";
         failedSends_ += events.size();
-        return TlsSendResult::NetworkError;
+        return SendResult::NetworkError;
     }
 
     // Build NDJSON batch (same format as TcpSender for Fluent Bit compatibility)

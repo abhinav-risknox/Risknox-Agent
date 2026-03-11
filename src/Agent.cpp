@@ -89,7 +89,7 @@ bool Agent::initialize(const std::string& configPath) {
     
     // Use TlsSender if registered, otherwise plain TcpSender
     if (useRegistration_ && certStore_ && certStore_->exists()) {
-        tlsSender_ = std::make_unique<TlsSender>();
+        auto tlsSender = std::make_unique<TlsSender>();
         // Read manager config
         std::ifstream cfgFile(configPath);
         nlohmann::json cfgJson;
@@ -98,21 +98,23 @@ bool Agent::initialize(const std::string& configPath) {
         std::string mgrHost = mgr.value("host", "localhost");
         int mgrPort = mgr.value("port", 1514);
         
-        if (!tlsSender_->initialize(mgrHost, mgrPort,
+        if (!tlsSender->initialize(mgrHost, mgrPort,
                 certStore_->getAgentCertPath(),
                 certStore_->getAgentKeyPath(),
                 certStore_->getCACertPath())) {
             LOG_ERROR("Failed to initialize TLS sender");
             return false;
         }
+        sender_ = std::move(tlsSender);
     } else {
-        sender_ = std::make_unique<TcpSender>();
-        if (!sender_->initialize(
+        auto tcpSender = std::make_unique<TcpSender>();
+        if (!tcpSender->initialize(
                 config.getFluentBitHost(),
                 config.getFluentBitPort())) {
             LOG_ERROR("Failed to initialize TCP sender");
             return false;
         }
+        sender_ = std::move(tcpSender);
     }
     
     collector_ = std::make_unique<EventCollector>();
