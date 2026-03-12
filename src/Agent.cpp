@@ -87,7 +87,17 @@ bool Agent::initialize(const std::string& configPath) {
         return false;
     }
     
-    // Use TlsSender if registered, otherwise plain TcpSender
+    // 1. Initialize Telemetry Sender (Always TCP to Fluent Bit)
+    auto tcpSender = std::make_unique<TcpSender>();
+    if (!tcpSender->initialize(
+            config.getFluentBitHost(),
+            config.getFluentBitPort())) {
+        LOG_ERROR("Failed to initialize TCP sender for events");
+        return false;
+    }
+    telemetrySender_ = std::move(tcpSender);
+
+    // 2. Initialize Management Sender (mTLS if registered)
     if (useRegistration_ && certStore_ && certStore_->exists()) {
         auto tlsSender = std::make_unique<TlsSender>();
         // Read manager config
@@ -102,19 +112,10 @@ bool Agent::initialize(const std::string& configPath) {
                 certStore_->getAgentCertPath(),
                 certStore_->getAgentKeyPath(),
                 certStore_->getCACertPath())) {
-            LOG_ERROR("Failed to initialize TLS sender");
+            LOG_ERROR("Failed to initialize TLS sender for management");
             return false;
         }
-        sender_ = std::move(tlsSender);
-    } else {
-        auto tcpSender = std::make_unique<TcpSender>();
-        if (!tcpSender->initialize(
-                config.getFluentBitHost(),
-                config.getFluentBitPort())) {
-            LOG_ERROR("Failed to initialize TCP sender");
-            return false;
-        }
-        sender_ = std::move(tcpSender);
+        managementSender_ = std::move(tlsSender);
     }
     
     collector_ = std::make_unique<EventCollector>();
@@ -138,7 +139,7 @@ bool Agent::initialize(const std::string& configPath) {
     // Initialize batch sender
     batchSender_ = std::make_unique<BatchSender>(
         *queue_,
-        *sender_,
+        *telemetrySender_,
         *buffer_,
         config.getAgentId(),
         config.getBufferConfig().max_events / 100,  // Batch size ~1% of max
@@ -319,6 +320,12 @@ int Agent::run() {
     
     batchSender_->start();
     
+    // Start management thread if registered
+    if (managementSender_) {
+        managementThread_ = std::thread(&Agent::managementLoop, this);
+        LOG_INFO("Management loop started");
+    }
+    
     // Start FIM if enabled
     if (fimMonitor_) {
         fimMonitor_->start();
@@ -372,6 +379,11 @@ int Agent::run() {
     }
     
     LOG_INFO("Stopping agent...");
+    
+    // Stop management thread if running
+    if (managementThread_.joinable()) {
+        managementThread_.join();
+    }
     
     // Stop system info thread if running
     if (sysInfoThread_.joinable()) {
@@ -453,6 +465,46 @@ void Agent::sysInfoLoop() {
     }
     
     LOG_DEBUG("System info collection thread stopped");
+}
+
+void Agent::managementLoop() {
+    LOG_DEBUG("Management loop background thread started");
+    auto& config = ConfigManager::instance();
+    std::string agentId = config.getAgentId();
+    
+    while (!shouldStop()) {
+        if (managementSender_) {
+            LOG_DEBUG("Sending management heartbeat...");
+            
+            uint64_t collected = collector_ ? collector_->getEventsCollected() : 0;
+            uint64_t sent = batchSender_ ? batchSender_->getEventsSent() : 0;
+            
+            SendResult result = managementSender_->sendHeartbeat(agentId, collected, sent);
+            
+            if (result == SendResult::Success) {
+                LOG_DEBUG("Heartbeat acknowledged by manager");
+            } else if (result == SendResult::AuthError) {
+                LOG_CRITICAL("License validation failed or mTLS authentication error: {}", managementSender_->getLastError());
+                LOG_CRITICAL("Suspending telemetry collection due to license enforcement.");
+                
+                if (collector_) collector_->stop();
+                if (batchSender_) batchSender_->stop();
+                
+                // We keep the loop running to check for license updates/restoration,
+                // but we'll log more frequently or just wait.
+            } else {
+                LOG_WARN("Manager heartbeat failed: {}", managementSender_->getLastError());
+            }
+        }
+        
+        // Wait for interval (60s) or stop
+        auto nextRun = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+        while (std::chrono::steady_clock::now() < nextRun && !shouldStop()) {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+    }
+    
+    LOG_DEBUG("Management loop background thread stopped");
 }
 
 } // namespace ResolutePulse

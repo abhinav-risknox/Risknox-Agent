@@ -394,6 +394,31 @@ target_link_libraries(test_agent_tls PRIVATE
 )
 
 # =============================================================================
+# Verification: Licenses
+# =============================================================================
+add_executable(verify_licenses
+    tests/verify_licenses.cpp
+    src/manager/db/PostgresClient.cpp
+    src/utils/Logger.cpp
+)
+
+target_include_directories(verify_licenses PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
+    ${LIBPQ_INCLUDE_DIR}
+)
+
+target_compile_definitions(verify_licenses PRIVATE
+    _WIN32_WINNT=0x0602 NOMINMAX WIN32_LEAN_AND_MEAN SPDLOG_HEADER_ONLY FMT_HEADER_ONLY
+)
+
+target_link_libraries(verify_licenses PRIVATE
+    ${LIBPQ_DLL}
+    ws2_32
+    advapi32
+)
+
+# =============================================================================
 # Install targets
 # =============================================================================
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)

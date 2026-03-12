@@ -92,9 +92,11 @@ struct HeartbeatAck {
     std::string agentId;
     std::string timestamp;
     bool        configChanged = false;  // If true, agent should re-fetch config
+    bool        licenseValid = true;    // If false, agent should stop collection
+    std::string licenseMessage;         // Reason for license issue
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(HeartbeatAck,
-        agentId, timestamp, configChanged)
+        agentId, timestamp, configChanged, licenseValid, licenseMessage)
 };
 
 // ─────────────────────────────────────────────────────────────

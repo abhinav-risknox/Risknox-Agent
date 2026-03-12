@@ -363,4 +363,35 @@ std::optional<LicenseRecord> PostgresClient::getLicense(const std::string& agent
     return license;
 }
 
+bool PostgresClient::insertLicense(const LicenseRecord& license) {
+    if (!isConnected() && !reconnect()) {
+        lastError_ = "Not connected";
+        return false;
+    }
+
+    const char* paramValues[5] = {
+        license.agentId.c_str(),
+        license.licenseKey.c_str(),
+        license.licenseType.c_str(),
+        license.validFrom.c_str(),
+        license.validUntil.c_str()
+    };
+
+    PGresult* res = PQexecParams(conn_,
+        "INSERT INTO licenses (agent_id, license_key, license_type, valid_from, valid_until, max_agents) "
+        "VALUES ($1, $2, $3, $4::timestamp, $5::timestamp, 1)",
+        5, nullptr, paramValues, nullptr, nullptr, 0);
+
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        lastError_ = "Insert license failed: " + std::string(PQerrorMessage(conn_));
+        LOG_ERROR("{}", lastError_);
+        PQclear(res);
+        return false;
+    }
+
+    PQclear(res);
+    LOG_INFO("Inserted {} license for agent: {}", license.licenseType, license.agentId);
+    return true;
+}
+
 } // namespace ResolutePulse

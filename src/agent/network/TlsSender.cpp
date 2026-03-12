@@ -281,13 +281,13 @@ SendResult TlsSender::sendBatch(const std::vector<Event>& events) {
         eventsSent_ += events.size();
         bytesSent_ += MESSAGE_HEADER_SIZE + batchData.size();
         batchesSent_++;
-        return TlsSendResult::Success;
+        return SendResult::Success;
     }
 
     failedSends_ += events.size();
     lastError_ = "Failed to send batch after " + std::to_string(MAX_RECONNECT_ATTEMPTS) + " attempts";
     LOG_ERROR("{}", lastError_);
-    return TlsSendResult::NetworkError;
+    return SendResult::NetworkError;
 }
 
 bool TlsSender::sslSendRaw(const void* data, size_t length) {
@@ -314,6 +314,126 @@ bool TlsSender::sslSendRaw(const void* data, size_t length) {
     }
 
     return true;
+}
+
+bool TlsSender::sslReadExact(void* buffer, size_t length) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!ssl_ || !connected_.load()) return false;
+
+    size_t total = 0;
+    auto* buf = static_cast<char*>(buffer);
+
+    while (total < length) {
+        int n = SSL_read(ssl_, buf + total, static_cast<int>(length - total));
+        if (n <= 0) {
+            connected_ = false;
+            return false;
+        }
+        total += n;
+    }
+    return true;
+}
+
+SendResult TlsSender::sendHeartbeat(const std::string& agentId, uint64_t eventsCollected, uint64_t eventsSent) {
+    if (!sslCtx_) {
+        lastError_ = "TLS sender not initialized (SSL context is null)";
+        return SendResult::NetworkError;
+    }
+
+    Heartbeat hb;
+    hb.agentId = agentId;
+    hb.eventsCollected = eventsCollected;
+    hb.eventsSent = eventsSent;
+    
+    // Get current time
+    time_t now = time(nullptr);
+    char buf[64];
+    strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+    hb.timestamp = buf;
+
+    // TODO: Add real CPU/Mem info if available
+    hb.cpuUsage = 0.0; 
+    hb.memoryUsageMb = 0;
+
+    std::string payload = nlohmann::json(hb).dump();
+
+    MessageHeader header;
+    header.type = static_cast<uint8_t>(MessageType::HEARTBEAT);
+    header.payloadLength = static_cast<uint32_t>(payload.size());
+
+    uint8_t headerBuf[MESSAGE_HEADER_SIZE];
+    serializeHeader(header, headerBuf);
+
+    int attempts = 0;
+    while (attempts < MAX_RECONNECT_ATTEMPTS) {
+        if (!connected_.load()) {
+            if (!connectWithMutualTLS()) {
+                attempts++;
+                std::this_thread::sleep_for(std::chrono::milliseconds(1000 * attempts));
+                continue;
+            }
+        }
+
+        if (!sslSendRaw(headerBuf, MESSAGE_HEADER_SIZE)) {
+            disconnect();
+            attempts++;
+            continue;
+        }
+
+        if (!sslSendRaw(payload.c_str(), payload.size())) {
+            disconnect();
+            attempts++;
+            continue;
+        }
+
+        bytesSent_ += MESSAGE_HEADER_SIZE + payload.size();
+
+        // --- Read response ---
+        uint8_t respHeaderBuf[MESSAGE_HEADER_SIZE];
+        if (!sslReadExact(respHeaderBuf, MESSAGE_HEADER_SIZE)) {
+            LOG_WARN("Failed to read heartbeat response header");
+            disconnect();
+            attempts++;
+            continue;
+        }
+
+        MessageHeader respHeader;
+        if (!deserializeHeader(respHeaderBuf, respHeader)) {
+            LOG_ERROR("Failed to deserialize heartbeat response header");
+            disconnect();
+            return SendResult::ServerError;
+        }
+
+        if (respHeader.type != static_cast<uint8_t>(MessageType::HEARTBEAT_ACK)) {
+            LOG_ERROR("Unexpected response type to heartbeat: {}", respHeader.type);
+            disconnect();
+            return SendResult::ServerError;
+        }
+
+        std::string respPayload(respHeader.payloadLength, '\0');
+        if (!sslReadExact(&respPayload[0], respHeader.payloadLength)) {
+            LOG_WARN("Failed to read heartbeat response payload");
+            disconnect();
+            attempts++;
+            continue;
+        }
+
+        try {
+            auto ack = nlohmann::json::parse(respPayload).get<HeartbeatAck>();
+            if (!ack.licenseValid) {
+                lastError_ = "License Error: " + ack.licenseMessage;
+                return SendResult::AuthError;
+            }
+            return SendResult::Success;
+        } catch (const std::exception& e) {
+            lastError_ = "Failed to parse HeartbeatAck: " + std::string(e.what());
+            LOG_ERROR("{}", lastError_);
+            return SendResult::ServerError;
+        }
+    }
+
+    lastError_ = "Failed to send heartbeat after " + std::to_string(MAX_RECONNECT_ATTEMPTS) + " attempts";
+    return SendResult::NetworkError;
 }
 
 } // namespace ResolutePulse

@@ -1,7 +1,7 @@
 {
     "fluent_bit_host": "localhost",
     "fluent_bit_port": 5170,
-    "agent_id": "windows-agent-001",
+    "agent_id": "test-license-agent",
     "manager": {
         "enabled": true,
         "host": "localhost",

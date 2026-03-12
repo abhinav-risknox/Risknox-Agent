@@ -38,6 +38,9 @@ public:
     // Send a batch of events over mTLS
     SendResult sendBatch(const std::vector<Event>& events) override;
 
+    // Send a heartbeat to the manager
+    SendResult sendHeartbeat(const std::string& agentId, uint64_t eventsCollected, uint64_t eventsSent) override;
+
     // Check if connected via mTLS
     bool isConnected() const override { return connected_.load(); }
 
@@ -62,6 +65,9 @@ private:
 
     // Send raw data over SSL
     bool sslSendRaw(const void* data, size_t length);
+
+    // Read exact number of bytes over SSL
+    bool sslReadExact(void* buffer, size_t length);
 
     std::string host_;
     int         port_ = 1514;

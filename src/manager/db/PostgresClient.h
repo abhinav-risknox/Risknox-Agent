@@ -113,6 +113,9 @@ public:
     // Get active license for an agent
     std::optional<LicenseRecord> getLicense(const std::string& agentId);
 
+    // Insert a new license record
+    bool insertLicense(const LicenseRecord& license);
+
     // Get last error message
     const std::string& getLastError() const { return lastError_; }
 

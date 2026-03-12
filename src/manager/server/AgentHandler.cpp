@@ -48,12 +48,7 @@ void AgentHandler::handleConnection(SSL* ssl, const std::string& clientAddr, boo
             break;
 
         case MessageType::EVENT_BATCH: {
-            if (!hasClientCert) {
-                LOG_WARN("Event batch from unauthenticated client {}", clientAddr);
-                return;
-            }
-            std::string agentId = extractAgentIdFromCert(ssl);
-            handleEventBatch(ssl, agentId, payload);
+            LOG_WARN("Received EVENT_BATCH over management channel from {}. This is not supported.", clientAddr);
             break;
         }
 
@@ -180,6 +175,26 @@ void AgentHandler::handleRegistration(SSL* ssl, const std::string& clientAddr,
     // Update agent with cert serial
     db_.updateAgentCertSerial(request.agentId, issued.serialNumber);
 
+    // If no license exists, create a default TRIAL license
+    if (!db_.getLicense(request.agentId).has_value()) {
+        LicenseRecord lr;
+        lr.agentId = request.agentId;
+        lr.licenseKey = "TRIAL-" + request.agentId.substr(0, 8);
+        lr.licenseType = "TRIAL";
+        
+        // Use current time and +7 days
+        time_t now = time(nullptr);
+        char buf[64];
+        strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+        lr.validFrom = buf;
+        
+        time_t future = now + (7 * 24 * 60 * 60);
+        strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&future));
+        lr.validUntil = buf;
+        
+        db_.insertLicense(lr);
+    }
+
     // Send acceptance response
     RegisterAccept accept;
     accept.status         = "authorized";
@@ -196,13 +211,7 @@ void AgentHandler::handleRegistration(SSL* ssl, const std::string& clientAddr,
              request.agentId, issued.serialNumber, isTrial);
 }
 
-void AgentHandler::handleEventBatch(SSL* ssl, const std::string& agentId,
-                                     const std::string& payload) {
-    LOG_DEBUG("Received event batch from agent: {}", agentId);
-    // Update last seen timestamp
-    db_.updateLastSeen(agentId);
-    // TODO: Forward events to event processing pipeline
-}
+// Event batching handled by telemetry stream exclusively now
 
 void AgentHandler::handleHeartbeat(SSL* ssl, const std::string& agentId,
                                     const std::string& payload) {
@@ -213,7 +222,31 @@ void AgentHandler::handleHeartbeat(SSL* ssl, const std::string& agentId,
     HeartbeatAck ack;
     ack.agentId = agentId;
 
-    // Get current time
+    // Get license status
+    auto license = db_.getLicense(agentId);
+    if (!license) {
+        LOG_WARN("No license found for agent: {}", agentId);
+        ack.licenseValid = false;
+        ack.licenseMessage = "No active license found";
+    } else {
+        // Check expiry
+        time_t now = time(nullptr);
+        // Simple string comparison for ISO8601 (works if formats are identical)
+        char nowBuf[64];
+        strftime(nowBuf, sizeof(nowBuf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+        std::string nowStr = nowBuf;
+
+        if (license->validUntil < nowStr) {
+            LOG_WARN("License expired for agent: {} (Expired at {})", agentId, license->validUntil);
+            ack.licenseValid = false;
+            ack.licenseMessage = "License expired";
+        } else {
+            ack.licenseValid = true;
+            ack.licenseMessage = "License active";
+        }
+    }
+
+    // Get current time for ack
     time_t now = time(nullptr);
     char buf[64];
     strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
