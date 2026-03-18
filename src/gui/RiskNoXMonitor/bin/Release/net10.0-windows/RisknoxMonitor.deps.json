@@ -1,0 +1,49 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "RisknoxMonitor/1.0.0": {
+        "dependencies": {
+          "System.ServiceProcess.ServiceController": "10.0.5"
+        },
+        "runtime": {
+          "RisknoxMonitor.dll": {}
+        }
+      },
+      "System.ServiceProcess.ServiceController/10.0.5": {
+        "runtime": {
+          "lib/net10.0/System.ServiceProcess.ServiceController.dll": {
+            "assemblyVersion": "10.0.0.5",
+            "fileVersion": "10.0.526.15411"
+          }
+        },
+        "runtimeTargets": {
+          "runtimes/win/lib/net10.0/System.ServiceProcess.ServiceController.dll": {
+            "rid": "win",
+            "assetType": "runtime",
+            "assemblyVersion": "10.0.0.5",
+            "fileVersion": "10.0.526.15411"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "RisknoxMonitor/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "System.ServiceProcess.ServiceController/10.0.5": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-L7pataU51CVJkdfIxpH6wY1buML9zsi9ZVWYaCOLM1AMpd4wQ0StzbOb8OGZAfwCyK/oyKEYcCZrWAi4GgP3lg==",
+      "path": "system.serviceprocess.servicecontroller/10.0.5",
+      "hashPath": "system.serviceprocess.servicecontroller.10.0.5.nupkg.sha512"
+    }
+  }
+}

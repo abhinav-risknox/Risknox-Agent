@@ -187,8 +187,12 @@ void WINAPI ServiceMain::serviceMain(DWORD argc, LPWSTR* argv) {
     
     reportServiceStatus(SERVICE_START_PENDING, NO_ERROR, 3000);
     
-    // Initialize logger for service mode (log to file)
-    Logger::initialize("info", "ResolutePulse.log");
+    // Initialize logger for service mode securely in the executable's directory
+    char buffer[MAX_PATH];
+    GetModuleFileNameA(nullptr, buffer, MAX_PATH);
+    std::string exePath(buffer);
+    std::string logPath = exePath.substr(0, exePath.find_last_of("\\/")) + "\\agent.log";
+    Logger::initialize("info", logPath);
     
     reportServiceStatus(SERVICE_RUNNING, NO_ERROR, 0);
     
