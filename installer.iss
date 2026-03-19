@@ -1,9 +1,9 @@
-; RiskNoX Security Agent - Installer Script
+; Risknox Security Agent - Installer Script
 ; Created with Inno Setup
 
-#define MyAppName "RiskNoX Security Agent"
+#define MyAppName "Risknox Security Agent"
 #define MyAppVersion "1.0.0"
-#define MyAppPublisher "RiskNoX Security"
+#define MyAppPublisher "Risknox Security"
 #define MyAppURL "https://risknox.ai"
 #define MyAppExeName "RisknoxMonitor.exe"
 #define MyAppServiceName "ResolutePulse"
@@ -17,11 +17,11 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
-DefaultDirName={autopf}\RiskNoX Security Agent
+DefaultDirName={autopf}\Risknox Security Agent
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=installer_output
-OutputBaseFilename=RiskNoX_Installer_v{#MyAppVersion}
+OutputBaseFilename=Risknox_Installer_v{#MyAppVersion}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
@@ -49,23 +49,23 @@ Name: "desktopicon"; Description: "Create a desktop icon for Monitor Dashboard";
 Source: "build\ResolutePulse.exe"; DestDir: "{app}"; Flags: ignoreversion; Components: core
 
 ; Monitor UI Executables & Dependencies
-Source: "src\gui\RiskNoXMonitor\bin\Release\net10.0-windows\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: ui
+Source: "src\gui\RisknoxMonitor\bin\Release\net10.0-windows\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: ui
 
 ; Configuration File
 Source: "config.json"; DestDir: "{app}"; Flags: ignoreversion; Components: core
 
 [Icons]
-Name: "{group}\RiskNoX Monitor"; Filename: "{app}\{#MyAppExeName}"
+Name: "{group}\Risknox Monitor"; Filename: "{app}\{#MyAppExeName}"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\RiskNoX Monitor"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
-Name: "{autostartup}\RiskNoX Monitor"; Filename: "{app}\{#MyAppExeName}"
+Name: "{autodesktop}\Risknox Monitor"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{autostartup}\Risknox Monitor"; Filename: "{app}\{#MyAppExeName}"
 
 [Run]
 ; Install the ResolutePulse Windows Service
 Filename: "{app}\ResolutePulse.exe"; Parameters: "--install"; StatusMsg: "Installing Windows Service..."; Flags: runhidden; Components: core
 
 ; Launch the Desktop Monitor UI after installation finishes
-Filename: "{app}\{#MyAppExeName}"; Description: "Launch RiskNoX Monitor Dashboard"; Flags: postinstall nowait skipifsilent shellexec
+Filename: "{app}\{#MyAppExeName}"; Description: "Launch Risknox Monitor Dashboard"; Flags: postinstall nowait skipifsilent shellexec
 
 [UninstallRun]
 ; Stop and remove the Windows Service during uninstallation

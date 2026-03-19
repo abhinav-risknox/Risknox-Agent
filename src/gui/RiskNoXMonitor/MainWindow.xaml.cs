@@ -116,18 +116,14 @@ namespace RisknoxMonitor
                             StatusText.Foreground = _colorLimeCream;
                             StatusIndicator.Fill = _colorLimeCream;
                             BtnStart.IsEnabled = false;
-                            BtnStart.Opacity = 0.5;
                             BtnStop.IsEnabled = true;
-                            BtnStop.Opacity = 1.0;
                             break;
                         case ServiceControllerStatus.Stopped:
                             StatusText.Text = "STOPPED";
                             StatusText.Foreground = _colorPlatinum;
                             StatusIndicator.Fill = _colorPlatinum;
                             BtnStart.IsEnabled = true;
-                            BtnStart.Opacity = 1.0;
                             BtnStop.IsEnabled = false;
-                            BtnStop.Opacity = 0.5;
                             break;
                         default:
                             StatusText.Text = sc.Status.ToString().ToUpper();
@@ -186,15 +182,22 @@ namespace RisknoxMonitor
 
         private void BtnOpenLogs_Click(object sender, RoutedEventArgs e)
         {
-            this.Height = 600;
-            LogViewerGrid.Visibility = Visibility.Visible;
-            RefreshLogs();
+            if (LogViewerGrid.Visibility == Visibility.Visible)
+            {
+                BtnCloseLogs_Click(sender, e);
+            }
+            else
+            {
+                LogViewerGrid.Visibility = Visibility.Visible;
+                this.SizeToContent = SizeToContent.Height;
+                RefreshLogs();
+            }
         }
 
         private void BtnCloseLogs_Click(object sender, RoutedEventArgs e)
         {
-            this.Height = 450;
             LogViewerGrid.Visibility = Visibility.Collapsed;
+            this.SizeToContent = SizeToContent.Height;
         }
 
         private void RefreshLogs()
