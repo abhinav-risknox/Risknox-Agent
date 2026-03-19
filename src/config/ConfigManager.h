@@ -10,6 +10,16 @@ namespace ResolutePulse {
 
 // TlsConfig removed - TCP does not use TLS
 
+struct ManagerConfig {
+    bool enabled = false;
+    std::string host = "localhost";
+    int port = 1514;
+    std::string certs_dir = "certs";
+    int registration_retry_interval = 30;
+    int heartbeat_interval = 60;
+    int license_check_interval = 3600;
+};
+
 struct BufferConfig {
     size_t max_events = 50000;
     int flush_interval_sec = 10;
@@ -62,6 +72,7 @@ public:
     const std::string& getAgentId() const { return agentId_; }
     const BufferConfig& getBufferConfig() const { return bufferConfig_; }
     const EventCollectionConfig& getEventCollectionConfig() const { return eventCollectionConfig_; }
+    const ManagerConfig& getManagerConfig() const { return managerConfig_; }
     
     const std::vector<std::string>& getCriticalChannels() const { return criticalChannels_; }
     const std::vector<std::string>& getEventChannels() const { return eventChannels_; }
@@ -84,6 +95,7 @@ private:
     std::string fluentBitHost_ = "localhost";
     int fluentBitPort_ = 5170;
     std::string agentId_;
+    ManagerConfig managerConfig_;
     BufferConfig bufferConfig_;
     EventCollectionConfig eventCollectionConfig_;
     FimConfigData fimConfig_;

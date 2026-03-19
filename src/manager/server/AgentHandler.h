@@ -16,7 +16,8 @@ public:
     ~AgentHandler() = default;
 
     // Handle a connected client — reads messages and dispatches
-    void handleConnection(SSL* ssl, const std::string& clientAddr, bool hasClientCert);
+    // Returns true if connection should stay open, false if it should close
+    bool handleConnection(SSL* ssl, const std::string& clientAddr, bool hasClientCert);
 
 private:
     // Handle registration request (one-way TLS — no client cert)
@@ -30,6 +31,10 @@ private:
     // Handle heartbeat from authenticated agent
     void handleHeartbeat(SSL* ssl, const std::string& agentId,
                          const std::string& payload);
+
+    // Handle license check from authenticated agent
+    void handleLicenseCheck(SSL* ssl, const std::string& agentId,
+                            const std::string& payload);
 
     // Read exactly N bytes from SSL
     bool sslReadExact(SSL* ssl, void* buffer, size_t length);

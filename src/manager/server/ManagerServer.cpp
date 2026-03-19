@@ -344,9 +344,13 @@ void ManagerServer::handleClient(SOCKET clientSocket, const std::string& clientA
     bool hasClientCert = (clientCert != nullptr);
     if (clientCert) X509_free(clientCert);
 
-    // Create handler and process
+    // Create handler and process with persistent connection (Keep-Alive)
     AgentHandler handler(*ca_, *db_);
-    handler.handleConnection(ssl, clientAddr, hasClientCert);
+    while (running_.load()) {
+        if (!handler.handleConnection(ssl, clientAddr, hasClientCert)) {
+            break; 
+        }
+    }
 
     // Cleanup
     SSL_shutdown(ssl);

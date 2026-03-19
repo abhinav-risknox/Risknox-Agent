@@ -164,7 +164,16 @@ bool RegistrationClient::registerWithManager(
     if (SSL_connect(ssl) <= 0) {
         lastError_ = "TLS handshake failed";
         LOG_ERROR("{}", lastError_);
-        ERR_print_errors_fp(stderr);
+
+        BIO* errBio = BIO_new(BIO_s_mem());
+        ERR_print_errors(errBio);
+        char* errData = nullptr;
+        long errLen = BIO_get_mem_data(errBio, &errData);
+        if (errLen > 0) {
+            LOG_ERROR("OpenSSL Errors: {}", std::string(errData, errLen));
+        }
+        BIO_free(errBio);
+
         SSL_free(ssl);
         closesocket(sock);
         SSL_CTX_free(sslCtx);

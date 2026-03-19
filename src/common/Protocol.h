@@ -17,7 +17,9 @@ enum class MessageType : uint8_t {
     HEARTBEAT_ACK      = 0x11,
     EVENT_BATCH        = 0x20,
     COMMAND            = 0x30,
-    COMMAND_RESULT     = 0x31
+    COMMAND_RESULT     = 0x31,
+    LICENSE_CHECK        = 0x40,
+    LICENSE_CHECK_RESULT = 0x41
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -97,6 +99,26 @@ struct HeartbeatAck {
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(HeartbeatAck,
         agentId, timestamp, configChanged, licenseValid, licenseMessage)
+};
+
+// ─────────────────────────────────────────────────────────────
+// License Messages
+// ─────────────────────────────────────────────────────────────
+
+struct LicenseCheck {
+    std::string agentId;
+    std::string timestamp;
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(LicenseCheck, agentId, timestamp)
+};
+
+struct LicenseCheckResult {
+    std::string agentId;
+    std::string timestamp;
+    bool licenseValid = true;
+    std::string licenseMessage;
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(LicenseCheckResult, agentId, timestamp, licenseValid, licenseMessage)
 };
 
 // ─────────────────────────────────────────────────────────────

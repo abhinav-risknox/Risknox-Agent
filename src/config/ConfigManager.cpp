@@ -36,6 +36,18 @@ bool ConfigManager::load(const std::string& configPath) {
         }
         agentId_ = config["agent_id"].get<std::string>();
         
+        // Manager config (optional)
+        if (config.contains("manager")) {
+            auto& mgr = config["manager"];
+            managerConfig_.enabled = mgr.value("enabled", false);
+            managerConfig_.host = mgr.value("host", "localhost");
+            managerConfig_.port = mgr.value("port", 1514);
+            managerConfig_.certs_dir = mgr.value("certs_dir", "certs");
+            managerConfig_.registration_retry_interval = mgr.value("registration_retry_interval", 30);
+            managerConfig_.heartbeat_interval = mgr.value("heartbeat_interval", 60);
+            managerConfig_.license_check_interval = mgr.value("license_check_interval", 3600);
+        }
+        
         // Buffer config (optional)
         if (config.contains("buffer")) {
             auto& buffer = config["buffer"];

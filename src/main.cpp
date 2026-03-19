@@ -79,24 +79,6 @@ int runConsoleMode(const std::string& configPath) {
     return exitCode;
 }
 
-int runServiceMode(const std::string& configPath) {
-    // Set up the main function for service
-    ServiceMain::setMainFunction([configPath]() -> int {
-        Agent agent;
-        g_agent = &agent;
-        
-        if (!agent.initialize(configPath)) {
-            return 1;
-        }
-        
-        int exitCode = agent.run();
-        g_agent = nullptr;
-        return exitCode;
-    });
-    
-    return ServiceMain::runAsService();
-}
-
 int main(int argc, char* argv[]) {
     std::string exePath = getExePath();
     std::string configPath = getConfigPath(exePath);
@@ -154,13 +136,28 @@ int main(int argc, char* argv[]) {
             return 1;
         }
     }
-    
+
     // Run mode
     if (consoleMode) {
         return runConsoleMode(configPath);
     } else {
-        // Try service mode first, fall back to console if not started by SCM
-        int result = runServiceMode(configPath);
+        // Try service mode first
+        
+        // Set up the main function for service
+        ServiceMain::setMainFunction([configPath]() -> int {
+            Agent agent;
+            g_agent = &agent;
+            
+            if (!agent.initialize(configPath)) {
+                return 1;
+            }
+            
+            int exitCode = agent.run();
+            g_agent = nullptr;
+            return exitCode;
+        });
+
+        int result = ServiceMain::runAsService();
         if (result != 0) {
             // Might have failed because not started by SCM
             // User should use --console explicitly

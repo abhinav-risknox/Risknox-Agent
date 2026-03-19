@@ -311,6 +311,24 @@ int Agent::run() {
     running_ = true;
     stopRequested_ = false;
     
+    // Start management thread if registered
+    if (managementSender_) {
+        managementThread_ = std::thread(&Agent::managementLoop, this);
+        LOG_INFO("Management loop started");
+        
+        LOG_INFO("Waiting for mutual TLS connection to be established...");
+        while (!shouldStop() && !managementSender_->isConnected()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        }
+        
+        if (shouldStop()) {
+            running_ = false;
+            return 0;
+        }
+        
+        LOG_INFO("Mutual TLS connection established. Starting log collection.");
+    }
+
     // Start components
     if (!collector_->start()) {
         LOG_ERROR("Failed to start event collector");
@@ -319,12 +337,6 @@ int Agent::run() {
     }
     
     batchSender_->start();
-    
-    // Start management thread if registered
-    if (managementSender_) {
-        managementThread_ = std::thread(&Agent::managementLoop, this);
-        LOG_INFO("Management loop started");
-    }
     
     // Start FIM if enabled
     if (fimMonitor_) {
@@ -472,8 +484,17 @@ void Agent::managementLoop() {
     auto& config = ConfigManager::instance();
     std::string agentId = config.getAgentId();
     
+    int heartbeatInterval = config.getManagerConfig().heartbeat_interval;
+    int licenseInterval = config.getManagerConfig().license_check_interval;
+    
+    auto lastLicenseCheck = std::chrono::steady_clock::now() - std::chrono::seconds(licenseInterval);
+    auto nextHeartbeat = std::chrono::steady_clock::now();
+    
     while (!shouldStop()) {
-        if (managementSender_) {
+        auto now = std::chrono::steady_clock::now();
+        
+        // Handle Heartbeat
+        if (managementSender_ && now >= nextHeartbeat) {
             LOG_DEBUG("Sending management heartbeat...");
             
             uint64_t collected = collector_ ? collector_->getEventsCollected() : 0;
@@ -484,24 +505,47 @@ void Agent::managementLoop() {
             if (result == SendResult::Success) {
                 LOG_DEBUG("Heartbeat acknowledged by manager");
             } else if (result == SendResult::AuthError) {
-                LOG_CRITICAL("License validation failed or mTLS authentication error: {}", managementSender_->getLastError());
-                LOG_CRITICAL("Suspending telemetry collection due to license enforcement.");
+                LOG_CRITICAL("mTLS authentication error: {}", managementSender_->getLastError());
+                LOG_CRITICAL("Suspending telemetry collection.");
                 
                 if (collector_) collector_->stop();
                 if (batchSender_) batchSender_->stop();
-                
-                // We keep the loop running to check for license updates/restoration,
-                // but we'll log more frequently or just wait.
+                if (fimMonitor_) fimMonitor_->stop();
             } else {
                 LOG_WARN("Manager heartbeat failed: {}", managementSender_->getLastError());
             }
+            
+            nextHeartbeat = std::chrono::steady_clock::now() + std::chrono::seconds(heartbeatInterval);
         }
         
-        // Wait for interval (60s) or stop
-        auto nextRun = std::chrono::steady_clock::now() + std::chrono::seconds(60);
-        while (std::chrono::steady_clock::now() < nextRun && !shouldStop()) {
-            std::this_thread::sleep_for(std::chrono::seconds(1));
+        // Handle License Check
+        auto now2 = std::chrono::steady_clock::now();
+        if (managementSender_ && std::chrono::duration_cast<std::chrono::seconds>(now2 - lastLicenseCheck).count() >= licenseInterval) {
+            LOG_DEBUG("Sending license check...");
+            
+            auto tlsSender = dynamic_cast<TlsSender*>(managementSender_.get());
+            if (tlsSender) {
+                SendResult result = tlsSender->checkLicense(agentId);
+                
+                if (result == SendResult::Success) {
+                    LOG_DEBUG("License check successful");
+                } else if (result == SendResult::AuthError) {
+                    LOG_CRITICAL("License validation failed: {}", tlsSender->getLastError());
+                    LOG_CRITICAL("Suspending telemetry collection due to license enforcement.");
+                    
+                    if (collector_) collector_->stop();
+                    if (batchSender_) batchSender_->stop();
+                    if (fimMonitor_) fimMonitor_->stop();
+                } else {
+                    LOG_WARN("License check failed: {}", tlsSender->getLastError());
+                }
+            }
+            
+            lastLicenseCheck = std::chrono::steady_clock::now();
         }
+        
+        // Wait a bit before checking times again
+        std::this_thread::sleep_for(std::chrono::seconds(1));
     }
     
     LOG_DEBUG("Management loop background thread stopped");

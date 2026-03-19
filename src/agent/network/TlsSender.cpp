@@ -436,4 +436,99 @@ SendResult TlsSender::sendHeartbeat(const std::string& agentId, uint64_t eventsC
     return SendResult::NetworkError;
 }
 
+SendResult TlsSender::checkLicense(const std::string& agentId) {
+    if (!sslCtx_) {
+        lastError_ = "TLS sender not initialized (SSL context is null)";
+        return SendResult::NetworkError;
+    }
+
+    LicenseCheck lc;
+    lc.agentId = agentId;
+    
+    time_t now = time(nullptr);
+    char buf[64];
+    strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+    lc.timestamp = buf;
+
+    std::string payload = nlohmann::json(lc).dump();
+
+    MessageHeader header;
+    header.type = static_cast<uint8_t>(MessageType::LICENSE_CHECK);
+    header.payloadLength = static_cast<uint32_t>(payload.size());
+
+    uint8_t headerBuf[MESSAGE_HEADER_SIZE];
+    serializeHeader(header, headerBuf);
+
+    int attempts = 0;
+    while (attempts < MAX_RECONNECT_ATTEMPTS) {
+        if (!connected_.load()) {
+            if (!connectWithMutualTLS()) {
+                attempts++;
+                std::this_thread::sleep_for(std::chrono::milliseconds(1000 * attempts));
+                continue;
+            }
+        }
+
+        if (!sslSendRaw(headerBuf, MESSAGE_HEADER_SIZE)) {
+            disconnect();
+            attempts++;
+            continue;
+        }
+
+        if (!sslSendRaw(payload.c_str(), payload.size())) {
+            disconnect();
+            attempts++;
+            continue;
+        }
+
+        bytesSent_ += MESSAGE_HEADER_SIZE + payload.size();
+
+        // --- Read response ---
+        uint8_t respHeaderBuf[MESSAGE_HEADER_SIZE];
+        if (!sslReadExact(respHeaderBuf, MESSAGE_HEADER_SIZE)) {
+            LOG_WARN("Failed to read license check response header");
+            disconnect();
+            attempts++;
+            continue;
+        }
+
+        MessageHeader respHeader;
+        if (!deserializeHeader(respHeaderBuf, respHeader)) {
+            LOG_ERROR("Failed to deserialize license check response header");
+            disconnect();
+            return SendResult::ServerError;
+        }
+
+        if (respHeader.type != static_cast<uint8_t>(MessageType::LICENSE_CHECK_RESULT)) {
+            LOG_ERROR("Unexpected response type to license check: {}", respHeader.type);
+            disconnect();
+            return SendResult::ServerError;
+        }
+
+        std::string respPayload(respHeader.payloadLength, '\0');
+        if (!sslReadExact(&respPayload[0], respHeader.payloadLength)) {
+            LOG_WARN("Failed to read license check response payload");
+            disconnect();
+            attempts++;
+            continue;
+        }
+
+        try {
+            auto result = nlohmann::json::parse(respPayload).get<LicenseCheckResult>();
+            if (!result.licenseValid) {
+                lastError_ = "License Error: " + result.licenseMessage;
+                return SendResult::AuthError;
+            }
+            return SendResult::Success;
+        } catch (const std::exception& e) {
+            lastError_ = "Failed to parse LicenseCheckResult: " + std::string(e.what());
+            LOG_ERROR("{}", lastError_);
+            return SendResult::ServerError;
+        }
+    }
+
+    lastError_ = "Failed to send license check after " + std::to_string(MAX_RECONNECT_ATTEMPTS) + " attempts";
+    return SendResult::NetworkError;
+}
+
 } // namespace ResolutePulse

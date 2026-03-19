@@ -41,6 +41,9 @@ public:
     // Send a heartbeat to the manager
     SendResult sendHeartbeat(const std::string& agentId, uint64_t eventsCollected, uint64_t eventsSent) override;
 
+    // Send a license check to the manager
+    SendResult checkLicense(const std::string& agentId);
+
     // Check if connected via mTLS
     bool isConnected() const override { return connected_.load(); }
 

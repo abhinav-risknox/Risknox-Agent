@@ -14,30 +14,26 @@ namespace ResolutePulse {
 AgentHandler::AgentHandler(CertificateAuthority& ca, PostgresClient& db)
     : ca_(ca), db_(db) {}
 
-void AgentHandler::handleConnection(SSL* ssl, const std::string& clientAddr, bool hasClientCert) {
+bool AgentHandler::handleConnection(SSL* ssl, const std::string& clientAddr, bool hasClientCert) {
     // Read message header
     uint8_t headerBuf[MESSAGE_HEADER_SIZE];
     if (!sslReadExact(ssl, headerBuf, MESSAGE_HEADER_SIZE)) {
-        LOG_WARN("Failed to read message header from {}", clientAddr);
-        return;
+        return false;
     }
 
     MessageHeader header;
     if (!deserializeHeader(headerBuf, header)) {
-        LOG_WARN("Invalid message header from {}", clientAddr);
-        return;
+        return false;
     }
 
     // Read payload
     if (header.payloadLength == 0 || header.payloadLength > 1024 * 1024) {
-        LOG_WARN("Invalid payload length: {} from {}", header.payloadLength, clientAddr);
-        return;
+        return false;
     }
 
     std::string payload(header.payloadLength, '\0');
     if (!sslReadExact(ssl, &payload[0], header.payloadLength)) {
-        LOG_WARN("Failed to read payload from {}", clientAddr);
-        return;
+        return false;
     }
 
     auto msgType = static_cast<MessageType>(header.type);
@@ -55,17 +51,29 @@ void AgentHandler::handleConnection(SSL* ssl, const std::string& clientAddr, boo
         case MessageType::HEARTBEAT: {
             if (!hasClientCert) {
                 LOG_WARN("Heartbeat from unauthenticated client {}", clientAddr);
-                return;
+                return false;
             }
             std::string agentId = extractAgentIdFromCert(ssl);
             handleHeartbeat(ssl, agentId, payload);
             break;
         }
 
+        case MessageType::LICENSE_CHECK: {
+            if (!hasClientCert) {
+                LOG_WARN("License check from unauthenticated client {}", clientAddr);
+                return false;
+            }
+            std::string agentId = extractAgentIdFromCert(ssl);
+            handleLicenseCheck(ssl, agentId, payload);
+            break;
+        }
+
         default:
             LOG_WARN("Unknown message type 0x{:02X} from {}", header.type, clientAddr);
-            break;
+            return false;
     }
+
+    return true;
 }
 
 void AgentHandler::handleRegistration(SSL* ssl, const std::string& clientAddr,
@@ -255,6 +263,44 @@ void AgentHandler::handleHeartbeat(SSL* ssl, const std::string& agentId,
 
     sslSendMessage(ssl, MessageType::HEARTBEAT_ACK,
                    nlohmann::json(ack).dump());
+}
+
+void AgentHandler::handleLicenseCheck(SSL* ssl, const std::string& agentId,
+                                      const std::string& payload) {
+    LOG_DEBUG("License check from agent: {}", agentId);
+    db_.updateLastSeen(agentId);
+
+    LicenseCheckResult result;
+    result.agentId = agentId;
+
+    auto license = db_.getLicense(agentId);
+    if (!license) {
+        LOG_WARN("No license found for agent: {}", agentId);
+        result.licenseValid = false;
+        result.licenseMessage = "No active license found";
+    } else {
+        time_t now = time(nullptr);
+        char nowBuf[64];
+        strftime(nowBuf, sizeof(nowBuf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+        std::string nowStr = nowBuf;
+
+        if (license->validUntil < nowStr) {
+            LOG_WARN("License expired for agent: {} (Expired at {})", agentId, license->validUntil);
+            result.licenseValid = false;
+            result.licenseMessage = "License expired";
+        } else {
+            result.licenseValid = true;
+            result.licenseMessage = "License active";
+        }
+    }
+
+    time_t now = time(nullptr);
+    char buf[64];
+    strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+    result.timestamp = buf;
+
+    sslSendMessage(ssl, MessageType::LICENSE_CHECK_RESULT,
+                   nlohmann::json(result).dump());
 }
 
 // ─────────────────────────────────────────────────────────────
