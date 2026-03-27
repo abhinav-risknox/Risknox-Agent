@@ -10,26 +10,10 @@ std::optional<LicenseRecord> LicenseManager::getLicense(const std::string& agent
 }
 
 int LicenseManager::calculateExpiry(const std::string& agentId) {
-    auto license = db_.getLicense(agentId);
-    
-    if (!license.has_value()) {
-        LOG_INFO("No license found for agent {}, using trial period ({} days)",
-                 agentId, TRIAL_DAYS);
-        return TRIAL_DAYS;
-    }
-
-    // Determine days based on license type
-    if (license->licenseType == "ENTERPRISE") {
-        LOG_INFO("Enterprise license for agent {}: 365 day cert", agentId);
-        return 365;
-    } else if (license->licenseType == "STANDARD") {
-        LOG_INFO("Standard license for agent {}: 180 day cert", agentId);
-        return 180;
-    }
-
-    // TRIAL
-    LOG_INFO("Trial license for agent {}: {} day cert", agentId, TRIAL_DAYS);
-    return TRIAL_DAYS;
+    // Certs are always 365 days — identity only.
+    // License expiry is enforced via heartbeat, not cert duration.
+    (void)agentId;
+    return CERT_VALIDITY_DAYS;
 }
 
 std::string LicenseManager::checkLicenseStatus(const std::string& agentId) {

@@ -23,8 +23,10 @@ public:
     // Returns "ACTIVE", "EXPIRED", or "NONE"
     std::string checkLicenseStatus(const std::string& agentId);
 
-    // Default trial period in days
-    static constexpr int TRIAL_DAYS = 7;
+    // Certificate validity (identity only — decoupled from license)
+    static constexpr int CERT_VALIDITY_DAYS = 365;
+    // Trial license duration in days
+    static constexpr int TRIAL_LICENSE_DAYS = 7;
 
 private:
     PostgresClient& db_;

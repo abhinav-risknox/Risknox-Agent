@@ -32,13 +32,13 @@ namespace RisknoxMonitor
             _timer.Start();
             
             UpdateStatus();
-            UpdateExpiry();
+            UpdateLicenseStatus();
         }
 
         private void Timer_Tick(object? sender, EventArgs e)
         {
             UpdateStatus();
-            UpdateExpiry();
+            UpdateLicenseStatus();
             if (LogViewerGrid.Visibility == Visibility.Visible)
             {
                 RefreshLogs();
@@ -58,7 +58,110 @@ namespace RisknoxMonitor
             this.Close();
         }
 
-        private void UpdateExpiry()
+        private void UpdateLicenseStatus()
+        {
+            try
+            {
+                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                string[] possiblePaths = new string[]
+                {
+                    Path.Combine(baseDir, "status.json"),
+                    Path.Combine(baseDir, "..", "..", "..", "..", "..", "build", "status.json"),
+                    Path.Combine(baseDir, "..", "..", "..", "..", "build", "status.json"),
+                    @"C:\Users\User\Desktop\Agent\build\status.json"
+                };
+
+                string statusPath = "";
+                foreach (var p in possiblePaths)
+                {
+                    if (File.Exists(p)) { statusPath = p; break; }
+                }
+
+                if (!string.IsNullOrEmpty(statusPath))
+                {
+                    string json;
+                    using (var fs = new FileStream(statusPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                    using (var sr = new StreamReader(fs))
+                    {
+                        json = sr.ReadToEnd();
+                    }
+
+                    using var doc = System.Text.Json.JsonDocument.Parse(json);
+                    var root = doc.RootElement;
+
+                    // License status
+                    bool suspended = root.TryGetProperty("licenseSuspended", out var suspProp) && suspProp.GetBoolean();
+                    string message = root.TryGetProperty("licenseMessage", out var msgProp) ? msgProp.GetString() ?? "" : "";
+                    string lastError = root.TryGetProperty("lastError", out var errProp) ? errProp.GetString() ?? "" : "";
+                    string licType = root.TryGetProperty("licenseType", out var typeProp) ? typeProp.GetString() ?? "" : "";
+                    string licExpiry = root.TryGetProperty("licenseExpiry", out var expProp) ? expProp.GetString() ?? "" : "";
+
+                    // Format license type for display
+                    string typeDisplay = licType switch
+                    {
+                        "ENTERPRISE" => "Enterprise License",
+                        "STANDARD" => "Standard License",
+                        "TRIAL" => "Trial License",
+                        "NONE" => "No License",
+                        _ => "Agent Subscription"
+                    };
+
+                    // Calculate license days remaining
+                    string expiryDetail = "";
+                    if (!string.IsNullOrEmpty(licExpiry) && DateTime.TryParse(licExpiry, out var expDate))
+                    {
+                        int daysLeft = (expDate - DateTime.UtcNow).Days;
+                        expiryDetail = daysLeft > 0 ? $"Expires in {daysLeft}d" : "Expired";
+                    }
+
+                    if (suspended)
+                    {
+                        TxtLicenseType.Text = typeDisplay;
+                        TxtExpiry.Text = "⚠ Suspended";
+                        TxtExpiry.Foreground = _colorOrange;
+                        TxtLicenseDetail.Text = expiryDetail;
+                    }
+                    else if (message == "License active")
+                    {
+                        TxtLicenseType.Text = typeDisplay;
+                        TxtExpiry.Text = "✓ Active";
+                        TxtExpiry.Foreground = (Brush)new BrushConverter().ConvertFromString("#4CAF50")!;
+                        TxtLicenseDetail.Text = expiryDetail;
+                    }
+                    else
+                    {
+                        TxtLicenseType.Text = typeDisplay;
+                        TxtExpiry.Text = message;
+                        TxtExpiry.Foreground = _colorWhite;
+                        TxtLicenseDetail.Text = expiryDetail;
+                    }
+
+                    // Error banner
+                    if (!string.IsNullOrEmpty(lastError))
+                    {
+                        TxtError.Text = lastError;
+                        ErrorBanner.Visibility = Visibility.Visible;
+                    }
+                    else
+                    {
+                        ErrorBanner.Visibility = Visibility.Collapsed;
+                    }
+                }
+                else
+                {
+                    // Fallback: read cert expiry if no status.json
+                    UpdateExpiryFromCert();
+                }
+            }
+            catch
+            {
+                TxtLicenseType.Text = "Agent Subscription";
+                TxtExpiry.Text = "Unknown";
+                TxtExpiry.Foreground = _colorPlatinum;
+            }
+        }
+
+        private void UpdateExpiryFromCert()
         {
             try
             {
@@ -80,27 +183,25 @@ namespace RisknoxMonitor
                 if (!string.IsNullOrEmpty(certPath))
                 {
                     var cert = new X509Certificate2(certPath);
-                    DateTime expiry = cert.NotAfter;
-                    int daysLeft = (expiry - DateTime.Now).Days;
-
-                    if (daysLeft > 0)
-                    {
-                        TxtExpiry.Text = $"{daysLeft} Days";
-                        TxtExpiry.Foreground = _colorWhite;
-                    }
-                    else
-                    {
-                        TxtExpiry.Text = "Expired";
-                        TxtExpiry.Foreground = _colorRed;
-                    }
+                    int daysLeft = (cert.NotAfter - DateTime.Now).Days;
+                    TxtLicenseType.Text = "Agent Subscription";
+                    TxtExpiry.Text = daysLeft > 0 ? $"{daysLeft} Days" : "Expired";
+                    TxtExpiry.Foreground = daysLeft > 0 ? _colorWhite : _colorRed;
+                    TxtLicenseDetail.Text = "Cert expiry (no status file)";
                 }
                 else
                 {
+                    TxtLicenseType.Text = "Not Registered";
                     TxtExpiry.Text = "No License";
                     TxtExpiry.Foreground = _colorPlatinum;
+                    TxtLicenseDetail.Text = "";
                 }
             }
-            catch { TxtExpiry.Text = "Invalid Cert"; TxtExpiry.Foreground = _colorRed; }
+            catch
+            {
+                TxtExpiry.Text = "Error";
+                TxtExpiry.Foreground = _colorRed;
+            }
         }
 
         private void UpdateStatus()

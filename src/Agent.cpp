@@ -5,6 +5,7 @@
 
 #include <nlohmann/json.hpp>
 #include <fstream>
+#include <filesystem>
 
 #include <thread>
 #include <chrono>
@@ -87,11 +88,13 @@ bool Agent::initialize(const std::string& configPath) {
         return false;
     }
     
-    // 1. Initialize Telemetry Sender (Always TCP to Fluent Bit)
+    // 1. Initialize Telemetry Sender (TCP to Fluent Bit, optionally with TLS)
     auto tcpSender = std::make_unique<TcpSender>();
     if (!tcpSender->initialize(
             config.getFluentBitHost(),
-            config.getFluentBitPort())) {
+            config.getFluentBitPort(),
+            config.getFluentBitTlsEnabled(),
+            config.getFluentBitCaCertPath())) {
         LOG_ERROR("Failed to initialize TCP sender for events");
         return false;
     }
@@ -224,7 +227,23 @@ bool Agent::performRegistration() {
     LOG_INFO("Checking agent registration status...");
     
     auto& config = ConfigManager::instance();
-    std::string certsDir = "certs";
+    
+    // Resolve certsDir relative to executable path (fix: avoid System32 when running as service)
+    std::string certsDir = config.getManagerConfig().certs_dir;
+    {
+        // If certsDir is relative, resolve it relative to the executable's directory
+        std::filesystem::path certsPath(certsDir);
+        if (certsPath.is_relative()) {
+            wchar_t exePath[MAX_PATH] = {};
+            GetModuleFileNameW(nullptr, exePath, MAX_PATH);
+            std::filesystem::path exeDir = std::filesystem::path(exePath).parent_path();
+            certsPath = exeDir / certsPath;
+            certsDir = certsPath.string();
+        }
+        // Ensure the directory exists
+        std::filesystem::create_directories(certsDir);
+    }
+    LOG_INFO("Certificates directory: {}", certsDir);
     
     certStore_ = std::make_unique<CertificateStore>();
     certStore_->setCertsDir(certsDir);
@@ -273,11 +292,10 @@ bool Agent::performRegistration() {
     std::string osVersion = "Windows";
     
     // Read manager settings from config
-    // Re-read config.json for manager section
-    std::string mgrHost = "localhost";
-    int mgrPort = 1514;
-    
-    // TODO: Read from config properly. For now use defaults.
+    const auto& mgrConfig = config.getManagerConfig();
+    std::string mgrHost = mgrConfig.host;
+    int mgrPort = mgrConfig.port;
+    LOG_INFO("Registering with manager at {}:{}", mgrHost, mgrPort);
     
     if (!regClient.registerWithManager(
             mgrHost, mgrPort,
@@ -489,6 +507,9 @@ void Agent::managementLoop() {
     
     auto lastLicenseCheck = std::chrono::steady_clock::now() - std::chrono::seconds(licenseInterval);
     auto nextHeartbeat = std::chrono::steady_clock::now();
+    auto lastCertCheck = std::chrono::steady_clock::now();
+    constexpr int CERT_CHECK_INTERVAL_SEC = 86400; // Check cert expiry every 24 hours
+    constexpr int CERT_RENEWAL_THRESHOLD_DAYS = 30; // Renew when <= 30 days remain
     
     while (!shouldStop()) {
         auto now = std::chrono::steady_clock::now();
@@ -504,18 +525,33 @@ void Agent::managementLoop() {
             
             if (result == SendResult::Success) {
                 LOG_DEBUG("Heartbeat acknowledged by manager");
+                lastError_.clear();
+                // Auto-resume if previously suspended
+                if (licenseSuspended_) {
+                    LOG_INFO("License restored — resuming telemetry collection.");
+                    if (collector_) collector_->start();
+                    if (batchSender_) batchSender_->start();
+                    if (fimMonitor_) fimMonitor_->start();
+                    licenseSuspended_ = false;
+                    licenseMessage_ = "License active";
+                }
             } else if (result == SendResult::AuthError) {
-                LOG_CRITICAL("mTLS authentication error: {}", managementSender_->getLastError());
-                LOG_CRITICAL("Suspending telemetry collection.");
-                
-                if (collector_) collector_->stop();
-                if (batchSender_) batchSender_->stop();
-                if (fimMonitor_) fimMonitor_->stop();
+                if (!licenseSuspended_) {
+                    LOG_WARN("License invalid — suspending telemetry. Agent stays connected.");
+                    LOG_WARN("Reason: {}", managementSender_->getLastError());
+                    if (collector_) collector_->stop();
+                    if (batchSender_) batchSender_->stop();
+                    if (fimMonitor_) fimMonitor_->stop();
+                    licenseSuspended_ = true;
+                    licenseMessage_ = "Suspended";
+                    lastError_ = managementSender_->getLastError();
+                }
             } else {
                 LOG_WARN("Manager heartbeat failed: {}", managementSender_->getLastError());
             }
             
             nextHeartbeat = std::chrono::steady_clock::now() + std::chrono::seconds(heartbeatInterval);
+            writeStatusFile();  // Update GUI
         }
         
         // Handle License Check
@@ -529,19 +565,64 @@ void Agent::managementLoop() {
                 
                 if (result == SendResult::Success) {
                     LOG_DEBUG("License check successful");
+                    licenseMessage_ = "License active";
+                    licenseType_ = tlsSender->getLastLicenseType();
+                    licenseExpiry_ = tlsSender->getLastLicenseExpiry();
+                    lastError_.clear();
+                    // Auto-resume if previously suspended
+                    if (licenseSuspended_) {
+                        LOG_INFO("License restored (via license check) — resuming telemetry.");
+                        if (collector_) collector_->start();
+                        if (batchSender_) batchSender_->start();
+                        if (fimMonitor_) fimMonitor_->start();
+                        licenseSuspended_ = false;
+                    }
                 } else if (result == SendResult::AuthError) {
-                    LOG_CRITICAL("License validation failed: {}", tlsSender->getLastError());
-                    LOG_CRITICAL("Suspending telemetry collection due to license enforcement.");
-                    
-                    if (collector_) collector_->stop();
-                    if (batchSender_) batchSender_->stop();
-                    if (fimMonitor_) fimMonitor_->stop();
+                    if (!licenseSuspended_) {
+                        LOG_WARN("License validation failed — suspending telemetry.");
+                        LOG_WARN("Reason: {}", tlsSender->getLastError());
+                        if (collector_) collector_->stop();
+                        if (batchSender_) batchSender_->stop();
+                        if (fimMonitor_) fimMonitor_->stop();
+                        licenseSuspended_ = true;
+                        licenseMessage_ = "Suspended";
+                        licenseType_ = tlsSender->getLastLicenseType();
+                        licenseExpiry_ = tlsSender->getLastLicenseExpiry();
+                        lastError_ = tlsSender->getLastError();
+                    }
                 } else {
                     LOG_WARN("License check failed: {}", tlsSender->getLastError());
                 }
             }
             
             lastLicenseCheck = std::chrono::steady_clock::now();
+            writeStatusFile();  // Update GUI
+        }
+        
+        // Handle Certificate Renewal Check (B2 fix)
+        auto now3 = std::chrono::steady_clock::now();
+        if (certStore_ && std::chrono::duration_cast<std::chrono::seconds>(now3 - lastCertCheck).count() >= CERT_CHECK_INTERVAL_SEC) {
+            int daysLeft = certStore_->daysUntilExpiry();
+            LOG_DEBUG("Certificate expiry check: {} days remaining", daysLeft);
+            
+            if (daysLeft > 0 && daysLeft <= CERT_RENEWAL_THRESHOLD_DAYS) {
+                LOG_WARN("Certificate expiring in {} days, triggering renewal...", daysLeft);
+                
+                // Perform re-registration in background
+                if (performRegistration()) {
+                    LOG_INFO("Certificate renewed successfully");
+                    // Reconnect mTLS with new cert
+                    auto tlsSender = dynamic_cast<TlsSender*>(managementSender_.get());
+                    if (tlsSender) {
+                        tlsSender->disconnect();
+                        LOG_INFO("mTLS connection will reconnect with new certificate");
+                    }
+                } else {
+                    LOG_ERROR("Certificate renewal failed, will retry in 24 hours");
+                }
+            }
+            
+            lastCertCheck = std::chrono::steady_clock::now();
         }
         
         // Wait a bit before checking times again
@@ -549,6 +630,51 @@ void Agent::managementLoop() {
     }
     
     LOG_DEBUG("Management loop background thread stopped");
+}
+
+void Agent::writeStatusFile() {
+    try {
+        // Resolve path next to executable
+        wchar_t exePath[MAX_PATH] = {};
+        GetModuleFileNameW(nullptr, exePath, MAX_PATH);
+        std::filesystem::path statusPath = std::filesystem::path(exePath).parent_path() / "status.json";
+
+        nlohmann::json status;
+        status["status"] = licenseSuspended_ ? "suspended" : (running_.load() ? "running" : "stopped");
+        status["licenseSuspended"] = licenseSuspended_;
+        status["licenseMessage"] = licenseMessage_;
+        status["licenseType"] = licenseType_;
+        status["licenseExpiry"] = licenseExpiry_;
+        status["lastError"] = lastError_;
+
+        // Cert info
+        if (certStore_) {
+            int daysLeft = certStore_->daysUntilExpiry();
+            status["certDaysLeft"] = daysLeft;
+        }
+
+        // Stats
+        status["eventsCollected"] = collector_ ? collector_->getEventsCollected() : 0;
+        status["eventsSent"] = batchSender_ ? batchSender_->getEventsSent() : 0;
+
+        // Timestamp
+        time_t now = time(nullptr);
+        char buf[64];
+        strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+        status["lastUpdated"] = buf;
+
+        // Write atomically (write to tmp, then rename)
+        std::string tmpPath = statusPath.string() + ".tmp";
+        {
+            std::ofstream out(tmpPath);
+            if (out.is_open()) {
+                out << status.dump(2);
+            }
+        }
+        std::filesystem::rename(tmpPath, statusPath);
+    } catch (const std::exception& e) {
+        LOG_DEBUG("Failed to write status file: {}", e.what());
+    }
 }
 
 } // namespace ResolutePulse

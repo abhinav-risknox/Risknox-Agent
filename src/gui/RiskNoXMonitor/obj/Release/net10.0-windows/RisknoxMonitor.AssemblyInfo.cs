@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("RisknoxMonitor")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ce9493fc83bf5a5a14b2e3780f10233bf0e422a6")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+07622e8c5bba4d8b615a4d7f0655cf7ab468ce82")]
 [assembly: System.Reflection.AssemblyProductAttribute("RisknoxMonitor")]
 [assembly: System.Reflection.AssemblyTitleAttribute("RisknoxMonitor")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -61,6 +61,16 @@ private:
     std::atomic<bool> running_{false};
     std::atomic<bool> stopRequested_{false};
     bool useRegistration_ = false;  // True when manager registration is configured
+    bool licenseSuspended_ = false; // True when license invalid, collectors stopped
+    
+    // License/status info for GUI (written to status.json)
+    std::string licenseMessage_ = "Checking...";
+    std::string licenseType_;
+    std::string licenseExpiry_;
+    std::string lastError_;
+    
+    // Write status.json for GUI to read
+    void writeStatusFile();
     
     // Management thread and status
     std::thread managementThread_;

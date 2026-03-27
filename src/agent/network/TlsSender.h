@@ -59,6 +59,10 @@ public:
 
     const std::string& getLastError() const override { return lastError_; }
 
+    // License details from last checkLicense call
+    const std::string& getLastLicenseType() const { return lastLicenseType_; }
+    const std::string& getLastLicenseExpiry() const { return lastLicenseExpiry_; }
+
 private:
     // Create SSL context with mutual TLS
     bool createSSLContext();
@@ -91,6 +95,8 @@ private:
     std::atomic<bool> connected_{false};
     std::mutex        mutex_;
     std::string       lastError_;
+    std::string       lastLicenseType_;
+    std::string       lastLicenseExpiry_;
 
     std::atomic<uint64_t> eventsSent_{0};
     std::atomic<uint64_t> bytesSent_{0};

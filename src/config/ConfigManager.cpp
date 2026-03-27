@@ -23,6 +23,10 @@ bool ConfigManager::load(const std::string& configPath) {
         fluentBitHost_ = config.value("fluent_bit_host", "localhost");
         fluentBitPort_ = config.value("fluent_bit_port", 5170);
         
+        // TLS configuration for Fluent Bit connection
+        fluentBitTlsEnabled_ = config.value("fluent_bit_tls", false);
+        fluentBitCaCertPath_ = config.value("fluent_bit_ca_cert", "");
+        
         // Validate port
         if (fluentBitPort_ < 1 || fluentBitPort_ > 65535) {
             LOG_ERROR("Invalid fluent_bit_port: {}", fluentBitPort_);

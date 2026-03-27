@@ -3,6 +3,11 @@
 
 #include <nlohmann/json.hpp>
 #include <sstream>
+#include <fstream>
+
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+#include <openssl/pem.h>
 
 #ifdef _WIN32
 #include <ws2tcpip.h>
@@ -16,6 +21,11 @@ TcpSender::TcpSender() = default;
 TcpSender::~TcpSender() {
     disconnect();
     
+    if (sslCtx_) {
+        SSL_CTX_free(sslCtx_);
+        sslCtx_ = nullptr;
+    }
+
 #ifdef _WIN32
     if (wsaInitialized_) {
         WSACleanup();
@@ -23,11 +33,15 @@ TcpSender::~TcpSender() {
 #endif
 }
 
-bool TcpSender::initialize(const std::string& host, int port) {
+bool TcpSender::initialize(const std::string& host, int port,
+                            bool tlsEnabled,
+                            const std::string& caCertPath) {
     host_ = host;
     port_ = port;
+    tlsEnabled_ = tlsEnabled;
+    caCertPath_ = caCertPath;
     
-    LOG_INFO("Initializing TCP sender: {}:{}", host_, port_);
+    LOG_INFO("Initializing TCP sender: {}:{} (TLS={})", host_, port_, tlsEnabled_ ? "on" : "off");
     
 #ifdef _WIN32
     // Initialize Winsock
@@ -40,6 +54,14 @@ bool TcpSender::initialize(const std::string& host, int port) {
     }
     wsaInitialized_ = true;
 #endif
+
+    // Create SSL context if TLS is enabled
+    if (tlsEnabled_) {
+        if (!createSSLContext()) {
+            LOG_ERROR("Failed to create SSL context for Fluent Bit TLS");
+            return false;
+        }
+    }
     
     // Try to connect
     if (!connect()) {
@@ -51,9 +73,69 @@ bool TcpSender::initialize(const std::string& host, int port) {
     return true;
 }
 
+bool TcpSender::createSSLContext() {
+    const SSL_METHOD* method = TLS_client_method();
+    sslCtx_ = SSL_CTX_new(method);
+    if (!sslCtx_) {
+        lastError_ = "Failed to create SSL context";
+        LOG_ERROR("{}", lastError_);
+        return false;
+    }
+
+    SSL_CTX_set_min_proto_version(sslCtx_, TLS1_2_VERSION);
+
+    // Load CA certificate for verifying Fluent Bit's server cert
+    if (!caCertPath_.empty()) {
+        // Use memory-based loading to avoid OPENSSL_Applink issues on Windows
+        std::ifstream ifs(caCertPath_, std::ios::binary);
+        if (!ifs) {
+            lastError_ = "Cannot open CA certificate: " + caCertPath_;
+            LOG_ERROR("{}", lastError_);
+            SSL_CTX_free(sslCtx_);
+            sslCtx_ = nullptr;
+            return false;
+        }
+        std::string caPem((std::istreambuf_iterator<char>(ifs)),
+                           std::istreambuf_iterator<char>());
+        
+        BIO* bio = BIO_new_mem_buf(caPem.data(), static_cast<int>(caPem.size()));
+        X509* caCert = PEM_read_bio_X509(bio, nullptr, nullptr, nullptr);
+        BIO_free(bio);
+
+        if (!caCert) {
+            lastError_ = "Failed to parse CA certificate: " + caCertPath_;
+            LOG_ERROR("{}", lastError_);
+            SSL_CTX_free(sslCtx_);
+            sslCtx_ = nullptr;
+            return false;
+        }
+
+        X509_STORE* store = SSL_CTX_get_cert_store(sslCtx_);
+        X509_STORE_add_cert(store, caCert);
+        X509_free(caCert);
+
+        // Enable server certificate verification
+        SSL_CTX_set_verify(sslCtx_, SSL_VERIFY_PEER, nullptr);
+        LOG_INFO("TLS: CA certificate loaded from {}", caCertPath_);
+    } else {
+        // No CA cert provided — accept any server cert (self-signed localhost)
+        SSL_CTX_set_verify(sslCtx_, SSL_VERIFY_NONE, nullptr);
+        LOG_WARN("TLS: No CA certificate provided, server verification disabled");
+    }
+
+    return true;
+}
+
 bool TcpSender::connect() {
     std::lock_guard<std::mutex> lock(socketMutex_);
     
+    // Clean up existing SSL session
+    if (ssl_) {
+        SSL_shutdown(ssl_);
+        SSL_free(ssl_);
+        ssl_ = nullptr;
+    }
+
     // Clean up existing socket if any
     if (socket_ != INVALID_SOCKET) {
         closesocket(socket_);
@@ -111,9 +193,39 @@ bool TcpSender::connect() {
         return false;
     }
     
+    // TLS handshake if enabled
+    if (tlsEnabled_ && sslCtx_) {
+        ssl_ = SSL_new(sslCtx_);
+        SSL_set_fd(ssl_, static_cast<int>(socket_));
+
+        if (SSL_connect(ssl_) <= 0) {
+            lastError_ = "TLS handshake with Fluent Bit failed";
+            LOG_ERROR("{}", lastError_);
+
+            // Log OpenSSL errors
+            BIO* errBio = BIO_new(BIO_s_mem());
+            ERR_print_errors(errBio);
+            char* errData = nullptr;
+            long errLen = BIO_get_mem_data(errBio, &errData);
+            if (errLen > 0) {
+                LOG_ERROR("OpenSSL Errors: {}", std::string(errData, errLen));
+            }
+            BIO_free(errBio);
+
+            SSL_free(ssl_);
+            ssl_ = nullptr;
+            closesocket(socket_);
+            socket_ = INVALID_SOCKET;
+            return false;
+        }
+
+        LOG_INFO("TLS connection established with Fluent Bit at {}:{}", host_, port_);
+    } else {
+        LOG_INFO("Connected to Fluent Bit at {}:{}", host_, port_);
+    }
+    
     connected_ = true;
     reconnections_++;
-    LOG_INFO("Connected to Fluent Bit at {}:{}", host_, port_);
     
     return true;
 }
@@ -121,6 +233,12 @@ bool TcpSender::connect() {
 void TcpSender::disconnect() {
     std::lock_guard<std::mutex> lock(socketMutex_);
     
+    if (ssl_) {
+        SSL_shutdown(ssl_);
+        SSL_free(ssl_);
+        ssl_ = nullptr;
+    }
+
     if (socket_ != INVALID_SOCKET) {
         closesocket(socket_);
         socket_ = INVALID_SOCKET;
@@ -196,25 +314,39 @@ bool TcpSender::sendRaw(const char* data, size_t length) {
     
     size_t totalSent = 0;
     while (totalSent < length) {
-        int sent = send(socket_, data + totalSent, (int)(length - totalSent), 0);
-        
-        if (sent == SOCKET_ERROR) {
+        int sent;
+
+        if (tlsEnabled_ && ssl_) {
+            // TLS path: use SSL_write
+            sent = SSL_write(ssl_, data + totalSent, static_cast<int>(length - totalSent));
+            if (sent <= 0) {
+                int sslErr = SSL_get_error(ssl_, sent);
+                lastError_ = "SSL_write error: " + std::to_string(sslErr);
+                LOG_ERROR("{}", lastError_);
+                connected_ = false;
+                return false;
+            }
+        } else {
+            // Plain TCP path: use send()
+            sent = send(socket_, data + totalSent, (int)(length - totalSent), 0);
+            if (sent == SOCKET_ERROR) {
 #ifdef _WIN32
-            int error = WSAGetLastError();
-            lastError_ = "Send error: " + std::to_string(error);
+                int error = WSAGetLastError();
+                lastError_ = "Send error: " + std::to_string(error);
 #else
-            lastError_ = "Send error";
+                lastError_ = "Send error";
 #endif
-            LOG_ERROR(lastError_);
-            connected_ = false;
-            return false;
-        }
-        
-        if (sent == 0) {
-            lastError_ = "Connection closed by remote";
-            LOG_ERROR(lastError_);
-            connected_ = false;
-            return false;
+                LOG_ERROR(lastError_);
+                connected_ = false;
+                return false;
+            }
+
+            if (sent == 0) {
+                lastError_ = "Connection closed by remote";
+                LOG_ERROR(lastError_);
+                connected_ = false;
+                return false;
+            }
         }
         
         totalSent += sent;

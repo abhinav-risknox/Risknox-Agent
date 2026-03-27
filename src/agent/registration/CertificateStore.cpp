@@ -88,10 +88,15 @@ bool CertificateStore::load() {
     }
 
     // Get notAfter and convert to time_t
+    // ASN1_TIME_to_tm() returns UTC time, so use _mkgmtime (not mktime which assumes local time)
     const ASN1_TIME* notAfter = X509_get0_notAfter(cert);
     struct tm tm = {};
     ASN1_TIME_to_tm(notAfter, &tm);
-    expiryTime_ = static_cast<long>(mktime(&tm));
+#ifdef _WIN32
+    expiryTime_ = static_cast<long>(_mkgmtime(&tm));
+#else
+    expiryTime_ = static_cast<long>(timegm(&tm));
+#endif
 
     X509_free(cert);
 

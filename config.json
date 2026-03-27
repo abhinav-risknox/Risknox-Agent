@@ -1,6 +1,8 @@
 {
     "fluent_bit_host": "localhost",
     "fluent_bit_port": 5170,
+    "fluent_bit_tls": false,
+    "fluent_bit_ca_cert": "certs/fluentbit-ca.crt",
     "agent_id": "test-license-agent",
     "manager": {
         "enabled": true,

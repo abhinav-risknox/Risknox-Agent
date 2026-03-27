@@ -69,6 +69,8 @@ public:
     // Getters
     const std::string& getFluentBitHost() const { return fluentBitHost_; }
     int getFluentBitPort() const { return fluentBitPort_; }
+    bool getFluentBitTlsEnabled() const { return fluentBitTlsEnabled_; }
+    const std::string& getFluentBitCaCertPath() const { return fluentBitCaCertPath_; }
     const std::string& getAgentId() const { return agentId_; }
     const BufferConfig& getBufferConfig() const { return bufferConfig_; }
     const EventCollectionConfig& getEventCollectionConfig() const { return eventCollectionConfig_; }
@@ -94,6 +96,8 @@ private:
     
     std::string fluentBitHost_ = "localhost";
     int fluentBitPort_ = 5170;
+    bool fluentBitTlsEnabled_ = false;
+    std::string fluentBitCaCertPath_;
     std::string agentId_;
     ManagerConfig managerConfig_;
     BufferConfig bufferConfig_;

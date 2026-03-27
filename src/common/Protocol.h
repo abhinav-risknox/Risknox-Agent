@@ -117,8 +117,10 @@ struct LicenseCheckResult {
     std::string timestamp;
     bool licenseValid = true;
     std::string licenseMessage;
+    std::string licenseType;    // TRIAL, STANDARD, ENTERPRISE
+    std::string licenseExpiry;  // ISO 8601 date
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(LicenseCheckResult, agentId, timestamp, licenseValid, licenseMessage)
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(LicenseCheckResult, agentId, timestamp, licenseValid, licenseMessage, licenseType, licenseExpiry)
 };
 
 // ─────────────────────────────────────────────────────────────

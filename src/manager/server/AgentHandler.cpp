@@ -114,19 +114,53 @@ void AgentHandler::handleRegistration(SSL* ssl, const std::string& clientAddr,
         return;
     }
 
-    // Check for duplicate registration
+    // Check for existing agent — allow re-registration if cert expired or agent inactive
     if (db_.agentExists(request.agentId)) {
-        LOG_WARN("Duplicate registration attempt: {}", request.agentId);
+        auto existingAgent = db_.getAgent(request.agentId);
+        bool allowReReg = false;
 
-        RegisterReject reject;
-        reject.status = "rejected";
-        reject.agentId = request.agentId;
-        reject.reason = "Agent already registered";
-        reject.errorCode = 409;
-        sslSendMessage(ssl, MessageType::REGISTER_REJECT,
-                       nlohmann::json(reject).dump());
-        return;
-    }
+        if (existingAgent.has_value()) {
+            // Allow re-registration if agent is INACTIVE
+            if (existingAgent->status == "INACTIVE" || existingAgent->status == "EXPIRED") {
+                LOG_INFO("Agent {} is {}, allowing re-registration", request.agentId, existingAgent->status);
+                allowReReg = true;
+            }
+
+            // Allow re-registration if their certificate is revoked or missing
+            if (!allowReReg) {
+                auto certRecord = db_.getCertificate(request.agentId);
+                if (!certRecord.has_value() || certRecord->revoked) {
+                    LOG_INFO("Agent {} certificate is revoked/missing, allowing re-registration", request.agentId);
+                    allowReReg = true;
+                }
+            }
+        }
+
+        if (!allowReReg) {
+            LOG_WARN("Duplicate registration attempt (active cert): {}", request.agentId);
+
+            RegisterReject reject;
+            reject.status = "rejected";
+            reject.agentId = request.agentId;
+            reject.reason = "Agent already registered with valid certificate";
+            reject.errorCode = 409;
+            sslSendMessage(ssl, MessageType::REGISTER_REJECT,
+                           nlohmann::json(reject).dump());
+            return;
+        }
+
+        // Revoke old certificate before re-issuing
+        auto oldCert = db_.getCertificate(request.agentId);
+        if (oldCert.has_value() && !oldCert->revoked) {
+            LOG_INFO("Revoking old certificate for re-registering agent: {}", request.agentId);
+            ca_.revokeCertificate(oldCert->serialNumber);
+            db_.revokeCertificate(oldCert->serialNumber, "Re-registration");
+        }
+
+        // Update existing agent record instead of inserting
+        db_.updateAgentStatus(request.agentId, "ACTIVE");
+        LOG_INFO("Agent {} re-registered successfully", request.agentId);
+    } else {
 
     // Insert agent record
     AgentRecord agent;
@@ -149,10 +183,14 @@ void AgentHandler::handleRegistration(SSL* ssl, const std::string& clientAddr,
                        nlohmann::json(reject).dump());
         return;
     }
+    } // end else (new registration)
 
-    // Calculate certificate expiry based on license
+    // Calculate certificate expiry — always 365 days (identity only, decoupled from license)
     int expiryDays = calculateExpiryDays(request.agentId);
-    bool isTrial = (expiryDays <= 7);
+
+    // Derive isTrial from license record, not cert duration
+    auto agentLicense = db_.getLicense(request.agentId);
+    bool isTrial = !agentLicense.has_value() || agentLicense->licenseType == "TRIAL";
 
     // Issue certificate
     auto issued = ca_.issueCertificate(request.agentId, request.publicKeyPem, expiryDays);
@@ -226,40 +264,18 @@ void AgentHandler::handleHeartbeat(SSL* ssl, const std::string& agentId,
     LOG_DEBUG("Heartbeat from agent: {}", agentId);
     db_.updateLastSeen(agentId);
 
-    // Send heartbeat ack
+    // Send heartbeat ack — heartbeat is purely a health signal.
+    // License enforcement is via the dedicated LICENSE_CHECK path only.
     HeartbeatAck ack;
     ack.agentId = agentId;
+    ack.licenseValid = true;  // Not checked here; LICENSE_CHECK handles this
+    ack.licenseMessage = "OK";
+    ack.configChanged = false;
 
-    // Get license status
-    auto license = db_.getLicense(agentId);
-    if (!license) {
-        LOG_WARN("No license found for agent: {}", agentId);
-        ack.licenseValid = false;
-        ack.licenseMessage = "No active license found";
-    } else {
-        // Check expiry
-        time_t now = time(nullptr);
-        // Simple string comparison for ISO8601 (works if formats are identical)
-        char nowBuf[64];
-        strftime(nowBuf, sizeof(nowBuf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
-        std::string nowStr = nowBuf;
-
-        if (license->validUntil < nowStr) {
-            LOG_WARN("License expired for agent: {} (Expired at {})", agentId, license->validUntil);
-            ack.licenseValid = false;
-            ack.licenseMessage = "License expired";
-        } else {
-            ack.licenseValid = true;
-            ack.licenseMessage = "License active";
-        }
-    }
-
-    // Get current time for ack
     time_t now = time(nullptr);
     char buf[64];
     strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
     ack.timestamp = buf;
-    ack.configChanged = false;
 
     sslSendMessage(ssl, MessageType::HEARTBEAT_ACK,
                    nlohmann::json(ack).dump());
@@ -278,7 +294,12 @@ void AgentHandler::handleLicenseCheck(SSL* ssl, const std::string& agentId,
         LOG_WARN("No license found for agent: {}", agentId);
         result.licenseValid = false;
         result.licenseMessage = "No active license found";
+        result.licenseType = "NONE";
+        result.licenseExpiry = "";
     } else {
+        result.licenseType = license->licenseType;
+        result.licenseExpiry = license->validUntil;
+
         time_t now = time(nullptr);
         char nowBuf[64];
         strftime(nowBuf, sizeof(nowBuf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
@@ -370,18 +391,10 @@ bool AgentHandler::validatePublicKey(const std::string& publicKeyPem) {
 }
 
 int AgentHandler::calculateExpiryDays(const std::string& agentId) {
-    auto license = db_.getLicense(agentId);
-    if (license.has_value()) {
-        // Parse valid_until and calculate days remaining
-        // For simplicity, use a fixed value based on license type
-        if (license->licenseType == "ENTERPRISE") {
-            return 365;
-        } else if (license->licenseType == "STANDARD") {
-            return 180;
-        }
-    }
-    // No license or TRIAL → 7-day trial
-    return 7;
+    // Always issue 365-day identity certs.
+    // License enforcement is via heartbeat response only.
+    (void)agentId;  // unused — cert duration no longer depends on license
+    return 365;
 }
 
 } // namespace ResolutePulse

@@ -11,6 +11,10 @@
 #include <winsock2.h>
 #endif
 
+// Forward declare OpenSSL types
+typedef struct ssl_st SSL;
+typedef struct ssl_ctx_st SSL_CTX;
+
 #include "SenderInterface.h"
 
 namespace ResolutePulse {
@@ -23,7 +27,11 @@ public:
     // Initialize the sender and connect to Fluent Bit
     // @param host - Fluent Bit hostname/IP
     // @param port - Fluent Bit TCP port
-    bool initialize(const std::string& host, int port);
+    // @param tlsEnabled - Whether to use TLS (default: false for backward compatibility)
+    // @param caCertPath - Path to CA certificate for verifying Fluent Bit's server cert
+    bool initialize(const std::string& host, int port,
+                    bool tlsEnabled = false,
+                    const std::string& caCertPath = "");
     
     // Send a batch of events as NDJSON lines (no agentId parameter)
     // @param events - Events to send
@@ -47,10 +55,13 @@ public:
     uint64_t getBatchesSent() const { return batchesSent_.load(); }
     
 private:
-    // Connect to the server
+    // Connect to the server (TCP + optional TLS handshake)
     bool connect();
     
-    // Send raw data over socket
+    // Create OpenSSL context for TLS
+    bool createSSLContext();
+    
+    // Send raw data over socket (plain TCP or TLS)
     bool sendRaw(const char* data, size_t length);
     
     // Cleanup socket resources
@@ -58,6 +69,12 @@ private:
     
     std::string host_;
     int port_ = 0;
+    
+    // TLS configuration
+    bool tlsEnabled_ = false;
+    std::string caCertPath_;
+    SSL_CTX* sslCtx_ = nullptr;
+    SSL* ssl_ = nullptr;
     
 #ifdef _WIN32
     SOCKET socket_ = INVALID_SOCKET;

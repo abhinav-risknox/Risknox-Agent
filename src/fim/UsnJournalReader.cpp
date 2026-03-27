@@ -157,6 +157,12 @@ void UsnJournalReader::stop() {
 }
 
 std::string UsnJournalReader::resolveFilePath(uint64_t fileReferenceNumber) {
+    // Check cache first
+    auto cacheIt = pathCache_.find(fileReferenceNumber);
+    if (cacheIt != pathCache_.end()) {
+        return cacheIt->second;
+    }
+
     // Open file by reference number
     FILE_ID_DESCRIPTOR fileId;
     fileId.dwSize = sizeof(fileId);
@@ -193,7 +199,15 @@ std::string UsnJournalReader::resolveFilePath(uint64_t fileReferenceNumber) {
         wPath = wPath.substr(4);
     }
     
-    return wideToUtf8(wPath);
+    std::string result = wideToUtf8(wPath);
+
+    // Cache the result (evict if too large)
+    if (pathCache_.size() >= MAX_PATH_CACHE_SIZE) {
+        pathCache_.clear();  // Simple eviction: clear all when full
+    }
+    pathCache_[fileReferenceNumber] = result;
+
+    return result;
 }
 
 void UsnJournalReader::monitorThread() {
@@ -202,7 +216,7 @@ void UsnJournalReader::monitorThread() {
     
     READ_USN_JOURNAL_DATA_V0 readData = {};
     readData.StartUsn = lastUsn_;
-    readData.ReasonMask = 0xFFFFFFFF; // All reasons
+    readData.ReasonMask = FIM_REASON_MASK;  // Only meaningful FIM changes
     readData.ReturnOnlyOnClose = FALSE;
     readData.Timeout = 0;
     readData.BytesToWaitFor = 0;
@@ -226,7 +240,7 @@ void UsnJournalReader::monitorThread() {
             DWORD error = GetLastError();
             if (error == ERROR_HANDLE_EOF || error == ERROR_NO_MORE_ITEMS) {
                 // No new records, wait and retry
-                Sleep(100);
+                Sleep(IDLE_POLL_MS);
                 continue;
             }
             
@@ -235,7 +249,7 @@ void UsnJournalReader::monitorThread() {
         }
         
         if (bytesReturned < sizeof(USN)) {
-            Sleep(100);
+            Sleep(IDLE_POLL_MS);
             continue;
         }
         
@@ -271,8 +285,8 @@ void UsnJournalReader::monitorThread() {
                 change.filePath = wideToUtf8(wFilename);
             }
             
-            // Only report file changes (not pure Close events)
-            if (change.reason != static_cast<uint32_t>(UsnReason::Close) && callback_) {
+            // Report change (Close events already excluded via FIM_REASON_MASK)
+            if (callback_) {
                 callback_(change);
             }
             
@@ -282,6 +296,9 @@ void UsnJournalReader::monitorThread() {
         }
         
         lastUsn_ = nextUsn;
+
+        // Yield CPU after processing a batch to prevent 100% utilization
+        Sleep(BATCH_YIELD_MS);
     }
     
     running_ = false;

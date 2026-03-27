@@ -5,6 +5,7 @@
 #include <atomic>
 #include <thread>
 #include <cstdint>
+#include <unordered_map>
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -95,6 +96,28 @@ private:
     
     uint64_t journalId_ = 0;
     uint64_t lastUsn_ = 0;
+
+    // Path resolution cache to avoid repeated OpenFileById calls
+    std::unordered_map<uint64_t, std::string> pathCache_;
+    static constexpr size_t MAX_PATH_CACHE_SIZE = 10000;
+
+    // Polling constants
+    static constexpr DWORD IDLE_POLL_MS = 1000;       // Sleep when no records
+    static constexpr DWORD BATCH_YIELD_MS = 10;       // Yield after processing a batch
+
+    // Only capture meaningful FIM changes (not close, metadata-only, etc.)
+    static constexpr uint32_t FIM_REASON_MASK =
+        0x00000001 |  // DataOverwrite
+        0x00000002 |  // DataExtend
+        0x00000004 |  // DataTruncation
+        0x00000010 |  // NamedDataOverwrite
+        0x00000020 |  // NamedDataExtend
+        0x00000040 |  // NamedDataTruncation
+        0x00000100 |  // FileCreate
+        0x00000200 |  // FileDelete
+        0x00000800 |  // SecurityChange
+        0x00001000 |  // RenameOldName
+        0x00002000;   // RenameNewName
 };
 
 } // namespace ResolutePulse

@@ -515,6 +515,8 @@ SendResult TlsSender::checkLicense(const std::string& agentId) {
 
         try {
             auto result = nlohmann::json::parse(respPayload).get<LicenseCheckResult>();
+            lastLicenseType_ = result.licenseType;
+            lastLicenseExpiry_ = result.licenseExpiry;
             if (!result.licenseValid) {
                 lastError_ = "License Error: " + result.licenseMessage;
                 return SendResult::AuthError;
