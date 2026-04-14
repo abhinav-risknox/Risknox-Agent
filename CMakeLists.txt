@@ -64,6 +64,9 @@ set(AGENT_SOURCES
     src/agent/registration/RegistrationClient.cpp
     # TLS Sender module
     src/agent/network/TlsSender.cpp
+    # Policy module
+    src/policy/PolicyManager.cpp
+    src/policy/CommandQueue.cpp
 )
 
 set(AGENT_HEADERS
@@ -95,6 +98,9 @@ set(AGENT_HEADERS
     src/agent/registration/CertificateStore.h
     src/agent/registration/RegistrationClient.h
     src/agent/network/TlsSender.h
+    # Policy module
+    src/policy/PolicyManager.h
+    src/policy/CommandQueue.h
     # Common
     ${COMMON_HEADERS}
 )

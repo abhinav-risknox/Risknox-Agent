@@ -44,6 +44,9 @@ public:
     // Disconnect from Fluent Bit
     void disconnect();
     
+    // Signal the sender to abort any pending connection attempts immediately
+    void requestStop() { stopRequested_ = true; }
+    
     // Get last error message
     const std::string& getLastError() const override { return lastError_; }
     
@@ -57,6 +60,9 @@ public:
 private:
     // Connect to the server (TCP + optional TLS handshake)
     bool connect();
+    
+    // Non-blocking connect with timeout (avoids 21s default TCP timeout on Windows)
+    bool connectWithTimeout(SOCKET sock, const struct sockaddr* addr, int addrlen, int timeoutMs);
     
     // Create OpenSSL context for TLS
     bool createSSLContext();
@@ -84,6 +90,7 @@ private:
 #endif
     
     std::atomic<bool> connected_{false};
+    std::atomic<bool> stopRequested_{false};
     std::mutex socketMutex_;
     
     std::string lastError_;

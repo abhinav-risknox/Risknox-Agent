@@ -126,8 +126,90 @@ bool TcpSender::createSSLContext() {
     return true;
 }
 
+bool TcpSender::connectWithTimeout(SOCKET sock, const struct sockaddr* addr, int addrlen, int timeoutMs) {
+    // Put socket in non-blocking mode
+    u_long mode = 1;
+    ioctlsocket(sock, FIONBIO, &mode);
+    
+    int ret = ::connect(sock, addr, addrlen);
+    if (ret == 0) {
+        // Connected immediately
+        mode = 0;
+        ioctlsocket(sock, FIONBIO, &mode);
+        return true;
+    }
+    
+#ifdef _WIN32
+    int err = WSAGetLastError();
+    if (err != WSAEWOULDBLOCK) {
+        lastError_ = "Connection failed: " + std::to_string(err);
+        LOG_ERROR(lastError_);
+        return false;
+    }
+#endif
+    
+    // Wait for connection with select(), checking stopRequested_ periodically
+    int elapsed = 0;
+    constexpr int POLL_INTERVAL_MS = 250;  // Check stop flag every 250ms
+    
+    while (elapsed < timeoutMs && !stopRequested_.load()) {
+        int remaining = std::min(POLL_INTERVAL_MS, timeoutMs - elapsed);
+        
+        fd_set writefds, errfds;
+        FD_ZERO(&writefds);
+        FD_ZERO(&errfds);
+        FD_SET(sock, &writefds);
+        FD_SET(sock, &errfds);
+        
+        struct timeval tv;
+        tv.tv_sec = remaining / 1000;
+        tv.tv_usec = (remaining % 1000) * 1000;
+        
+        ret = select(0, nullptr, &writefds, &errfds, &tv);
+        
+        if (ret > 0) {
+            if (FD_ISSET(sock, &errfds)) {
+                // Connection failed
+                int optErr = 0;
+                int optLen = sizeof(optErr);
+                getsockopt(sock, SOL_SOCKET, SO_ERROR, (char*)&optErr, &optLen);
+                lastError_ = "Connection failed: " + std::to_string(optErr);
+                LOG_ERROR(lastError_);
+                return false;
+            }
+            if (FD_ISSET(sock, &writefds)) {
+                // Connected! Restore blocking mode
+                mode = 0;
+                ioctlsocket(sock, FIONBIO, &mode);
+                return true;
+            }
+        } else if (ret < 0) {
+            lastError_ = "select() failed: " + std::to_string(WSAGetLastError());
+            LOG_ERROR(lastError_);
+            return false;
+        }
+        
+        elapsed += remaining;
+    }
+    
+    if (stopRequested_.load()) {
+        lastError_ = "Connection aborted: shutdown requested";
+        LOG_INFO(lastError_);
+    } else {
+        lastError_ = "Connection timed out after " + std::to_string(timeoutMs) + "ms";
+        LOG_ERROR(lastError_);
+    }
+    return false;
+}
+
 bool TcpSender::connect() {
     std::lock_guard<std::mutex> lock(socketMutex_);
+    
+    // Abort early if shutdown was requested
+    if (stopRequested_.load()) {
+        lastError_ = "Connection skipped: shutdown requested";
+        return false;
+    }
     
     // Clean up existing SSL session
     if (ssl_) {
@@ -154,7 +236,7 @@ bool TcpSender::connect() {
         return false;
     }
     
-    // Set timeouts
+    // Set send/recv timeouts (these apply after connection is established)
 #ifdef _WIN32
     DWORD timeout = SEND_TIMEOUT_MS;
     setsockopt(socket_, SOL_SOCKET, SO_SNDTIMEO, (const char*)&timeout, sizeof(timeout));
@@ -177,17 +259,11 @@ bool TcpSender::connect() {
         return false;
     }
     
-    // Connect to server
-    ret = ::connect(socket_, result->ai_addr, (int)result->ai_addrlen);
+    // Connect with timeout (non-blocking + select)
+    bool connectOk = connectWithTimeout(socket_, result->ai_addr, (int)result->ai_addrlen, CONNECT_TIMEOUT_MS);
     freeaddrinfo(result);
     
-    if (ret == SOCKET_ERROR) {
-#ifdef _WIN32
-        lastError_ = "Connection failed: " + std::to_string(WSAGetLastError());
-#else
-        lastError_ = "Connection failed";
-#endif
-        LOG_ERROR(lastError_);
+    if (!connectOk) {
         closesocket(socket_);
         socket_ = INVALID_SOCKET;
         return false;
@@ -273,12 +349,15 @@ SendResult TcpSender::sendBatch(const std::vector<Event>& events) {
     
     // Try to send, reconnect if needed
     int attempts = 0;
-    while (attempts < MAX_RECONNECT_ATTEMPTS) {
+    while (attempts < MAX_RECONNECT_ATTEMPTS && !stopRequested_.load()) {
         if (!connected_.load()) {
             LOG_DEBUG("Not connected, attempting to connect (attempt {})", attempts + 1);
             if (!connect()) {
                 attempts++;
-                std::this_thread::sleep_for(std::chrono::milliseconds(1000 * attempts));
+                // Interruptible sleep: check stopRequested_ every 250ms
+                for (int ms = 0; ms < 1000 * attempts && !stopRequested_.load(); ms += 250) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(250));
+                }
                 continue;
             }
         }
@@ -294,7 +373,10 @@ SendResult TcpSender::sendBatch(const std::vector<Event>& events) {
         LOG_WARN("Send failed, will retry");
         disconnect();
         attempts++;
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000 * attempts));
+        // Interruptible sleep
+        for (int ms = 0; ms < 1000 * attempts && !stopRequested_.load(); ms += 250) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(250));
+        }
     }
     
     failedSends_ += events.size();

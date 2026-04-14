@@ -1,5 +1,6 @@
 #include "BatchSender.h"
 #include "utils/Logger.h"
+#include "network/TcpSender.h"
 
 namespace ResolutePulse {
 
@@ -44,6 +45,13 @@ void BatchSender::stop() {
     
     LOG_INFO("Stopping BatchSender...");
     stopRequested_ = true;
+    
+    // Signal the underlying TCP sender to abort any pending connection attempts
+    auto* tcpSender = dynamic_cast<TcpSender*>(&sender_);
+    if (tcpSender) {
+        tcpSender->requestStop();
+    }
+    
     queue_.shutdown();
     
     if (senderThread_.joinable()) {
@@ -133,20 +141,28 @@ void BatchSender::senderLoop() {
         }
     }
     
-    // Final flush: try to send any remaining events in queue
+    // Final flush: save remaining events (buffer to SQLite if server is unreachable)
     LOG_DEBUG("Final flush of remaining events");
     while (!queue_.empty()) {
         auto events = queue_.popBatch(batchSize_, std::chrono::milliseconds(100));
         if (events.empty()) break;
         
-        SendResult result = sender_.sendBatch(events);
-        if (result != SendResult::Success) {
-            LOG_WARN("Final flush failed, buffering {} events", events.size());
+        // Only attempt network send if we're still connected;
+        // don't waste time on reconnection attempts during shutdown
+        bool sent = false;
+        if (sender_.isConnected()) {
+            SendResult result = sender_.sendBatch(events);
+            if (result == SendResult::Success) {
+                batchesSent_++;
+                eventsSent_ += events.size();
+                sent = true;
+            }
+        }
+        
+        if (!sent) {
+            LOG_WARN("Final flush: buffering {} events to disk", events.size());
             buffer_.addEvents(events);
             eventsBuffered_ += events.size();
-        } else {
-            batchesSent_++;
-            eventsSent_ += events.size();
         }
     }
     

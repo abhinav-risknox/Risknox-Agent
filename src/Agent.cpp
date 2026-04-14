@@ -82,8 +82,24 @@ bool Agent::initialize(const std::string& configPath) {
     // Initialize components
     queue_ = std::make_unique<EventQueue>(config.getBufferConfig().max_events);
     
+    // Resolve db_path to ProgramData directory (Program Files is write-protected by Windows ACLs,
+    // SQLite needs to create WAL/SHM journal files alongside the database)
+    std::string dbPath = config.getBufferConfig().db_path;
+    {
+        std::filesystem::path p(dbPath);
+        if (p.is_relative()) {
+            const char* programData = std::getenv("ProgramData");
+            std::filesystem::path dataDir = std::filesystem::path(
+                programData ? programData : "C:\\ProgramData") / "Risknox Pulse";
+            std::filesystem::create_directories(dataDir);
+            p = dataDir / p;
+            dbPath = p.string();
+        }
+    }
+    LOG_INFO("Event buffer database: {}", dbPath);
+    
     buffer_ = std::make_unique<EventBuffer>();
-    if (!buffer_->initialize(config.getBufferConfig().db_path)) {
+    if (!buffer_->initialize(dbPath)) {
         LOG_ERROR("Failed to initialize event buffer");
         return false;
     }
@@ -160,8 +176,23 @@ bool Agent::initialize(const std::string& configPath) {
         fimConfig.maxFileSizeMb = fimCfg.max_file_size_mb;
         fimConfig.hashFiles = true;
         
+        // Resolve FIM db_path to ProgramData directory
+        std::string fimDbPath = fimCfg.db_path;
+        {
+            std::filesystem::path p(fimDbPath);
+            if (p.is_relative()) {
+                const char* programData = std::getenv("ProgramData");
+                std::filesystem::path dataDir = std::filesystem::path(
+                    programData ? programData : "C:\\ProgramData") / "Risknox Pulse";
+                std::filesystem::create_directories(dataDir);
+                p = dataDir / p;
+                fimDbPath = p.string();
+            }
+        }
+        LOG_INFO("FIM database: {}", fimDbPath);
+        
         fimMonitor_ = std::make_unique<FimMonitor>();
-        if (!fimMonitor_->initialize(fimConfig, fimCfg.db_path)) {
+        if (!fimMonitor_->initialize(fimConfig, fimDbPath)) {
             LOG_WARN("Failed to initialize FIM - continuing without FIM");
             fimMonitor_.reset();
         } else {

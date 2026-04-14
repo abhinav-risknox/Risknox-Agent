@@ -1,0 +1,52 @@
+windows-events-pipeline:
+  source:
+    http:
+      port: 2021
+      path: "/log/ingest"
+      authentication:
+        unauthenticated:
+
+  # Routes are a top-level pipeline key
+  route:
+    - json_route: '/channel == "FIM" or /channel == "SystemInfo"'
+    - xml_route: '/channel != "FIM" and /channel != "SystemInfo"'
+
+  processor:
+    # 1a. Parse JSON for FIM / SystemInfo events
+    - parse_json:
+        source: "data"
+        destination: "winlog"
+        parse_when: '/channel == "FIM" or /channel == "SystemInfo"'
+
+    # 1b. Parse XML for Standard Windows Events
+    - parse_xml:
+        source: "data"
+        destination: "winlog"
+        parse_when: '/channel != "FIM" and /channel != "SystemInfo"'
+
+    # 2. Remove the raw data field to save storage
+    - delete_entries:
+        with_keys: ["data"]
+
+    # 3. Standardize field names to ECS
+    - rename_keys:
+        entries:
+          - from_key: "winlog/EventID"
+            to_key: "event/code"
+          - from_key: "winlog/Computer"
+            to_key: "host/name"
+          - from_key: "winlog/Channel"
+            to_key: "winlog/channel"
+          - from_key: "winlog/Provider/Name"
+            to_key: "winlog/provider_name"
+
+  sink:
+    - opensearch:
+        hosts: [ "http://opensearch:9200" ]
+        insecure: true
+        username: "${OPENSEARCH_USERNAME}"
+        password: "${OPENSEARCH_PASSWORD}"
+        index: "windows-events"
+        routes:
+          - json_route
+          - xml_route

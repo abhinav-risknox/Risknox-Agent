@@ -213,7 +213,7 @@ void WINAPI ServiceMain::serviceCtrlHandler(DWORD ctrlCode) {
     switch (ctrlCode) {
         case SERVICE_CONTROL_STOP:
         case SERVICE_CONTROL_SHUTDOWN:
-            reportServiceStatus(SERVICE_STOP_PENDING, NO_ERROR, 5000);
+            reportServiceStatus(SERVICE_STOP_PENDING, NO_ERROR, 15000);
             g_stopRequested = true;
             LOG_INFO("Service stop requested");
             break;

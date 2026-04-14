@@ -289,7 +289,7 @@ void ManagerServer::acceptLoop() {
 
     while (running_.load()) {
         struct sockaddr_in clientAddr = {};
-        int addrLen = sizeof(clientAddr);
+        socklen_t addrLen = sizeof(clientAddr);
 
         SOCKET clientSocket = accept(listenSocket_,
             reinterpret_cast<struct sockaddr*>(&clientAddr), &addrLen);
