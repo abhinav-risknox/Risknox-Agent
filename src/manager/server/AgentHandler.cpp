@@ -1,4 +1,5 @@
-#include "AgentHandler.h"
+﻿#include "AgentHandler.h"
+#include "ManagerServer.h"
 #include "utils/Logger.h"
 
 #include <openssl/ssl.h>
@@ -11,8 +12,8 @@
 
 namespace ResolutePulse {
 
-AgentHandler::AgentHandler(CertificateAuthority& ca, PostgresClient& db)
-    : ca_(ca), db_(db) {}
+AgentHandler::AgentHandler(CertificateAuthority& ca, PostgresClient& db, ManagerServer* server)
+    : ca_(ca), db_(db), server_(server) {}
 
 bool AgentHandler::handleConnection(SSL* ssl, const std::string& clientAddr, bool hasClientCert) {
     // Read message header
@@ -68,6 +69,26 @@ bool AgentHandler::handleConnection(SSL* ssl, const std::string& clientAddr, boo
             break;
         }
 
+        case MessageType::STATUS_REPORT: {
+            if (!hasClientCert) {
+                LOG_WARN("Status report from unauthenticated client {}", clientAddr);
+                return false;
+            }
+            std::string agentId = extractAgentIdFromCert(ssl);
+            handleStatusReport(ssl, agentId, payload);
+            break;
+        }
+
+        case MessageType::POLICY_UPDATE_ACK: {
+            if (!hasClientCert) {
+                LOG_WARN("Policy ack from unauthenticated client {}", clientAddr);
+                return false;
+            }
+            std::string agentId = extractAgentIdFromCert(ssl);
+            LOG_INFO("Policy update acknowledged by agent: {}", agentId);
+            break;
+        }
+
         default:
             LOG_WARN("Unknown message type 0x{:02X} from {}", header.type, clientAddr);
             return false;
@@ -114,7 +135,7 @@ void AgentHandler::handleRegistration(SSL* ssl, const std::string& clientAddr,
         return;
     }
 
-    // Check for existing agent — allow re-registration if cert expired or agent inactive
+    // Check for existing agent - allow re-registration if cert expired or agent inactive
     if (db_.agentExists(request.agentId)) {
         auto existingAgent = db_.getAgent(request.agentId);
         bool allowReReg = false;
@@ -185,7 +206,7 @@ void AgentHandler::handleRegistration(SSL* ssl, const std::string& clientAddr,
     }
     } // end else (new registration)
 
-    // Calculate certificate expiry — always 365 days (identity only, decoupled from license)
+    // Calculate certificate expiry - always 365 days (identity only, decoupled from license)
     int expiryDays = calculateExpiryDays(request.agentId);
 
     // Derive isTrial from license record, not cert duration
@@ -264,7 +285,10 @@ void AgentHandler::handleHeartbeat(SSL* ssl, const std::string& agentId,
     LOG_DEBUG("Heartbeat from agent: {}", agentId);
     db_.updateLastSeen(agentId);
 
-    // Send heartbeat ack — heartbeat is purely a health signal.
+    // Track the agent ID so ManagerServer can register this session
+    if (lastAgentId_.empty()) lastAgentId_ = agentId;
+
+    // Send heartbeat ack - heartbeat is purely a health signal.
     // License enforcement is via the dedicated LICENSE_CHECK path only.
     HeartbeatAck ack;
     ack.agentId = agentId;
@@ -279,6 +303,21 @@ void AgentHandler::handleHeartbeat(SSL* ssl, const std::string& agentId,
 
     sslSendMessage(ssl, MessageType::HEARTBEAT_ACK,
                    nlohmann::json(ack).dump());
+
+    // Drain any pending offline commands for this agent
+    auto pending = db_.fetchPendingCommands(agentId);
+    for (auto& cmd : pending) {
+        LOG_INFO("Delivering offline command id={} type={} to agent {}",
+                 cmd.id, cmd.policyType, agentId);
+        auto policyData = nlohmann::json::parse(cmd.policyData, nullptr, false);
+        if (policyData.is_discarded()) {
+            db_.updateCommandStatus(cmd.id, "failed", "Invalid JSON in policy_data");
+            continue;
+        }
+        bool ok = pushPolicyUpdate(ssl, agentId, cmd.policyType, policyData);
+        db_.updateCommandStatus(cmd.id, ok ? "sent" : "failed",
+                                 ok ? "" : "SSL write error during offline drain");
+    }
 }
 
 void AgentHandler::handleLicenseCheck(SSL* ssl, const std::string& agentId,
@@ -393,8 +432,61 @@ bool AgentHandler::validatePublicKey(const std::string& publicKeyPem) {
 int AgentHandler::calculateExpiryDays(const std::string& agentId) {
     // Always issue 365-day identity certs.
     // License enforcement is via heartbeat response only.
-    (void)agentId;  // unused — cert duration no longer depends on license
+    (void)agentId;  // unused - cert duration no longer depends on license
     return 365;
 }
 
+void AgentHandler::handleStatusReport(SSL* ssl, const std::string& agentId,
+                                       const std::string& payload) {
+    LOG_INFO("Status report from agent: {}", agentId);
+    db_.updateLastSeen(agentId);
+
+    try {
+        auto j = nlohmann::json::parse(payload);
+        auto report = j.get<StatusReport>();
+
+        LOG_INFO("Status report type={} from agent {}", report.reportType, agentId);
+        LOG_DEBUG("Status data: {}", report.reportData);
+
+        // TODO: Store status report in DB or forward to backend API
+
+    } catch (const std::exception& e) {
+        LOG_ERROR("Failed to parse status report from {}: {}", agentId, e.what());
+    }
+
+    // Send acknowledgment
+    StatusReportAck ack;
+    ack.agentId = agentId;
+    ack.received = true;
+
+    time_t now = time(nullptr);
+    char buf[64];
+    strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+    ack.timestamp = buf;
+
+    sslSendMessage(ssl, MessageType::STATUS_REPORT_ACK,
+                   nlohmann::json(ack).dump());
+}
+
+bool AgentHandler::pushPolicyUpdate(SSL* ssl, const std::string& agentId,
+                                     const std::string& policyType,
+                                     const nlohmann::json& policyData) {
+    LOG_INFO("Pushing policy update to agent {}: type={}", agentId, policyType);
+
+    PolicyUpdate update;
+    update.agentId = agentId;
+    update.policyType = policyType;
+    update.policyData = policyData.dump();
+    update.policyVersion = "1";
+
+    time_t now = time(nullptr);
+    char buf[64];
+    strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+    update.timestamp = buf;
+
+    return sslSendMessage(ssl, MessageType::POLICY_UPDATE,
+                          nlohmann::json(update).dump());
+}
+
 } // namespace ResolutePulse
+

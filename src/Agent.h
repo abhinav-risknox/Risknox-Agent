@@ -12,6 +12,11 @@
 #include "agent/registration/CertificateStore.h"
 #include "agent/registration/RegistrationClient.h"
 #include "agent/network/TlsSender.h"
+#include "patch/PatchManager.h"
+#include "webblock/WebBlocker.h"
+#include "appblock/SoftwareBlocker.h"
+#include "policy/PolicyManager.h"
+#include "policy/CommandQueue.h"
 
 #include <memory>
 #include <atomic>
@@ -55,6 +60,13 @@ private:
     std::unique_ptr<FimMonitor> fimMonitor_;
     std::unique_ptr<SystemInfoCollector> sysInfoCollector_;
     
+    // Security modules
+    std::unique_ptr<PatchManager> patchManager_;
+    std::unique_ptr<WebBlocker> webBlocker_;
+    std::unique_ptr<SoftwareBlocker> softwareBlocker_;
+    std::unique_ptr<PolicyManager> policyManager_;
+    std::unique_ptr<CommandQueue> commandQueue_;
+    
     // Registration components
     std::unique_ptr<CertificateStore> certStore_;
     
@@ -76,6 +88,10 @@ private:
     std::thread managementThread_;
     void managementLoop();
     
+    // Policy processing thread
+    std::thread policyThread_;
+    void policyProcessingLoop();
+    
     // System info thread and configuration
     std::thread sysInfoThread_;
     std::chrono::hours sysInfoInterval_{24};
@@ -83,6 +99,9 @@ private:
     
     // System info collection loop
     void sysInfoLoop();
+    
+    // Helper to resolve config dir path
+    std::string resolveConfigDir() const;
 };
 
 } // namespace ResolutePulse

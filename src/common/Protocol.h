@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <cstdint>
 #include <string>
@@ -19,11 +19,15 @@ enum class MessageType : uint8_t {
     COMMAND            = 0x30,
     COMMAND_RESULT     = 0x31,
     LICENSE_CHECK        = 0x40,
-    LICENSE_CHECK_RESULT = 0x41
+    LICENSE_CHECK_RESULT = 0x41,
+    POLICY_UPDATE        = 0x50,
+    POLICY_UPDATE_ACK    = 0x51,
+    STATUS_REPORT        = 0x60,
+    STATUS_REPORT_ACK    = 0x61
 };
 
 // ─────────────────────────────────────────────────────────────
-// Message Header — prepended to every message on the wire
+// Message Header - prepended to every message on the wire
 // ─────────────────────────────────────────────────────────────
 struct MessageHeader {
     uint8_t  magic[4] = {'R', 'P', 'L', 'S'};  // "RPLS" magic bytes
@@ -34,7 +38,7 @@ struct MessageHeader {
 };
 
 static constexpr size_t   MESSAGE_HEADER_SIZE = 12;           // 4 + 1 + 1 + 2 + 4
-static constexpr uint32_t MAX_PAYLOAD_SIZE    = 64u * 1024u * 1024u; // 64 MB — receiver must reject frames that exceed this
+static constexpr uint32_t MAX_PAYLOAD_SIZE    = 64u * 1024u * 1024u; // 64 MB - receiver must reject frames that exceed this
 
 // ─────────────────────────────────────────────────────────────
 // Registration Messages
@@ -150,6 +154,51 @@ struct CommandResult {
 };
 
 // ─────────────────────────────────────────────────────────────
+// Policy Messages (Manager ↔ Agent)
+// ─────────────────────────────────────────────────────────────
+
+struct PolicyUpdate {
+    std::string agentId;
+    std::string policyType;     // "patch", "web_blocking", "software_blocking"
+    std::string policyData;     // JSON-encoded policy rules
+    std::string timestamp;
+    std::string policyVersion;  // For conflict resolution
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(PolicyUpdate,
+        agentId, policyType, policyData, timestamp, policyVersion)
+};
+
+struct PolicyUpdateAck {
+    std::string agentId;
+    std::string policyType;
+    bool applied = false;
+    std::string message;
+    std::string timestamp;
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(PolicyUpdateAck,
+        agentId, policyType, applied, message, timestamp)
+};
+
+struct StatusReport {
+    std::string agentId;
+    std::string reportType;     // "patch_status", "web_blocking_status", etc.
+    std::string reportData;     // JSON-encoded status
+    std::string timestamp;
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(StatusReport,
+        agentId, reportType, reportData, timestamp)
+};
+
+struct StatusReportAck {
+    std::string agentId;
+    std::string timestamp;
+    bool received = true;
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(StatusReportAck,
+        agentId, timestamp, received)
+};
+
+// ─────────────────────────────────────────────────────────────
 // Helper: Serialize / Deserialize MessageHeader
 // ─────────────────────────────────────────────────────────────
 
@@ -208,3 +257,4 @@ inline std::string buildMessage(MessageType type, const T& payload) {
 }
 
 } // namespace ResolutePulse
+

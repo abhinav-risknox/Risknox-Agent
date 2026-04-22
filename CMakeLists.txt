@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+﻿cmake_minimum_required(VERSION 3.20)
 project(ResolutePulse VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -67,6 +67,16 @@ set(AGENT_SOURCES
     # Policy module
     src/policy/PolicyManager.cpp
     src/policy/CommandQueue.cpp
+    # Patch Management module
+    src/patch/PatchManager.cpp
+    # Web Blocking module
+    src/webblock/WebBlocker.cpp
+    # Software Blocking module
+    src/appblock/SoftwareBlocker.cpp
+    # IPC layer (Named Pipe channel to worker processes)
+    src/ipc/PipeChannel.cpp
+    # Worker process manager
+    src/workers/WorkerManager.cpp
 )
 
 set(AGENT_HEADERS
@@ -101,6 +111,12 @@ set(AGENT_HEADERS
     # Policy module
     src/policy/PolicyManager.h
     src/policy/CommandQueue.h
+    # Patch Management module
+    src/patch/PatchManager.h
+    # Web Blocking module
+    src/webblock/WebBlocker.h
+    # Software Blocking module
+    src/appblock/SoftwareBlocker.h
     # Common
     ${COMMON_HEADERS}
 )
@@ -133,6 +149,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     bcrypt
     iphlpapi
     netapi32
+    ole32
+    oleaut32
 )
 
 # =============================================================================
@@ -260,7 +278,7 @@ target_link_libraries(test_postgres_client PRIVATE
 )
 
 # =============================================================================
-# Test: Manager Server (Integration — mock libpq, real CA + TLS)
+# Test: Manager Server (Integration - mock libpq, real CA + TLS)
 # =============================================================================
 add_executable(test_manager_server
     tests/test_manager_server.cpp
@@ -293,7 +311,7 @@ target_link_libraries(test_manager_server PRIVATE
 )
 
 # =============================================================================
-# Test: Agent Registry (Unit — mock libpq)
+# Test: Agent Registry (Unit - mock libpq)
 # =============================================================================
 add_executable(test_agent_registry
     tests/test_agent_registry.cpp
@@ -315,7 +333,7 @@ target_compile_definitions(test_agent_registry PRIVATE
 target_link_libraries(test_agent_registry PRIVATE ws2_32 advapi32)
 
 # =============================================================================
-# Test: License Manager (Unit — mock libpq)
+# Test: License Manager (Unit - mock libpq)
 # =============================================================================
 add_executable(test_license_manager
     tests/test_license_manager.cpp
@@ -337,7 +355,7 @@ target_compile_definitions(test_license_manager PRIVATE
 target_link_libraries(test_license_manager PRIVATE ws2_32 advapi32)
 
 # =============================================================================
-# Test: Agent Handler (Integration — mock libpq, real CA + OpenSSL)
+# Test: Agent Handler (Integration - mock libpq, real CA + OpenSSL)
 # =============================================================================
 add_executable(test_agent_handler
     tests/test_agent_handler.cpp
@@ -365,7 +383,7 @@ target_link_libraries(test_agent_handler PRIVATE
 )
 
 # =============================================================================
-# Test: Agent TLS (Unit + Integration — CertificateStore, RegistrationClient, TlsSender)
+# Test: Agent TLS (Unit + Integration - CertificateStore, RegistrationClient, TlsSender)
 # =============================================================================
 add_executable(test_agent_tls
     tests/test_agent_tls.cpp
@@ -433,3 +451,80 @@ install(FILES config.json DESTINATION bin)
 if(TARGET ResolutePulseManager)
     install(TARGETS ResolutePulseManager DESTINATION bin)
 endif()
+
+# =============================================================================
+# Worker executable targets (Wazuh-style child processes)
+# Each is a separate lightweight exe, called by the core agent via Named Pipe.
+# =============================================================================
+
+# Shared compile options for all workers
+set(WORKER_COMPILE_DEFS
+    _WIN32_WINNT=0x0602
+    NOMINMAX
+    WIN32_LEAN_AND_MEAN
+    SPDLOG_HEADER_ONLY
+    FMT_HEADER_ONLY
+)
+
+# ── rp-softblock.exe ──────────────────────────────────────────────────────────
+add_executable(rp-softblock
+    src/workers/SoftwareBlockerWorker.cpp
+    src/appblock/SoftwareBlocker.cpp
+    src/ipc/PipeChannel.cpp
+    src/config/ConfigManager.cpp
+    src/utils/Logger.cpp
+)
+target_include_directories(rp-softblock PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
+)
+target_compile_definitions(rp-softblock PRIVATE ${WORKER_COMPILE_DEFS})
+target_link_libraries(rp-softblock PRIVATE ws2_32 advapi32)
+install(TARGETS rp-softblock DESTINATION bin)
+
+# ── rp-webblock.exe ───────────────────────────────────────────────────────────
+add_executable(rp-webblock
+    src/workers/WebBlockerWorker.cpp
+    src/webblock/WebBlocker.cpp
+    src/ipc/PipeChannel.cpp
+    src/config/ConfigManager.cpp
+    src/utils/Logger.cpp
+)
+target_include_directories(rp-webblock PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
+)
+target_compile_definitions(rp-webblock PRIVATE ${WORKER_COMPILE_DEFS})
+target_link_libraries(rp-webblock PRIVATE ws2_32 advapi32)
+install(TARGETS rp-webblock DESTINATION bin)
+
+# ── rp-patch.exe ──────────────────────────────────────────────────────────────
+add_executable(rp-patch
+    src/workers/PatchWorker.cpp
+    src/patch/PatchManager.cpp
+    src/ipc/PipeChannel.cpp
+    src/config/ConfigManager.cpp
+    src/utils/Logger.cpp
+)
+target_include_directories(rp-patch PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
+)
+target_compile_definitions(rp-patch PRIVATE ${WORKER_COMPILE_DEFS})
+target_link_libraries(rp-patch PRIVATE ws2_32 advapi32 ole32 oleaut32)
+install(TARGETS rp-patch DESTINATION bin)
+
+# ── rp-antivirus.exe ──────────────────────────────────────────────────────────
+add_executable(rp-antivirus
+    src/antivirus/AntivirusWorker.cpp
+    src/ipc/PipeChannel.cpp
+    src/utils/Logger.cpp
+)
+target_include_directories(rp-antivirus PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
+)
+target_compile_definitions(rp-antivirus PRIVATE ${WORKER_COMPILE_DEFS})
+target_link_libraries(rp-antivirus PRIVATE ws2_32 advapi32)
+install(TARGETS rp-antivirus DESTINATION bin)
+

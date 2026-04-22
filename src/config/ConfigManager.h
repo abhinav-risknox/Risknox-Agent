@@ -59,6 +59,23 @@ struct SystemInfoConfig {
     } ports;
 };
 
+struct PatchConfigData {
+    bool enabled = false;
+    bool auto_scan = true;
+    int scan_interval_hours = 24;
+    bool auto_install = false;
+    std::vector<std::string> exclude_kbs;
+};
+
+struct WebBlockConfigData {
+    bool enabled = false;
+};
+
+struct AppBlockConfigData {
+    bool enabled = false;
+    int monitor_interval_ms = 300;
+};
+
 class ConfigManager {
 public:
     static ConfigManager& instance();
@@ -83,6 +100,9 @@ public:
     const std::string& getLogLevel() const { return logLevel_; }
     const FimConfigData& getFimConfig() const { return fimConfig_; }
     const SystemInfoConfig& getSysInfoConfig() const { return sysInfoConfig_; }
+    const PatchConfigData& getPatchConfig() const { return patchConfig_; }
+    const WebBlockConfigData& getWebBlockConfig() const { return webBlockConfig_; }
+    const AppBlockConfigData& getAppBlockConfig() const { return appBlockConfig_; }
     
     // Check if an event should be collected
     bool shouldCollectEvent(const std::string& channel, int eventId) const;
@@ -110,6 +130,9 @@ private:
     std::map<std::string, std::set<int>> eventFilters_;
     
     std::string logLevel_ = "info";
+    PatchConfigData patchConfig_;
+    WebBlockConfigData webBlockConfig_;
+    AppBlockConfigData appBlockConfig_;
 };
 
 } // namespace ResolutePulse

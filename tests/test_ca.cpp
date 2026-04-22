@@ -1,4 +1,4 @@
-#include "manager/ca/CertificateAuthority.h"
+﻿#include "manager/ca/CertificateAuthority.h"
 #include "utils/Logger.h"
 
 #include <openssl/evp.h>
@@ -187,7 +187,7 @@ int main() {
         IssuedCertificate issued = ca4.issueCertificate("agent-revoke-001", agentPubPem, 365);
         assert(!issued.serialNumber.empty() && "Must have a serial to revoke");
 
-        // Revoke the certificate — should return true
+        // Revoke the certificate - should return true
         bool revokeResult = ca4.revokeCertificate(issued.serialNumber);
         assert(revokeResult && "revokeCertificate() must return true");
 
@@ -246,7 +246,7 @@ int main() {
         std::cout << "[PASS] generateCRL() produced a valid, correctly-signed CRL\n";
     }
 
-    // ─── Test 6: updateCRL() — regenerate CRL after revocation ───
+    // ─── Test 6: updateCRL() - regenerate CRL after revocation ───
     std::cout << "\n========== TEST 6: Update CRL After Revocation ==========\n";
     {
         CertificateAuthority ca6;
@@ -496,3 +496,4 @@ int main() {
     std::cout << "\n=== ALL TESTS PASSED ===\n\n";
     return 0;
 }
+

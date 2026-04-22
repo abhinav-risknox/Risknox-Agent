@@ -1,7 +1,7 @@
-// =============================================================================
-// test_agent_registry.cpp — Unit tests for AgentRegistry (cache + DB layer)
+﻿// =============================================================================
+// test_agent_registry.cpp - Unit tests for AgentRegistry (cache + DB layer)
 //
-// Uses mock libpq stubs — no database needed.
+// Uses mock libpq stubs - no database needed.
 // =============================================================================
 
 #include "manager/registry/AgentRegistry.h"
@@ -34,7 +34,7 @@ static pg_conn* g_mockConn = nullptr;
 static int g_mockConnStatus = 0;
 static std::string g_mockErrorMessage = "";
 
-// Controllable mock result — set before each operation
+// Controllable mock result - set before each operation
 static pg_result* g_mockResult = nullptr;
 static std::string g_lastQuery = "";
 static std::vector<std::string> g_lastParams = {};
@@ -219,7 +219,7 @@ void test_RegisterAgent() {
 }
 
 void test_GetAgent_CacheHit() {
-    std::cout << "\n========== TEST 2: Get Agent — Cache Hit ==========\n";
+    std::cout << "\n========== TEST 2: Get Agent - Cache Hit ==========\n";
     PostgresClient db;
     g_mockConnStatus = 0;
     db.connect("mock");
@@ -245,14 +245,14 @@ void test_GetAgent_CacheHit() {
 }
 
 void test_GetAgent_CacheMiss_DBHit() {
-    std::cout << "\n========== TEST 3: Get Agent — Cache Miss / DB Hit ==========\n";
+    std::cout << "\n========== TEST 3: Get Agent - Cache Miss / DB Hit ==========\n";
     PostgresClient db;
     g_mockConnStatus = 0;
     db.connect("mock");
 
     AgentRegistry registry(db);
 
-    // Don't register — agent not in cache. Set DB to return a record.
+    // Don't register - agent not in cache. Set DB to return a record.
     g_dbGetAgentShouldReturn = true;
     g_dbGetAgentRecord = {};
     g_dbGetAgentRecord.id = 42;
@@ -275,7 +275,7 @@ void test_GetAgent_CacheMiss_DBHit() {
 }
 
 void test_GetAgent_NotFound() {
-    std::cout << "\n========== TEST 4: Get Agent — Not Found ==========\n";
+    std::cout << "\n========== TEST 4: Get Agent - Not Found ==========\n";
     PostgresClient db;
     g_mockConnStatus = 0;
     db.connect("mock");
@@ -316,7 +316,7 @@ void test_UpdateStatus() {
 }
 
 void test_IsRegistered_Cache() {
-    std::cout << "\n========== TEST 6: Is Registered — Cache ==========\n";
+    std::cout << "\n========== TEST 6: Is Registered - Cache ==========\n";
     PostgresClient db;
     g_mockConnStatus = 0;
     db.connect("mock");
@@ -335,7 +335,7 @@ void test_IsRegistered_Cache() {
 }
 
 void test_IsRegistered_DBFallback() {
-    std::cout << "\n========== TEST 7: Is Registered — DB Fallback ==========\n";
+    std::cout << "\n========== TEST 7: Is Registered - DB Fallback ==========\n";
     PostgresClient db;
     g_mockConnStatus = 0;
     db.connect("mock");
@@ -422,3 +422,4 @@ int main() {
     std::cout << "\n=== ALL AGENT REGISTRY TESTS PASSED ===\n\n";
     return 0;
 }
+

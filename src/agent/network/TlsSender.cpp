@@ -334,6 +334,67 @@ bool TlsSender::sslReadExact(void* buffer, size_t length) {
     return true;
 }
 
+bool TlsSender::readNextMessage(MessageType& outType, std::string& outPayload) {
+    uint8_t headerBuf[MESSAGE_HEADER_SIZE];
+    size_t total = 0;
+    auto* buf = reinterpret_cast<char*>(headerBuf);
+
+    // Read header (no lock — callers already hold mutex_ or use their own sync)
+    while (total < MESSAGE_HEADER_SIZE) {
+        int n = SSL_read(ssl_, buf + total, static_cast<int>(MESSAGE_HEADER_SIZE - total));
+        if (n <= 0) { connected_ = false; return false; }
+        total += n;
+    }
+
+    MessageHeader header;
+    if (!deserializeHeader(headerBuf, header)) return false;
+    if (header.payloadLength > MAX_PAYLOAD_SIZE) { connected_ = false; return false; }
+
+    outPayload.resize(header.payloadLength);
+    total = 0;
+    while (total < header.payloadLength) {
+        int n = SSL_read(ssl_, &outPayload[0] + total,
+                         static_cast<int>(header.payloadLength - total));
+        if (n <= 0) { connected_ = false; return false; }
+        total += n;
+    }
+
+    outType = static_cast<MessageType>(header.type);
+    return true;
+}
+
+bool TlsSender::readExpectedMessage(MessageType expected, std::string& outPayload) {
+    // Keep reading messages. If we get a POLICY_UPDATE while waiting for our
+    // ACK, queue it for later retrieval via tryReadInbound(). 
+    for (int safety = 0; safety < 10; ++safety) {
+        MessageType type;
+        std::string payload;
+        if (!readNextMessage(type, payload)) return false;
+
+        if (type == expected) {
+            outPayload = std::move(payload);
+            return true;
+        }
+
+        // Got something else (almost certainly POLICY_UPDATE) — queue it
+        if (type == MessageType::POLICY_UPDATE) {
+            auto j = nlohmann::json::parse(payload, nullptr, false);
+            if (!j.is_discarded()) {
+                pendingInbound_.push(std::move(j));
+                LOG_DEBUG("Queued inbound POLICY_UPDATE while waiting for ACK (queue={})",
+                          pendingInbound_.size());
+            }
+        } else {
+            LOG_WARN("Discarding unexpected message type 0x{:02X} while waiting for 0x{:02X}",
+                     static_cast<uint8_t>(type), static_cast<uint8_t>(expected));
+        }
+    }
+
+    LOG_ERROR("Too many unexpected messages while waiting for type 0x{:02X}",
+              static_cast<uint8_t>(expected));
+    return false;
+}
+
 SendResult TlsSender::sendHeartbeat(const std::string& agentId, uint64_t eventsCollected, uint64_t eventsSent) {
     if (!sslCtx_) {
         lastError_ = "TLS sender not initialized (SSL context is null)";
@@ -388,31 +449,10 @@ SendResult TlsSender::sendHeartbeat(const std::string& agentId, uint64_t eventsC
 
         bytesSent_ += MESSAGE_HEADER_SIZE + payload.size();
 
-        // --- Read response ---
-        uint8_t respHeaderBuf[MESSAGE_HEADER_SIZE];
-        if (!sslReadExact(respHeaderBuf, MESSAGE_HEADER_SIZE)) {
-            LOG_WARN("Failed to read heartbeat response header");
-            disconnect();
-            attempts++;
-            continue;
-        }
-
-        MessageHeader respHeader;
-        if (!deserializeHeader(respHeaderBuf, respHeader)) {
-            LOG_ERROR("Failed to deserialize heartbeat response header");
-            disconnect();
-            return SendResult::ServerError;
-        }
-
-        if (respHeader.type != static_cast<uint8_t>(MessageType::HEARTBEAT_ACK)) {
-            LOG_ERROR("Unexpected response type to heartbeat: {}", respHeader.type);
-            disconnect();
-            return SendResult::ServerError;
-        }
-
-        std::string respPayload(respHeader.payloadLength, '\0');
-        if (!sslReadExact(&respPayload[0], respHeader.payloadLength)) {
-            LOG_WARN("Failed to read heartbeat response payload");
+        // --- Read response (tolerates interleaved POLICY_UPDATEs) ---
+        std::string respPayload;
+        if (!readExpectedMessage(MessageType::HEARTBEAT_ACK, respPayload)) {
+            LOG_WARN("Failed to read HEARTBEAT_ACK");
             disconnect();
             attempts++;
             continue;
@@ -483,31 +523,10 @@ SendResult TlsSender::checkLicense(const std::string& agentId) {
 
         bytesSent_ += MESSAGE_HEADER_SIZE + payload.size();
 
-        // --- Read response ---
-        uint8_t respHeaderBuf[MESSAGE_HEADER_SIZE];
-        if (!sslReadExact(respHeaderBuf, MESSAGE_HEADER_SIZE)) {
-            LOG_WARN("Failed to read license check response header");
-            disconnect();
-            attempts++;
-            continue;
-        }
-
-        MessageHeader respHeader;
-        if (!deserializeHeader(respHeaderBuf, respHeader)) {
-            LOG_ERROR("Failed to deserialize license check response header");
-            disconnect();
-            return SendResult::ServerError;
-        }
-
-        if (respHeader.type != static_cast<uint8_t>(MessageType::LICENSE_CHECK_RESULT)) {
-            LOG_ERROR("Unexpected response type to license check: {}", respHeader.type);
-            disconnect();
-            return SendResult::ServerError;
-        }
-
-        std::string respPayload(respHeader.payloadLength, '\0');
-        if (!sslReadExact(&respPayload[0], respHeader.payloadLength)) {
-            LOG_WARN("Failed to read license check response payload");
+        // --- Read response (tolerates interleaved POLICY_UPDATEs) ---
+        std::string respPayload;
+        if (!readExpectedMessage(MessageType::LICENSE_CHECK_RESULT, respPayload)) {
+            LOG_WARN("Failed to read LICENSE_CHECK_RESULT");
             disconnect();
             attempts++;
             continue;
@@ -533,4 +552,34 @@ SendResult TlsSender::checkLicense(const std::string& agentId) {
     return SendResult::NetworkError;
 }
 
+bool TlsSender::tryReadInbound(nlohmann::json& out) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    // 1) Drain any messages queued during sendHeartbeat/checkLicense first
+    if (!pendingInbound_.empty()) {
+        out = std::move(pendingInbound_.front());
+        pendingInbound_.pop();
+        return true;
+    }
+
+    // 2) Check for new data on the wire (non-blocking)
+    if (!ssl_ || !connected_.load()) return false;
+    if (SSL_pending(ssl_) <= 0) return false;
+
+    // Data available — read one full message
+    MessageType type;
+    std::string payload;
+    if (!readNextMessage(type, payload)) return false;
+
+    // Only surface POLICY_UPDATE messages; discard anything else
+    if (type != MessageType::POLICY_UPDATE) {
+        LOG_DEBUG("tryReadInbound: discarding unexpected type 0x{:02X}", static_cast<uint8_t>(type));
+        return false;
+    }
+
+    out = nlohmann::json::parse(payload, nullptr, false);
+    return !out.is_discarded();
+}
+
 } // namespace ResolutePulse
+

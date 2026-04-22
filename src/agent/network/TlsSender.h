@@ -7,6 +7,10 @@
 #include <atomic>
 #include <mutex>
 
+#include <nlohmann/json.hpp>
+#include <queue>
+#include "common/Protocol.h"
+
 // Forward declare OpenSSL types
 typedef struct ssl_ctx_st SSL_CTX;
 typedef struct ssl_st SSL;
@@ -50,6 +54,11 @@ public:
     // Disconnect
     void disconnect();
 
+    // Try to read an inbound POLICY_UPDATE from the Manager (non-blocking).
+    // Returns true and populates `out` if a message was available.
+    // Returns false immediately if no data is pending.
+    bool tryReadInbound(nlohmann::json& out);
+
     // Statistics
     uint64_t getEventsSent() const { return eventsSent_.load(); }
     uint64_t getBytesSent() const { return bytesSent_.load(); }
@@ -75,6 +84,13 @@ private:
 
     // Read exact number of bytes over SSL
     bool sslReadExact(void* buffer, size_t length);
+
+    // Read one complete protocol message from the socket (header + payload).
+    // Returns false on I/O error. Populates outType and outPayload.
+    bool readNextMessage(MessageType& outType, std::string& outPayload);
+
+    // Read messages until we get the expected type, queuing anything else.
+    bool readExpectedMessage(MessageType expected, std::string& outPayload);
 
     std::string host_;
     int         port_ = 1514;
@@ -103,6 +119,9 @@ private:
     std::atomic<uint64_t> batchesSent_{0};
     std::atomic<uint64_t> failedSends_{0};
     std::atomic<uint64_t> reconnections_{0};
+
+    // Queue for POLICY_UPDATE messages that arrived while waiting for an ACK
+    std::queue<nlohmann::json> pendingInbound_;
 
     static constexpr int MAX_RECONNECT_ATTEMPTS = 3;
     static constexpr int CONNECT_TIMEOUT_MS = 5000;

@@ -2,6 +2,7 @@
 
 #include "manager/ca/CertificateAuthority.h"
 #include "manager/db/PostgresClient.h"
+#include "nlohmann/json.hpp"
 
 #include <string>
 #include <atomic>
@@ -9,6 +10,7 @@
 #include <vector>
 #include <functional>
 #include <mutex>
+#include <unordered_map>
 
 // Forward declare OpenSSL types
 typedef struct ssl_ctx_st SSL_CTX;
@@ -53,6 +55,12 @@ public:
     // Check if running
     bool isRunning() const { return running_.load(); }
 
+    // ── Session registry (called by AgentHandler) ──
+    // Register an authenticated agent's live SSL socket
+    void registerSession(const std::string& agentId, SSL* ssl);
+    // Unregister when connection closes
+    void unregisterSession(const std::string& agentId);
+
 private:
     // Create SSL context for TLS server
     bool createSSLContext();
@@ -69,6 +77,14 @@ private:
     // Handle a single client connection in a thread
     void handleClient(SOCKET clientSocket, const std::string& clientAddr);
 
+    // Command ingest loop: listens on 127.0.0.1:1515, routes to live sessions
+    void commandIngestLoop();
+
+    // Dispatch a command to an agent's live SSL socket
+    void dispatchCommand(const std::string& agentId,
+                         const std::string& policyType,
+                         const nlohmann::json& policyData);
+
     int               port_ = 1514;
     CertificateAuthority* ca_ = nullptr;
     PostgresClient*       db_ = nullptr;
@@ -76,15 +92,22 @@ private:
 
 #ifdef _WIN32
     SOCKET            listenSocket_ = INVALID_SOCKET;
+    SOCKET            commandSocket_ = INVALID_SOCKET;  // 127.0.0.1:1515
     bool              wsaInitialized_ = false;
 #else
     int               listenSocket_ = -1;
+    int               commandSocket_ = -1;
 #endif
 
     std::atomic<bool> running_{false};
     std::thread       acceptThread_;
+    std::thread       commandIngestThread_;            // command ingest on port 1515
     std::vector<std::thread> clientThreads_;
     std::mutex        threadsMutex_;
+
+    // Live authenticated sessions: agentId → SSL*
+    std::unordered_map<std::string, SSL*> activeSessions_;
+    std::mutex                             sessionsMutex_;
 
     // Server certificate paths (issued by the CA for the manager itself)
     std::string       serverCertPath_;

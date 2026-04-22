@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "manager/db/PostgresClient.h"
 
@@ -23,7 +23,7 @@ public:
     // Returns "ACTIVE", "EXPIRED", or "NONE"
     std::string checkLicenseStatus(const std::string& agentId);
 
-    // Certificate validity (identity only — decoupled from license)
+    // Certificate validity (identity only - decoupled from license)
     static constexpr int CERT_VALIDITY_DAYS = 365;
     // Trial license duration in days
     static constexpr int TRIAL_LICENSE_DAYS = 7;
@@ -33,3 +33,4 @@ private:
 };
 
 } // namespace ResolutePulse
+

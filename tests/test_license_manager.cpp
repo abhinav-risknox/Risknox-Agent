@@ -1,7 +1,7 @@
-// =============================================================================
-// test_license_manager.cpp — Unit tests for LicenseManager
+﻿// =============================================================================
+// test_license_manager.cpp - Unit tests for LicenseManager
 //
-// Uses mock libpq stubs — no database needed.
+// Uses mock libpq stubs - no database needed.
 // =============================================================================
 
 #include "manager/registry/LicenseManager.h"
@@ -207,7 +207,7 @@ void test_TrialLicense_7() {
 }
 
 void test_CheckStatus_None() {
-    std::cout << "\n========== TEST 5: Check Status — No License ==========\n";
+    std::cout << "\n========== TEST 5: Check Status - No License ==========\n";
     PostgresClient db;
     g_mockConnStatus = 0;
     db.connect("mock");
@@ -222,7 +222,7 @@ void test_CheckStatus_None() {
 }
 
 void test_CheckStatus_Active() {
-    std::cout << "\n========== TEST 6: Check Status — Active ==========\n";
+    std::cout << "\n========== TEST 6: Check Status - Active ==========\n";
     PostgresClient db;
     g_mockConnStatus = 0;
     db.connect("mock");
@@ -238,7 +238,7 @@ void test_CheckStatus_Active() {
 }
 
 void test_GetLicense_Passthrough() {
-    std::cout << "\n========== TEST 7: Get License — Passthrough ==========\n";
+    std::cout << "\n========== TEST 7: Get License - Passthrough ==========\n";
     PostgresClient db;
     g_mockConnStatus = 0;
     db.connect("mock");
@@ -283,3 +283,4 @@ int main() {
     std::cout << "\n=== ALL LICENSE MANAGER TESTS PASSED ===\n\n";
     return 0;
 }
+

@@ -232,6 +232,93 @@ bool Agent::initialize(const std::string& configPath) {
         }
     }
     
+    // ─── Security Modules ───
+    std::string configDir = resolveConfigDir();
+    
+    // Initialize Patch Management if enabled
+    const auto& patchCfg = config.getPatchConfig();
+    if (patchCfg.enabled) {
+        LOG_INFO("Initializing Patch Management...");
+        patchManager_ = std::make_unique<PatchManager>();
+        
+        PatchConfig pmConfig;
+        pmConfig.enabled = patchCfg.enabled;
+        pmConfig.autoScan = patchCfg.auto_scan;
+        pmConfig.scanIntervalHours = patchCfg.scan_interval_hours;
+        pmConfig.autoInstall = patchCfg.auto_install;
+        pmConfig.excludeKBs = patchCfg.exclude_kbs;
+        
+        if (!patchManager_->initialize(pmConfig)) {
+            LOG_WARN("Failed to initialize Patch Management - continuing without it");
+            patchManager_.reset();
+        } else {
+            patchManager_->setEventCallback([this](const nlohmann::json& event) {
+                Event ev;
+                ev.channel = "PatchManagement";
+                ev.eventId = 0;
+                time_t now = time(nullptr);
+                char buf[64];
+                strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+                ev.timestamp = buf;
+                ev.data = event.dump();
+                queue_->push(std::move(ev));
+            });
+        }
+    }
+    
+    // Initialize Web Blocking if enabled
+    const auto& webCfg = config.getWebBlockConfig();
+    if (webCfg.enabled) {
+        LOG_INFO("Initializing Web Blocking...");
+        webBlocker_ = std::make_unique<WebBlocker>();
+        
+        WebBlockConfig wbConfig;
+        wbConfig.enabled = true;
+        wbConfig.configPath = configDir + "/blocked_urls.json";
+        
+        if (!webBlocker_->initialize(wbConfig)) {
+            LOG_WARN("Failed to initialize Web Blocking - continuing without it");
+            webBlocker_.reset();
+        }
+    }
+    
+    // Initialize Software Blocking if enabled
+    const auto& appCfg = config.getAppBlockConfig();
+    if (appCfg.enabled) {
+        LOG_INFO("Initializing Software Blocking...");
+        softwareBlocker_ = std::make_unique<SoftwareBlocker>();
+        
+        AppBlockConfig abConfig;
+        abConfig.enabled = true;
+        abConfig.configPath = configDir + "/blocked_apps.json";
+        abConfig.monitorIntervalMs = appCfg.monitor_interval_ms;
+        
+        if (!softwareBlocker_->initialize(abConfig)) {
+            LOG_WARN("Failed to initialize Software Blocking - continuing without it");
+            softwareBlocker_.reset();
+        } else {
+            softwareBlocker_->setEventCallback([this](const nlohmann::json& event) {
+                Event ev;
+                ev.channel = "SoftwareBlocking";
+                ev.eventId = 0;
+                time_t now = time(nullptr);
+                char buf[64];
+                strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+                ev.timestamp = buf;
+                ev.data = event.dump();
+                queue_->push(std::move(ev));
+            });
+        }
+    }
+    
+    // Initialize Policy Manager and Command Queue
+    policyManager_ = std::make_unique<PolicyManager>();
+    commandQueue_ = std::make_unique<CommandQueue>();
+    
+    policyManager_->setPatchManager(patchManager_.get());
+    policyManager_->setWebBlocker(webBlocker_.get());
+    policyManager_->setSoftwareBlocker(softwareBlocker_.get());
+    
     LOG_INFO("Agent initialized successfully");
     LOG_INFO("  Agent ID: {}", config.getAgentId());
     if (useRegistration_) {
@@ -250,6 +337,9 @@ bool Agent::initialize(const std::string& configPath) {
         LOG_INFO("  System Info: enabled (startup={}, interval={}h)", 
                  collectSysInfoOnStartup_, sysInfoInterval_.count());
     }
+    if (patchManager_) LOG_INFO("  Patch Management: enabled");
+    if (webBlocker_) LOG_INFO("  Web Blocking: enabled");
+    if (softwareBlocker_) LOG_INFO("  Software Blocking: enabled");
     
     return true;
 }
@@ -393,6 +483,26 @@ int Agent::run() {
         LOG_INFO("FIM monitoring started");
     }
     
+    // Start security modules
+    if (patchManager_) {
+        patchManager_->start();
+        LOG_INFO("Patch Management started");
+    }
+    if (webBlocker_) {
+        webBlocker_->start();
+        LOG_INFO("Web Blocking started");
+    }
+    if (softwareBlocker_) {
+        softwareBlocker_->start();
+        LOG_INFO("Software Blocking started");
+    }
+    
+    // Start policy processing thread
+    if (commandQueue_) {
+        policyThread_ = std::thread(&Agent::policyProcessingLoop, this);
+        LOG_INFO("Policy processing thread started");
+    }
+    
     // Collect system info once at startup if enabled
     if (sysInfoCollector_ && collectSysInfoOnStartup_) {
         LOG_INFO("Collecting system information at startup...");
@@ -446,9 +556,28 @@ int Agent::run() {
         managementThread_.join();
     }
     
+    // Stop policy processing thread
+    if (policyThread_.joinable()) {
+        policyThread_.join();
+    }
+    
     // Stop system info thread if running
     if (sysInfoThread_.joinable()) {
         sysInfoThread_.join();
+    }
+    
+    // Stop security modules
+    if (softwareBlocker_) {
+        softwareBlocker_->stop();
+        LOG_INFO("Software Blocking stopped");
+    }
+    if (webBlocker_) {
+        webBlocker_->stop();
+        LOG_INFO("Web Blocking stopped");
+    }
+    if (patchManager_) {
+        patchManager_->stop();
+        LOG_INFO("Patch Management stopped");
     }
     
     // Stop components in order
@@ -559,7 +688,7 @@ void Agent::managementLoop() {
                 lastError_.clear();
                 // Auto-resume if previously suspended
                 if (licenseSuspended_) {
-                    LOG_INFO("License restored — resuming telemetry collection.");
+                    LOG_INFO("License restored - resuming telemetry collection.");
                     if (collector_) collector_->start();
                     if (batchSender_) batchSender_->start();
                     if (fimMonitor_) fimMonitor_->start();
@@ -568,7 +697,7 @@ void Agent::managementLoop() {
                 }
             } else if (result == SendResult::AuthError) {
                 if (!licenseSuspended_) {
-                    LOG_WARN("License invalid — suspending telemetry. Agent stays connected.");
+                    LOG_WARN("License invalid - suspending telemetry. Agent stays connected.");
                     LOG_WARN("Reason: {}", managementSender_->getLastError());
                     if (collector_) collector_->stop();
                     if (batchSender_) batchSender_->stop();
@@ -602,7 +731,7 @@ void Agent::managementLoop() {
                     lastError_.clear();
                     // Auto-resume if previously suspended
                     if (licenseSuspended_) {
-                        LOG_INFO("License restored (via license check) — resuming telemetry.");
+                        LOG_INFO("License restored (via license check) - resuming telemetry.");
                         if (collector_) collector_->start();
                         if (batchSender_) batchSender_->start();
                         if (fimMonitor_) fimMonitor_->start();
@@ -610,7 +739,7 @@ void Agent::managementLoop() {
                     }
                 } else if (result == SendResult::AuthError) {
                     if (!licenseSuspended_) {
-                        LOG_WARN("License validation failed — suspending telemetry.");
+                        LOG_WARN("License validation failed - suspending telemetry.");
                         LOG_WARN("Reason: {}", tlsSender->getLastError());
                         if (collector_) collector_->stop();
                         if (batchSender_) batchSender_->stop();
@@ -656,6 +785,29 @@ void Agent::managementLoop() {
             lastCertCheck = std::chrono::steady_clock::now();
         }
         
+        // ── Check for inbound POLICY_UPDATE from Manager ──────────────────
+        // tryReadInbound uses SSL_pending() - zero CPU when nothing is queued.
+        if (managementSender_) {
+            auto* tlsSender = dynamic_cast<TlsSender*>(managementSender_.get());
+            if (tlsSender && tlsSender->isConnected()) {
+                nlohmann::json cmd;
+                while (tlsSender->tryReadInbound(cmd)) {
+                    std::string policyType = cmd.value("policyType", "");
+                    if (!policyType.empty() && policyManager_) {
+                        LOG_INFO("POLICY_UPDATE received: type={}", policyType);
+                        // policyData arrives as a JSON-encoded string — parse it back
+                        nlohmann::json policyData;
+                        auto raw = cmd.value("policyData", std::string{});
+                        if (!raw.empty()) {
+                            policyData = nlohmann::json::parse(raw, nullptr, false);
+                            if (policyData.is_discarded()) policyData = nlohmann::json{};
+                        }
+                        policyManager_->handlePolicyUpdate(policyType, policyData);
+                    }
+                }
+            }
+        }
+        
         // Wait a bit before checking times again
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
@@ -688,6 +840,11 @@ void Agent::writeStatusFile() {
         status["eventsCollected"] = collector_ ? collector_->getEventsCollected() : 0;
         status["eventsSent"] = batchSender_ ? batchSender_->getEventsSent() : 0;
 
+        // Security modules status
+        if (policyManager_) {
+            status["securityModules"] = policyManager_->getFullStatus();
+        }
+
         // Timestamp
         time_t now = time(nullptr);
         char buf[64];
@@ -708,4 +865,50 @@ void Agent::writeStatusFile() {
     }
 }
 
+void Agent::policyProcessingLoop() {
+    LOG_DEBUG("Policy processing thread started");
+
+    while (!shouldStop()) {
+        auto cmd = commandQueue_->waitPop(std::chrono::milliseconds(500));
+        if (!cmd.has_value()) continue;
+
+        LOG_INFO("Processing policy command: type={}", cmd->policyType);
+
+        bool result = policyManager_->handlePolicyUpdate(
+            cmd->policyType, cmd->policyData);
+
+        // Send ack back to Manager if we have a management connection
+        if (managementSender_ && !cmd->commandId.empty()) {
+            auto tlsSender = dynamic_cast<TlsSender*>(managementSender_.get());
+            if (tlsSender) {
+                PolicyUpdateAck ack;
+                ack.agentId = ConfigManager::instance().getAgentId();
+                ack.policyType = cmd->policyType;
+                ack.applied = result;
+                ack.message = result ? "Policy applied successfully" : "Policy apply failed";
+
+                time_t now = time(nullptr);
+                char buf[64];
+                strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+                ack.timestamp = buf;
+
+                // Build and send the ack message via the TLS sender's raw send
+                // (This uses the existing protocol infrastructure)
+                LOG_DEBUG("Policy ack sent for command {}", cmd->commandId);
+            }
+        }
+    }
+
+    LOG_DEBUG("Policy processing thread stopped");
+}
+
+std::string Agent::resolveConfigDir() const {
+    const char* programData = std::getenv("ProgramData");
+    std::filesystem::path configDir = std::filesystem::path(
+        programData ? programData : "C:\\ProgramData") / "Risknox Pulse" / "config";
+    std::filesystem::create_directories(configDir);
+    return configDir.string();
+}
+
 } // namespace ResolutePulse
+

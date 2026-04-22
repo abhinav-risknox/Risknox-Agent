@@ -137,6 +137,31 @@ bool ConfigManager::load(const std::string& configPath) {
             }
         }
         
+        // Patch management config (optional)
+        if (config.contains("patch_management")) {
+            auto& pm = config["patch_management"];
+            patchConfig_.enabled = pm.value("enabled", false);
+            patchConfig_.auto_scan = pm.value("auto_scan", true);
+            patchConfig_.scan_interval_hours = pm.value("scan_interval_hours", 24);
+            patchConfig_.auto_install = pm.value("auto_install", false);
+            if (pm.contains("exclude_kbs")) {
+                patchConfig_.exclude_kbs = pm["exclude_kbs"].get<std::vector<std::string>>();
+            }
+        }
+        
+        // Web blocking config (optional)
+        if (config.contains("web_blocking")) {
+            auto& wb = config["web_blocking"];
+            webBlockConfig_.enabled = wb.value("enabled", false);
+        }
+        
+        // Software/application blocking config (optional)
+        if (config.contains("software_blocking")) {
+            auto& ab = config["software_blocking"];
+            appBlockConfig_.enabled = ab.value("enabled", false);
+            appBlockConfig_.monitor_interval_ms = ab.value("monitor_interval_ms", 300);
+        }
+        
         loaded_ = true;
         LOG_INFO("Configuration loaded successfully from: {}", configPath);
         LOG_INFO("Agent ID: {}", agentId_);
@@ -150,6 +175,17 @@ bool ConfigManager::load(const std::string& configPath) {
             LOG_INFO("System Info enabled: collect on startup={}, interval={}h", 
                      sysInfoConfig_.collect_on_startup, 
                      sysInfoConfig_.collection_interval_hours);
+        }
+        if (patchConfig_.enabled) {
+            LOG_INFO("Patch Management enabled: autoScan={}, interval={}h",
+                     patchConfig_.auto_scan, patchConfig_.scan_interval_hours);
+        }
+        if (webBlockConfig_.enabled) {
+            LOG_INFO("Web Blocking enabled");
+        }
+        if (appBlockConfig_.enabled) {
+            LOG_INFO("Software Blocking enabled: monitorInterval={}ms",
+                     appBlockConfig_.monitor_interval_ms);
         }
         
         return true;

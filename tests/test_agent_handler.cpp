@@ -1,5 +1,5 @@
-// =============================================================================
-// test_agent_handler.cpp — Tests for AgentHandler message processing
+﻿// =============================================================================
+// test_agent_handler.cpp - Tests for AgentHandler message processing
 //
 // Uses:
 //   • Real CertificateAuthority (temp dir)
@@ -266,7 +266,7 @@ static void runOneConnectionServer(int port, SSL_CTX* sslCtx,
         bool hasCert = (clientCert != nullptr);
         if (clientCert) X509_free(clientCert);
 
-        AgentHandler handler(ca, db);
+        AgentHandler handler(ca, db, nullptr);
         handler.handleConnection(ssl, "127.0.0.1", hasCert);
     }
 
@@ -361,7 +361,7 @@ static bool tlsClientSendOnly(int port, const std::string& message) {
 
     SSL_write(ssl, message.data(), static_cast<int>(message.size()));
 
-    // Try to read — expect nothing (handler drops silently)
+    // Try to read - expect nothing (handler drops silently)
     uint8_t buf[1];
     // Set a short timeout so we don't wait forever
     struct timeval tv; tv.tv_sec = 1; tv.tv_usec = 0;
@@ -518,7 +518,7 @@ void test_Heartbeat_ACK(int port, SSL_CTX* sslCtx,
     // and the handler will drop. We expect no response.
     // For this to work with hasClientCert=true, we'd need mTLS.
     // Instead, let's just verify the unauthenticated case drops correctly:
-    // That's Test 6. Here, we test by modifying the approach — send as
+    // That's Test 6. Here, we test by modifying the approach - send as
     // REGISTER_REQUEST with heartbeat data would fail, so let's accept
     // that TLS-level client cert distinction can't be tested without mTLS setup.
 
@@ -612,3 +612,4 @@ int main() {
     std::cout << "\n=== ALL AGENT HANDLER TESTS PASSED ===\n\n";
     return 0;
 }
+

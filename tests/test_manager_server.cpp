@@ -1,9 +1,9 @@
-// =============================================================================
-// test_manager_server.cpp — Integration tests for ManagerServer + AgentHandler
+﻿// =============================================================================
+// test_manager_server.cpp - Integration tests for ManagerServer + AgentHandler
 //
 // Uses:
 //   • Real CertificateAuthority (temp dir)
-//   • Mock libpq (extern "C" stubs — no database needed)
+//   • Mock libpq (extern "C" stubs - no database needed)
 //   • Real TCP + TLS client to exercise the full registration path
 // =============================================================================
 
@@ -155,7 +155,7 @@ extern "C" {
             return &existsResult;
         }
 
-        // INSERT INTO agents — track the agent ID
+        // INSERT INTO agents - track the agent ID
         if (query.find("INSERT INTO agents") != std::string::npos) {
             if (nParams > 0) {
                 g_registeredAgents.insert(paramValues[0]);
@@ -203,7 +203,7 @@ extern "C" {
     }
 
     void PQclear(PGresult* res) {
-        // Static results — no cleanup needed
+        // Static results - no cleanup needed
     }
 
     int PQntuples(const PGresult* res) {
@@ -397,7 +397,7 @@ int main() {
         std::filesystem::remove_all(TEST_CA_DIR);
     }
 
-    // Initialize shared CA — used by all tests
+    // Initialize shared CA - used by all tests
     CertificateAuthority ca;
     bool caOk = ca.initializeCA(TEST_CA_DIR);
     assert(caOk && "CA must initialize for tests to proceed");
@@ -408,7 +408,7 @@ int main() {
     db.connect("host=localhost dbname=test_mock");
 
     // ═════════════════════════════════════════════════════════════
-    // Test 1: Server Construction — default state
+    // Test 1: Server Construction - default state
     // ═════════════════════════════════════════════════════════════
     std::cout << "\n========== TEST 1: Server Construction ==========\n";
     {
@@ -458,7 +458,7 @@ int main() {
     }
 
     // ═════════════════════════════════════════════════════════════
-    // Test 4: Agent Registration — End to End
+    // Test 4: Agent Registration - End to End
     // ═════════════════════════════════════════════════════════════
     std::cout << "\n========== TEST 4: Agent Registration E2E ==========\n";
     {
@@ -532,7 +532,7 @@ int main() {
     // ═════════════════════════════════════════════════════════════
     std::cout << "\n========== TEST 5: Duplicate Registration Rejection ==========\n";
     {
-        // Don't clear g_registeredAgents — "test-agent-e2e-001" is already registered
+        // Don't clear g_registeredAgents - "test-agent-e2e-001" is already registered
 
         ManagerServer server;
         bool initOk = server.initialize(TEST_PORT + 3, ca, db);
@@ -628,3 +628,4 @@ int main() {
     std::cout << "\n=== ALL MANAGER SERVER TESTS PASSED ===\n\n";
     return 0;
 }
+

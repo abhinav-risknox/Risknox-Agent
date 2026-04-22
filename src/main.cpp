@@ -94,9 +94,9 @@ int main(int argc, char* argv[]) {
             printUsage(argv[0]);
             return 0;
         }
-        else if (arg == "--console" || arg == "-c") {
-            consoleMode = true;
-        }
+    else if (arg == "--console" || arg == "-c") {
+        consoleMode = true;
+    }
         else if (arg == "--install") {
             installMode = true;
         }

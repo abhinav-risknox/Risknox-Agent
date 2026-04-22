@@ -6,6 +6,8 @@
 #include <openssl/err.h>
 #include <openssl/pem.h>
 
+#include <nlohmann/json.hpp>
+
 #ifdef _WIN32
 #include <ws2tcpip.h>
 #endif
@@ -23,6 +25,7 @@ ManagerServer::~ManagerServer() {
     if (sslCtx_) SSL_CTX_free(sslCtx_);
 #ifdef _WIN32
     if (listenSocket_ != INVALID_SOCKET) closesocket(listenSocket_);
+    if (commandSocket_ != INVALID_SOCKET) closesocket(commandSocket_);
     if (wsaInitialized_) WSACleanup();
 #endif
 }
@@ -71,7 +74,7 @@ bool ManagerServer::initialize(int port,
         std::string pubKeyPem(pubData, pubLen);
         BIO_free(bio);
 
-        // Issue cert through CA — must use CertType::Server for serverAuth EKU
+        // Issue cert through CA - must use CertType::Server for serverAuth EKU
         auto issued = ca.issueCertificate("ResolutePulse-Manager", pubKeyPem, 365,
                                            CertType::Server);
         if (issued.certificatePem.empty()) {
@@ -256,7 +259,8 @@ bool ManagerServer::start() {
     }
 
     running_ = true;
-    acceptThread_ = std::thread(&ManagerServer::acceptLoop, this);
+    acceptThread_        = std::thread(&ManagerServer::acceptLoop, this);
+    commandIngestThread_ = std::thread(&ManagerServer::commandIngestLoop, this);
     return true;
 }
 
@@ -268,11 +272,14 @@ void ManagerServer::stop() {
         closesocket(listenSocket_);
         listenSocket_ = INVALID_SOCKET;
     }
+    if (commandSocket_ != INVALID_SOCKET) {
+        closesocket(commandSocket_);
+        commandSocket_ = INVALID_SOCKET;
+    }
 #endif
 
-    if (acceptThread_.joinable()) {
-        acceptThread_.join();
-    }
+    if (acceptThread_.joinable())        acceptThread_.join();
+    if (commandIngestThread_.joinable()) commandIngestThread_.join();
 
     // Wait for all client threads
     std::lock_guard<std::mutex> lock(threadsMutex_);
@@ -345,18 +352,133 @@ void ManagerServer::handleClient(SOCKET clientSocket, const std::string& clientA
     if (clientCert) X509_free(clientCert);
 
     // Create handler and process with persistent connection (Keep-Alive)
-    AgentHandler handler(*ca_, *db_);
+    AgentHandler handler(*ca_, *db_, this);
+    std::string agentId;
+
     while (running_.load()) {
         if (!handler.handleConnection(ssl, clientAddr, hasClientCert)) {
             break; 
         }
+        // After first successful authenticated message, retrieve the agentId
+        // and register in the session map
+        if (agentId.empty() && hasClientCert) {
+            agentId = handler.getLastAgentId();
+            if (!agentId.empty()) {
+                registerSession(agentId, ssl);
+            }
+        }
     }
 
-    // Cleanup
+    // Cleanup - unregister session
+    if (!agentId.empty()) {
+        unregisterSession(agentId);
+    }
+
     SSL_shutdown(ssl);
     SSL_free(ssl);
     closesocket(clientSocket);
     LOG_DEBUG("Connection closed: {}", clientAddr);
 }
 
+// ─────────────────────────────────────────────────────────────
+// Session registry
+// ─────────────────────────────────────────────────────────────
+
+void ManagerServer::registerSession(const std::string& agentId, SSL* ssl) {
+    std::lock_guard<std::mutex> lk(sessionsMutex_);
+    activeSessions_[agentId] = ssl;
+    LOG_INFO("Session registered: agent={}", agentId);
+}
+
+void ManagerServer::unregisterSession(const std::string& agentId) {
+    std::lock_guard<std::mutex> lk(sessionsMutex_);
+    activeSessions_.erase(agentId);
+    LOG_INFO("Session unregistered: agent={}", agentId);
+}
+
+// ─────────────────────────────────────────────────────────────
+// Command ingest socket (127.0.0.1:1515)
+// ─────────────────────────────────────────────────────────────
+
+void ManagerServer::commandIngestLoop() {
+    commandSocket_ = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (commandSocket_ == INVALID_SOCKET) {
+        LOG_ERROR("Failed to create command ingest socket");
+        return;
+    }
+
+    int opt = 1;
+    setsockopt(commandSocket_, SOL_SOCKET, SO_REUSEADDR,
+               reinterpret_cast<const char*>(&opt), sizeof(opt));
+
+    struct sockaddr_in addr = {};
+    addr.sin_family      = AF_INET;
+    addr.sin_addr.s_addr = inet_addr("127.0.0.1");  // loopback ONLY
+    addr.sin_port        = htons(1515);
+
+    if (bind(commandSocket_, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) == SOCKET_ERROR) {
+        LOG_ERROR("Failed to bind command ingest socket on 127.0.0.1:1515");
+        closesocket(commandSocket_);
+        commandSocket_ = INVALID_SOCKET;
+        return;
+    }
+
+    listen(commandSocket_, 8);
+    LOG_INFO("Command ingest socket listening on 127.0.0.1:1515");
+
+    while (running_.load()) {
+        SOCKET client = accept(commandSocket_, nullptr, nullptr);
+        if (client == INVALID_SOCKET) {
+            if (running_.load()) LOG_WARN("Command ingest accept failed");
+            continue;
+        }
+
+        // Read the full JSON payload - commands are small, one recv is enough
+        char buf[65536];
+        int n = recv(client, buf, static_cast<int>(sizeof(buf) - 1), 0);
+        closesocket(client);
+
+        if (n <= 0) continue;
+        buf[n] = '\0';
+
+        try {
+            auto cmd        = nlohmann::json::parse(buf);
+            std::string aid = cmd.at("agent_id").get<std::string>();
+            std::string pt  = cmd.at("policy_type").get<std::string>();
+            auto pd         = cmd.at("policy_data");
+            LOG_INFO("Command ingest: agent={} type={}", aid, pt);
+            dispatchCommand(aid, pt, pd);
+        } catch (const std::exception& e) {
+            LOG_WARN("Command ingest: malformed JSON - {}", e.what());
+        }
+    }
+
+    LOG_INFO("Command ingest loop stopped");
+}
+
+void ManagerServer::dispatchCommand(const std::string& agentId,
+                                     const std::string& policyType,
+                                     const nlohmann::json& policyData) {
+    SSL* ssl = nullptr;
+    {
+        std::lock_guard<std::mutex> lk(sessionsMutex_);
+        auto it = activeSessions_.find(agentId);
+        if (it != activeSessions_.end()) ssl = it->second;
+    }
+
+    if (!ssl) {
+        LOG_WARN("dispatchCommand: agent {} not connected - command will be delivered on next reconnect", agentId);
+        return;
+    }
+
+    AgentHandler handler(*ca_, *db_, this);
+    bool ok = handler.pushPolicyUpdate(ssl, agentId, policyType, policyData);
+    if (ok) {
+        LOG_INFO("Policy '{}' dispatched to agent {}", policyType, agentId);
+    } else {
+        LOG_ERROR("Failed to dispatch policy '{}' to agent {}", policyType, agentId);
+    }
+}
+
 } // namespace ResolutePulse
+

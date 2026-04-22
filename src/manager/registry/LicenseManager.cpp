@@ -1,4 +1,4 @@
-#include "LicenseManager.h"
+﻿#include "LicenseManager.h"
 #include "utils/Logger.h"
 
 namespace ResolutePulse {
@@ -10,7 +10,7 @@ std::optional<LicenseRecord> LicenseManager::getLicense(const std::string& agent
 }
 
 int LicenseManager::calculateExpiry(const std::string& agentId) {
-    // Certs are always 365 days — identity only.
+    // Certs are always 365 days - identity only.
     // License expiry is enforced via heartbeat, not cert duration.
     (void)agentId;
     return CERT_VALIDITY_DAYS;
@@ -29,3 +29,4 @@ std::string LicenseManager::checkLicenseStatus(const std::string& agentId) {
 }
 
 } // namespace ResolutePulse
+

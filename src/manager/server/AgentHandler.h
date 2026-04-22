@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "manager/ca/CertificateAuthority.h"
 #include "manager/db/PostgresClient.h"
@@ -10,17 +10,27 @@ typedef struct ssl_st SSL;
 
 namespace ResolutePulse {
 
+class ManagerServer;  // forward declare
+
 class AgentHandler {
 public:
-    AgentHandler(CertificateAuthority& ca, PostgresClient& db);
+    AgentHandler(CertificateAuthority& ca, PostgresClient& db, ManagerServer* server = nullptr);
     ~AgentHandler() = default;
 
-    // Handle a connected client — reads messages and dispatches
+    // Handle a connected client - reads messages and dispatches
     // Returns true if connection should stay open, false if it should close
     bool handleConnection(SSL* ssl, const std::string& clientAddr, bool hasClientCert);
 
+    // Returns the last successfully authenticated agent_id (empty until first heartbeat/license)
+    const std::string& getLastAgentId() const { return lastAgentId_; }
+
+    // Push a policy update to a connected agent
+    bool pushPolicyUpdate(SSL* ssl, const std::string& agentId,
+                          const std::string& policyType,
+                          const nlohmann::json& policyData);
+
 private:
-    // Handle registration request (one-way TLS — no client cert)
+    // Handle registration request (one-way TLS - no client cert)
     void handleRegistration(SSL* ssl, const std::string& clientAddr,
                             const std::string& payload);
 
@@ -34,6 +44,10 @@ private:
 
     // Handle license check from authenticated agent
     void handleLicenseCheck(SSL* ssl, const std::string& agentId,
+                            const std::string& payload);
+
+    // Handle status report from authenticated agent
+    void handleStatusReport(SSL* ssl, const std::string& agentId,
                             const std::string& payload);
 
     // Read exactly N bytes from SSL
@@ -53,6 +67,9 @@ private:
 
     CertificateAuthority& ca_;
     PostgresClient&       db_;
+    ManagerServer*        server_ = nullptr;  // optional, may be nullptr in tests
+    std::string           lastAgentId_;  // populated after first authenticated message
 };
 
 } // namespace ResolutePulse
+

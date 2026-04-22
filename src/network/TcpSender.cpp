@@ -1,4 +1,4 @@
-#include "TcpSender.h"
+﻿#include "TcpSender.h"
 #include "utils/Logger.h"
 
 #include <nlohmann/json.hpp>
@@ -118,7 +118,7 @@ bool TcpSender::createSSLContext() {
         SSL_CTX_set_verify(sslCtx_, SSL_VERIFY_PEER, nullptr);
         LOG_INFO("TLS: CA certificate loaded from {}", caCertPath_);
     } else {
-        // No CA cert provided — accept any server cert (self-signed localhost)
+        // No CA cert provided - accept any server cert (self-signed localhost)
         SSL_CTX_set_verify(sslCtx_, SSL_VERIFY_NONE, nullptr);
         LOG_WARN("TLS: No CA certificate provided, server verification disabled");
     }
@@ -438,3 +438,4 @@ bool TcpSender::sendRaw(const char* data, size_t length) {
 }
 
 } // namespace ResolutePulse
+

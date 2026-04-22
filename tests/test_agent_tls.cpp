@@ -1,13 +1,13 @@
-// =============================================================================
-// test_agent_tls.cpp — Unit + Integration tests for the Agent TLS path
+﻿// =============================================================================
+// test_agent_tls.cpp - Unit + Integration tests for the Agent TLS path
 //
 // Tests:
-//   1. CertificateStore — save / load / isValid / daysUntilExpiry     (unit)
-//   2. RegistrationClient — generateKeyPair                            (unit)
-//   3. TlsSender — initialize() with missing cert files               (unit)
-//   4. RegistrationClient — registerWithManager() live E2E            (integration)
-//   5. TlsSender — sendBatch() when never initialized                 (unit)
-//   6. TlsSender — sendBatch() over mTLS with real certs              (integration)
+//   1. CertificateStore - save / load / isValid / daysUntilExpiry     (unit)
+//   2. RegistrationClient - generateKeyPair                            (unit)
+//   3. TlsSender - initialize() with missing cert files               (unit)
+//   4. RegistrationClient - registerWithManager() live E2E            (integration)
+//   5. TlsSender - sendBatch() when never initialized                 (unit)
+//   6. TlsSender - sendBatch() over mTLS with real certs              (integration)
 //
 // Tests 4 and 6 require ResolutePulseManager.exe running on port 1514.
 // =============================================================================
@@ -85,7 +85,7 @@ int main() {
     std::cout << "[INFO] Local test CA initialized in " << TLS_CA_DIR << "\n";
 
     // Issue a test agent certificate via the CA's issueAgentCertificate method
-    // We need a public key for the CSR — generate one inline
+    // We need a public key for the CSR - generate one inline
     EVP_PKEY_CTX* kctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, nullptr);
     EVP_PKEY_keygen_init(kctx);
     EVP_PKEY_CTX_set_rsa_keygen_bits(kctx, 2048);
@@ -131,14 +131,14 @@ int main() {
     assert(!caCertPem.empty() && "CA cert must not be empty");
 
     // ═════════════════════════════════════════════════════════════════════════
-    // Test 1: CertificateStore — save / load / isValid / daysUntilExpiry
+    // Test 1: CertificateStore - save / load / isValid / daysUntilExpiry
     // ═════════════════════════════════════════════════════════════════════════
     std::cout << "\n========== TEST 1: CertificateStore save/load/isValid ==========\n";
     {
         CertificateStore store;
         store.setCertsDir(TLS_CERTS_DIR);
 
-        // Before save — should not exist
+        // Before save - should not exist
         assert(!store.exists() && "Store must not exist before save()");
 
         // Save issued cert + CA cert
@@ -162,12 +162,12 @@ int main() {
         assert(!store.getAgentCertPem().empty() && "Agent cert PEM must not be empty after load");
         assert(!store.getCACertPem().empty()    && "CA cert PEM must not be empty after load");
 
-        std::cout << "[PASS] CertificateStore — saved, loaded, valid, "
+        std::cout << "[PASS] CertificateStore - saved, loaded, valid, "
                   << store.daysUntilExpiry() << " days until expiry\n";
     }
 
     // ═════════════════════════════════════════════════════════════════════════
-    // Test 2: RegistrationClient — generateKeyPair
+    // Test 2: RegistrationClient - generateKeyPair
     // ═════════════════════════════════════════════════════════════════════════
     std::cout << "\n========== TEST 2: RegistrationClient generateKeyPair ==========\n";
     {
@@ -195,13 +195,13 @@ int main() {
         assert(loaded != nullptr && "OpenSSL must be able to parse the generated public key");
         EVP_PKEY_free(loaded);
 
-        std::cout << "[PASS] RegistrationClient — ECC key pair generated, key file on disk\n";
+        std::cout << "[PASS] RegistrationClient - ECC key pair generated, key file on disk\n";
     }
 
     // ═════════════════════════════════════════════════════════════════════════
-    // Test 3: TlsSender — initialize() fails gracefully with bad cert paths
+    // Test 3: TlsSender - initialize() fails gracefully with bad cert paths
     // ═════════════════════════════════════════════════════════════════════════
-    std::cout << "\n========== TEST 3: TlsSender — bad cert paths ==========\n";
+    std::cout << "\n========== TEST 3: TlsSender - bad cert paths ==========\n";
     {
         TlsSender sender;
         // Provide paths to non-existent files
@@ -215,14 +215,14 @@ int main() {
         assert(!ok && "initialize() must return false when cert files do not exist");
         assert(!sender.isConnected() && "Sender must not be connected after failed init");
 
-        std::cout << "[PASS] TlsSender — initialize() correctly returns false for missing certs\n";
+        std::cout << "[PASS] TlsSender - initialize() correctly returns false for missing certs\n";
         std::cout << "[INFO] Last error: " << sender.getLastError() << "\n";
     }
 
     // ═════════════════════════════════════════════════════════════════════════
-    // Test 4: RegistrationClient — registerWithManager() live (integration)
+    // Test 4: RegistrationClient - registerWithManager() live (integration)
     // ═════════════════════════════════════════════════════════════════════════
-    std::cout << "\n========== TEST 4: RegistrationClient — live registration ==========\n";
+    std::cout << "\n========== TEST 4: RegistrationClient - live registration ==========\n";
     {
         std::string regDir = TLS_TEST_DIR + "/reg_certs";
         std::filesystem::remove_all(regDir);
@@ -252,8 +252,8 @@ int main() {
         );
 
         if (!regOk) {
-            // Manager may not be running — warn and skip instead of crashing
-            std::cout << "[SKIP] Test 4 skipped — manager unreachable: "
+            // Manager may not be running - warn and skip instead of crashing
+            std::cout << "[SKIP] Test 4 skipped - manager unreachable: "
                       << client.getLastError() << "\n";
         } else {
             assert(certStore.exists() && "Certificates must be saved after registration");
@@ -270,8 +270,8 @@ int main() {
                    != std::string::npos && "CA cert PEM must be valid");
 
             // Persist regDir for Test 6
-            // (leave it in place — Test 6 will re-use it)
-            std::cout << "[PASS] RegistrationClient — registered with live manager\n";
+            // (leave it in place - Test 6 will re-use it)
+            std::cout << "[PASS] RegistrationClient - registered with live manager\n";
             std::cout << "[INFO] Agent ID: " << agentId << "\n";
             std::cout << "[INFO] Cert valid for " << certStore.daysUntilExpiry() << " days\n";
 
@@ -284,9 +284,9 @@ int main() {
     }
 
     // ═════════════════════════════════════════════════════════════════════════
-    // Test 5: TlsSender — sendBatch() when never initialized → NetworkError
+    // Test 5: TlsSender - sendBatch() when never initialized → NetworkError
     // ═════════════════════════════════════════════════════════════════════════
-    std::cout << "\n========== TEST 5: TlsSender — sendBatch() uninitialized ==========\n";
+    std::cout << "\n========== TEST 5: TlsSender - sendBatch() uninitialized ==========\n";
     {
         TlsSender sender;
 
@@ -302,18 +302,18 @@ int main() {
         assert(sender.getEventsSent() == 0 && "No events must be counted on failure");
         assert(sender.getFailedSends() == 1 && "failedSends must be incremented");
 
-        std::cout << "[PASS] TlsSender — sendBatch() on uninitialized sender returns NetworkError\n";
+        std::cout << "[PASS] TlsSender - sendBatch() on uninitialized sender returns NetworkError\n";
     }
 
     // ═════════════════════════════════════════════════════════════════════════
-    // Test 6: TlsSender — sendBatch() over mTLS with real certs (integration)
+    // Test 6: TlsSender - sendBatch() over mTLS with real certs (integration)
     // ═════════════════════════════════════════════════════════════════════════
-    std::cout << "\n========== TEST 6: TlsSender — mTLS sendBatch() E2E ==========\n";
+    std::cout << "\n========== TEST 6: TlsSender - mTLS sendBatch() E2E ==========\n";
     {
         // Read stashed registration info from Test 4
         std::string markerPath = TLS_TEST_DIR + "/reg_agent_id.txt";
         if (!std::filesystem::exists(markerPath)) {
-            std::cout << "[SKIP] Test 6 skipped — Test 4 did not complete (no live manager)\n";
+            std::cout << "[SKIP] Test 6 skipped - Test 4 did not complete (no live manager)\n";
         } else {
             std::ifstream marker(markerPath);
             std::string agentId, regDir;
@@ -335,8 +335,8 @@ int main() {
 
             if (!initOk) {
                 // Even if initialization "fails" at connect time, it may return true
-                // and retry on first send — check for connect failure specifically
-                std::cout << "[SKIP] Test 6 skipped — TlsSender init failed: "
+                // and retry on first send - check for connect failure specifically
+                std::cout << "[SKIP] Test 6 skipped - TlsSender init failed: "
                           << sender.getLastError() << "\n";
             } else {
                 // Build two events
@@ -355,7 +355,7 @@ int main() {
                 SendResult result = sender.sendBatch({e1, e2});
 
                 if (result != SendResult::Success) {
-                    std::cout << "[SKIP] Test 6 skipped — manager rejected mTLS send: "
+                    std::cout << "[SKIP] Test 6 skipped - manager rejected mTLS send: "
                               << sender.getLastError() << "\n";
                 } else {
                     assert(sender.getEventsSent()  == 2 && "2 events must be counted");
@@ -366,7 +366,7 @@ int main() {
                     sender.disconnect();
                     assert(!sender.isConnected() && "disconnect() must clear connected flag");
 
-                    std::cout << "[PASS] TlsSender — sendBatch() over mTLS succeeded\n";
+                    std::cout << "[PASS] TlsSender - sendBatch() over mTLS succeeded\n";
                     std::cout << "[INFO] Events sent: " << sender.getEventsSent() << "\n";
                     std::cout << "[INFO] Bytes sent:  " << sender.getBytesSent()  << "\n";
                 }
@@ -384,3 +384,4 @@ int main() {
     std::cout << "\n=== ALL AGENT TLS TESTS COMPLETED ===\n\n";
     return 0;
 }
+
