@@ -552,6 +552,104 @@ SendResult TlsSender::checkLicense(const std::string& agentId) {
     return SendResult::NetworkError;
 }
 
+SendResult TlsSender::sendStatusReport(const std::string& agentId,
+                                        const std::string& reportType,
+                                        const nlohmann::json& reportData) {
+    if (!sslCtx_) {
+        lastError_ = "TLS sender not initialized";
+        return SendResult::NetworkError;
+    }
+
+    StatusReport report;
+    report.agentId = agentId;
+    report.reportType = reportType;
+    report.reportData = reportData.dump();
+
+    time_t now = time(nullptr);
+    char buf[64];
+    strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+    report.timestamp = buf;
+
+    std::string payload = nlohmann::json(report).dump();
+
+    MessageHeader header;
+    header.type = static_cast<uint8_t>(MessageType::STATUS_REPORT);
+    header.payloadLength = static_cast<uint32_t>(payload.size());
+
+    uint8_t headerBuf[MESSAGE_HEADER_SIZE];
+    serializeHeader(header, headerBuf);
+
+    if (!connected_.load()) {
+        lastError_ = "Not connected";
+        return SendResult::NetworkError;
+    }
+
+    if (!sslSendRaw(headerBuf, MESSAGE_HEADER_SIZE) ||
+        !sslSendRaw(payload.c_str(), payload.size())) {
+        disconnect();
+        return SendResult::NetworkError;
+    }
+
+    bytesSent_ += MESSAGE_HEADER_SIZE + payload.size();
+
+    // Read ACK (tolerates interleaved POLICY_UPDATEs)
+    std::string respPayload;
+    if (!readExpectedMessage(MessageType::STATUS_REPORT_ACK, respPayload)) {
+        LOG_WARN("Failed to read STATUS_REPORT_ACK");
+        disconnect();
+        return SendResult::ServerError;
+    }
+
+    LOG_INFO("Status report sent: type={}", reportType);
+    return SendResult::Success;
+}
+
+SendResult TlsSender::sendPolicyAck(const std::string& agentId,
+                                     const std::string& policyType,
+                                     bool applied,
+                                     const std::string& message) {
+    if (!sslCtx_) {
+        lastError_ = "TLS sender not initialized";
+        return SendResult::NetworkError;
+    }
+
+    PolicyUpdateAck ack;
+    ack.agentId = agentId;
+    ack.policyType = policyType;
+    ack.applied = applied;
+    ack.message = message;
+
+    time_t now = time(nullptr);
+    char buf[64];
+    strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+    ack.timestamp = buf;
+
+    std::string payload = nlohmann::json(ack).dump();
+
+    MessageHeader header;
+    header.type = static_cast<uint8_t>(MessageType::POLICY_UPDATE_ACK);
+    header.payloadLength = static_cast<uint32_t>(payload.size());
+
+    uint8_t headerBuf[MESSAGE_HEADER_SIZE];
+    serializeHeader(header, headerBuf);
+
+    if (!connected_.load()) {
+        lastError_ = "Not connected";
+        return SendResult::NetworkError;
+    }
+
+    // Fire-and-forget: no ACK expected back from Manager for this message
+    if (!sslSendRaw(headerBuf, MESSAGE_HEADER_SIZE) ||
+        !sslSendRaw(payload.c_str(), payload.size())) {
+        disconnect();
+        return SendResult::NetworkError;
+    }
+
+    bytesSent_ += MESSAGE_HEADER_SIZE + payload.size();
+    LOG_INFO("Policy ACK sent: type={} applied={}", policyType, applied);
+    return SendResult::Success;
+}
+
 bool TlsSender::tryReadInbound(nlohmann::json& out) {
     std::lock_guard<std::mutex> lock(mutex_);
 

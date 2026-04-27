@@ -251,7 +251,7 @@ std::vector<PatchInfo> PatchManager::scanForUpdates() {
         LOG_INFO("  Update: {} | KB={} | ID={} | Severity={}", p.title, p.kb, p.updateId, p.severity);
     }
 
-    // Fire event callback
+    // Fire event callback (→ Fluent Bit → OpenSearch)
     if (eventCallback_) {
         nlohmann::json event;
         event["type"] = "patch_scan_complete";
@@ -263,6 +263,19 @@ std::vector<PatchInfo> PatchManager::scanForUpdates() {
         }
         event["patches"] = patchList;
         eventCallback_(event);
+    }
+
+    // Fire status callback (→ Manager → PostgreSQL for dashboard)
+    if (statusCallback_) {
+        nlohmann::json report;
+        report["pendingCount"] = pending.size();
+        nlohmann::json patchList = nlohmann::json::array();
+        for (const auto& p : pending) {
+            patchList.push_back(p.toJson());
+        }
+        report["patches"] = patchList;
+        report["scanTime"] = getCurrentTimestamp();
+        statusCallback_("patch_scan", report);
     }
 
     return pending;
@@ -515,6 +528,16 @@ bool PatchManager::installUpdates(const std::vector<std::string>& updateIds) {
     searcher->Release();
     session->Release();
     CoUninitialize();
+
+    // Fire status callback (→ Manager → PostgreSQL for dashboard)
+    if (statusCallback_) {
+        nlohmann::json report;
+        report["success"] = success;
+        report["installedCount"] = installCount;
+        report["requestedIds"] = updateIds;
+        report["installTime"] = getCurrentTimestamp();
+        statusCallback_("patch_install", report);
+    }
 
     return success;
 }

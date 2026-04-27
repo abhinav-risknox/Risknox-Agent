@@ -467,7 +467,8 @@ void ManagerServer::dispatchCommand(const std::string& agentId,
     }
 
     if (!ssl) {
-        LOG_WARN("dispatchCommand: agent {} not connected - command will be delivered on next reconnect", agentId);
+        LOG_INFO("dispatchCommand: agent {} not connected - queuing for offline delivery", agentId);
+        db_->queueCommand(agentId, policyType, policyData.dump());
         return;
     }
 

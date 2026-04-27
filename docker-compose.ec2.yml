@@ -1,0 +1,120 @@
+version: '3'
+services:
+  opensearch:
+    image: opensearchproject/opensearch:latest
+    container_name: opensearch
+    environment:
+      - discovery.type=single-node
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=Opensearch@123
+      - plugins.security.disabled=true
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    ports:
+      - 9200:9200
+      - 9600:9600
+    networks:
+      - risknox-net
+
+  fluent-bit:
+    image: fluent/fluent-bit:3.2
+    container_name: fluent-bit
+    ports:
+      - 5170:5170
+    volumes:
+      - ./fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+      - ./fluent-bit-scripts:/fluent-bit/scripts:ro
+    networks:
+      - risknox-net
+    depends_on:
+      - opensearch
+      - data-prepper
+
+  data-prepper:
+    image: opensearchproject/data-prepper:latest
+    container_name: data-prepper
+    ports:
+      - 2021:2021
+    environment:
+      - OPENSEARCH_USERNAME=admin
+      - OPENSEARCH_PASSWORD=Opensearch@123
+    volumes:
+      - ./data-prepper/pipelines.yaml:/usr/share/data-prepper/pipelines/pipelines.yaml:ro
+      - ./data-prepper/data-prepper-config.yaml:/usr/share/data-prepper/config/data-prepper-config.yaml:ro
+    networks:
+      - risknox-net
+    depends_on:
+      - opensearch
+
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:latest
+    container_name: opensearch-dashboards
+    environment:
+      - OPENSEARCH_HOSTS=http://opensearch:9200
+      - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
+    ports:
+      - 5601:5601
+    depends_on:
+      - opensearch
+    networks:
+      - risknox-net
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=risknox
+    ports:
+      - 5433:5432
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./db/migrations/001_certificates.sql:/docker-entrypoint-initdb.d/001_certificates.sql:ro
+    networks:
+      - risknox-net
+
+  manager:
+    # ── Pulled directly from Docker Hub by GitHub Actions on every push to main
+    image: abhinavrisknox/risknox-manager:latest
+    pull_policy: always
+    container_name: resolutepulse-manager
+    environment:
+      - RPLS_DB_CONN=host=postgres port=5432 dbname=risknox user=postgres password=postgres
+      - RPLS_PORT=1514
+    ports:
+      - 1514:1514
+    volumes:
+      - manager-ca-data:/app/ca
+    networks:
+      - risknox-net
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  # ── Watchtower: polls Docker Hub every 5 min, auto-restarts manager on new image
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Docker Hub credentials so watchtower can pull private images
+      - /root/.docker/config.json:/config.json:ro
+    environment:
+      - WATCHTOWER_POLL_INTERVAL=300
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_LABEL_ENABLE=false
+    # Only watch the manager container, leave others alone
+    command: resolutepulse-manager
+    networks:
+      - risknox-net
+    restart: unless-stopped
+
+networks:
+  risknox-net:
+
+volumes:
+  postgres-data:
+  manager-ca-data:

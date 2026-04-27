@@ -1,4 +1,4 @@
-﻿#include "AntivirusWorker.h"
+#include "AntivirusWorker.h"
 #include "ipc/PipeChannel.h"
 #include "utils/Logger.h"
 
@@ -108,14 +108,14 @@ void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe) {
             lineBuf.erase(0, pos + 1);
             if (!line.empty() && line.back() == '\r') line.pop_back();
 
-            if (line.rfind("Scanning ", 0) == 0) {
+            if (line.find(": OK") != std::string::npos || line.find(": Empty file") != std::string::npos) {
                 filesScanned++;
                 if (filesScanned % progressInterval == 0) {
                     pipe.sendJson({ {"type","progress"}, {"filesScanned", filesScanned} });
                 }
             } else if (line.find("FOUND") != std::string::npos) {
                 // "<path>: <ThreatName> FOUND"
-                auto colonPos = line.find(':');
+                auto colonPos = line.rfind(": ");
                 std::string filePath = (colonPos != std::string::npos)
                                      ? line.substr(0, colonPos)
                                      : line;
@@ -126,6 +126,7 @@ void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe) {
                     if (foundPos != std::string::npos) threat = rest.substr(0, foundPos);
                 }
                 threats++;
+                filesScanned++;
                 pipe.sendJson({
                     {"type",   "threat"},
                     {"file",   filePath},
@@ -215,7 +216,18 @@ int main() {
     char selfPath[MAX_PATH] = {};
     GetModuleFileNameA(nullptr, selfPath, MAX_PATH);
     std::filesystem::path agentDir = std::filesystem::path(selfPath).parent_path();
-    std::string clamDir = (agentDir / "vendor" / "clamav").string();
+    // Resolve clamav dir: prefer bundled copy next to this exe,
+    // fall back to a system-wide ClamAV installation.
+    std::filesystem::path bundledClamDir = agentDir / "clamav";
+    std::string clamDir;
+
+    if (std::filesystem::exists(bundledClamDir / "clamscan.exe")) {
+        clamDir = bundledClamDir.string();
+        LOG_INFO("rp-antivirus: using bundled ClamAV at {}", clamDir);
+    } else {
+        clamDir = "C:\\Program Files\\ClamAV";
+        LOG_WARN("rp-antivirus: bundled ClamAV not found, falling back to system path: {}", clamDir);
+    }
 
     AntivirusWorker worker(clamDir);
 

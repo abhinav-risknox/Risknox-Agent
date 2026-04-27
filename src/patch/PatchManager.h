@@ -43,6 +43,8 @@ struct PatchConfig {
 class PatchManager {
 public:
     using PatchEventCallback = std::function<void(const nlohmann::json&)>;
+    using StatusReportCallback = std::function<void(const std::string& reportType,
+                                                     const nlohmann::json& data)>;
 
     PatchManager();
     ~PatchManager();
@@ -63,6 +65,7 @@ public:
     nlohmann::json getStatus() const;
 
     void setEventCallback(PatchEventCallback callback);
+    void setStatusReportCallback(StatusReportCallback cb) { statusCallback_ = std::move(cb); }
 
     bool isRunning() const { return running_.load(); }
 
@@ -74,6 +77,7 @@ private:
     std::thread scanThread_;
     std::atomic<bool> running_{false};
     PatchEventCallback eventCallback_;
+    StatusReportCallback statusCallback_;
     mutable std::mutex mutex_;
 
     // Cached scan results

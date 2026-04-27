@@ -48,6 +48,17 @@ public:
     // Send a license check to the manager
     SendResult checkLicense(const std::string& agentId);
 
+    // Send a status report back to the manager
+    SendResult sendStatusReport(const std::string& agentId,
+                                const std::string& reportType,
+                                const nlohmann::json& reportData);
+
+    // Send a policy update acknowledgement back to the manager
+    SendResult sendPolicyAck(const std::string& agentId,
+                             const std::string& policyType,
+                             bool applied,
+                             const std::string& message);
+
     // Check if connected via mTLS
     bool isConnected() const override { return connected_.load(); }
 

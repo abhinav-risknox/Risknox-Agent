@@ -1,4 +1,4 @@
-﻿#include "AgentHandler.h"
+#include "AgentHandler.h"
 #include "ManagerServer.h"
 #include "utils/Logger.h"
 
@@ -448,7 +448,8 @@ void AgentHandler::handleStatusReport(SSL* ssl, const std::string& agentId,
         LOG_INFO("Status report type={} from agent {}", report.reportType, agentId);
         LOG_DEBUG("Status data: {}", report.reportData);
 
-        // TODO: Store status report in DB or forward to backend API
+        // Store status report in DB for dashboard queries
+        db_.storeStatusReport(agentId, report.reportType, report.reportData);
 
     } catch (const std::exception& e) {
         LOG_ERROR("Failed to parse status report from {}: {}", agentId, e.what());

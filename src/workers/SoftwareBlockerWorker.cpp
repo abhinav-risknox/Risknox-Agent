@@ -1,4 +1,4 @@
-﻿// SoftwareBlockerWorker.cpp - rp-softblock.exe entry point
+// SoftwareBlockerWorker.cpp - rp-softblock.exe entry point
 // Persistent worker process that blocks/unblocks applications via the
 // Windows registry (DisallowRun) and process monitoring.
 // Communicates with the core agent via Named Pipe \\.\pipe\rp-softblock.
@@ -52,8 +52,14 @@ int main() {
         while (pipe.recvJson(cmd, INFINITE)) {
             nlohmann::json result;
             try {
-                bool ok = blocker.applyPolicy(cmd);
-                result["ok"] = ok;
+                std::string action = cmd.value("action", "");
+                if (action == "get_status") {
+                    result["ok"]     = true;
+                    result["status"] = blocker.getStatus();
+                } else {
+                    bool ok = blocker.applyPolicy(cmd);
+                    result["ok"] = ok;
+                }
             } catch (const std::exception& e) {
                 result["ok"]    = false;
                 result["error"] = std::string(e.what());

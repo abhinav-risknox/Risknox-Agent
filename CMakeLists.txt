@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.20)
 project(ResolutePulse VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -12,6 +12,31 @@ set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libgcc -static-lib
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     add_compile_options(-Wa,-mbig-obj)
 endif()
+
+# Default to Release build (smaller, faster binaries for deployment)
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+    message(STATUS "Build type not specified - defaulting to Release")
+endif()
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+
+# Release flags: full optimisation + strip debug info at link time
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    add_compile_options(-O2)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -s")  # -s strips symbols
+endif()
+
+# Helper: add a post-build strip step to any target (no-op on non-GNU toolchains)
+function(strip_target TARGET_NAME)
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_BUILD_TYPE STREQUAL "Release")
+        find_program(STRIP_EXE strip)
+        if(STRIP_EXE)
+            add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+                COMMAND ${STRIP_EXE} $<TARGET_FILE:${TARGET_NAME}>
+                COMMENT "Stripping debug symbols from ${TARGET_NAME}")
+        endif()
+    endif()
+endfunction()
 
 # Include directories for header-only libraries
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty)
@@ -64,15 +89,6 @@ set(AGENT_SOURCES
     src/agent/registration/RegistrationClient.cpp
     # TLS Sender module
     src/agent/network/TlsSender.cpp
-    # Policy module
-    src/policy/PolicyManager.cpp
-    src/policy/CommandQueue.cpp
-    # Patch Management module
-    src/patch/PatchManager.cpp
-    # Web Blocking module
-    src/webblock/WebBlocker.cpp
-    # Software Blocking module
-    src/appblock/SoftwareBlocker.cpp
     # IPC layer (Named Pipe channel to worker processes)
     src/ipc/PipeChannel.cpp
     # Worker process manager
@@ -152,6 +168,9 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     ole32
     oleaut32
 )
+
+install(TARGETS ${PROJECT_NAME} DESTINATION bin)
+strip_target(${PROJECT_NAME})
 
 # =============================================================================
 # Manager Executable
@@ -481,6 +500,7 @@ target_include_directories(rp-softblock PRIVATE
 target_compile_definitions(rp-softblock PRIVATE ${WORKER_COMPILE_DEFS})
 target_link_libraries(rp-softblock PRIVATE ws2_32 advapi32)
 install(TARGETS rp-softblock DESTINATION bin)
+strip_target(rp-softblock)
 
 # ── rp-webblock.exe ───────────────────────────────────────────────────────────
 add_executable(rp-webblock
@@ -497,6 +517,7 @@ target_include_directories(rp-webblock PRIVATE
 target_compile_definitions(rp-webblock PRIVATE ${WORKER_COMPILE_DEFS})
 target_link_libraries(rp-webblock PRIVATE ws2_32 advapi32)
 install(TARGETS rp-webblock DESTINATION bin)
+strip_target(rp-webblock)
 
 # ── rp-patch.exe ──────────────────────────────────────────────────────────────
 add_executable(rp-patch
@@ -513,6 +534,7 @@ target_include_directories(rp-patch PRIVATE
 target_compile_definitions(rp-patch PRIVATE ${WORKER_COMPILE_DEFS})
 target_link_libraries(rp-patch PRIVATE ws2_32 advapi32 ole32 oleaut32)
 install(TARGETS rp-patch DESTINATION bin)
+strip_target(rp-patch)
 
 # ── rp-antivirus.exe ──────────────────────────────────────────────────────────
 add_executable(rp-antivirus
@@ -527,4 +549,5 @@ target_include_directories(rp-antivirus PRIVATE
 target_compile_definitions(rp-antivirus PRIVATE ${WORKER_COMPILE_DEFS})
 target_link_libraries(rp-antivirus PRIVATE ws2_32 advapi32)
 install(TARGETS rp-antivirus DESTINATION bin)
+strip_target(rp-antivirus)
 

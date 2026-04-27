@@ -1,4 +1,4 @@
-﻿
+
 
 import subprocess
 import struct
@@ -53,7 +53,7 @@ print(f"[*] Sending command: {json.dumps(cmd)}")
 send_json(pipe, cmd)
 
 # Read events until "complete"
-print(f"\n{'─'*60}")
+print(f"\n{'-'*60}")
 threats = []
 files_scanned = 0
 start = time.time()
@@ -72,7 +72,7 @@ while True:
 
     elif t == "threat":
         threats.append(event)
-        print(f"\n  [THREAT] {event.get('file')} → {event.get('threat')}")
+        print(f"\n  [THREAT] {event.get('file')} -> {event.get('threat')}")
 
     elif t == "error":
         print(f"\n  [ERROR] {event.get('message')}")
@@ -80,14 +80,14 @@ while True:
 
     elif t == "complete":
         elapsed = time.time() - start
-        print(f"\n{'─'*60}")
-        print(f"[✓] Scan complete in {elapsed:.1f}s")
+        print(f"\n{'-'*60}")
+        print(f"[OK] Scan complete in {elapsed:.1f}s")
         print(f"    Files scanned : {event.get('filesScanned', files_scanned)}")
         print(f"    Threats found : {event.get('threats', len(threats))}")
         if threats:
             print("\n  Threats detected:")
             for th in threats:
-                print(f"    • {th['file']} - {th['threat']}")
+                print(f"    * {th['file']} - {th['threat']}")
         break
 
 pipe.close()

@@ -1,8 +1,6 @@
 #pragma once
 
-#include "patch/PatchManager.h"
-#include "webblock/WebBlocker.h"
-#include "appblock/SoftwareBlocker.h"
+#include "workers/WorkerManager.h"
 #include "utils/Logger.h"
 
 #include <nlohmann/json.hpp>
@@ -23,14 +21,13 @@ public:
     PolicyManager() = default;
     ~PolicyManager() = default;
 
-    void setPatchManager(PatchManager* pm) { patchManager_ = pm; }
-    void setWebBlocker(WebBlocker* wb) { webBlocker_ = wb; }
-    void setSoftwareBlocker(SoftwareBlocker* sb) { softwareBlocker_ = sb; }
+    void setWorkerManager(WorkerManager* wm) { workerManager_ = wm; }
     void setStatusReportCallback(StatusReportCallback cb) { statusCallback_ = std::move(cb); }
 
     /**
      * Handle an incoming policy update from the Manager.
-     * @param policyType One of: "patch", "web_blocking", "software_blocking"
+     * Dispatches to the appropriate subprocess worker via Named Pipe IPC.
+     * @param policyType One of: "patch", "web_blocking", "software_blocking", "antivirus"
      * @param policyData JSON policy payload
      * @return true if policy was applied successfully
      */
@@ -38,16 +35,57 @@ public:
                             const nlohmann::json& policyData) {
         LOG_INFO("PolicyManager: Received policy update type={}", policyType);
 
+        if (!workerManager_) {
+            LOG_ERROR("PolicyManager: WorkerManager not set");
+            return false;
+        }
+
         bool result = false;
 
-        if (policyType == "patch" && patchManager_) {
-            result = patchManager_->applyPolicy(policyData);
-        } else if (policyType == "web_blocking" && webBlocker_) {
-            result = webBlocker_->applyPolicy(policyData);
-        } else if (policyType == "software_blocking" && softwareBlocker_) {
-            result = softwareBlocker_->applyPolicy(policyData);
+        if (policyType == "web_blocking") {
+            // Persistent worker: request/response
+            auto resp = workerManager_->sendCommand("rp-webblock", policyData);
+            result = resp.value("ok", false);
+            if (!result) {
+                LOG_WARN("PolicyManager: rp-webblock returned error: {}",
+                         resp.value("error", "unknown"));
+            }
+        } else if (policyType == "software_blocking") {
+            // Persistent worker: request/response
+            auto resp = workerManager_->sendCommand("rp-softblock", policyData);
+            result = resp.value("ok", false);
+            if (!result) {
+                LOG_WARN("PolicyManager: rp-softblock returned error: {}",
+                         resp.value("error", "unknown"));
+            }
+        } else if (policyType == "patch") {
+            // On-demand worker: spawn, stream events, worker exits when done
+            workerManager_->spawnWorker("rp-patch.exe", "rp-patch", /*persistent=*/false);
+            // Give the process a moment to create its pipe
+            Sleep(300);
+            workerManager_->streamEvents("rp-patch", policyData,
+                [this](const nlohmann::json& event) {
+                    std::string type = event.value("type", "");
+                    LOG_INFO("PolicyManager [rp-patch]: {}", event.dump());
+                    if (statusCallback_ && type == "complete") {
+                        statusCallback_("patch_scan", event);
+                    }
+                });
+            result = true;
+        } else if (policyType == "antivirus") {
+            // On-demand worker: spawn, stream events, worker exits when done
+            workerManager_->spawnWorker("rp-antivirus.exe", "rp-antivirus", /*persistent=*/false);
+            Sleep(300);
+            workerManager_->streamEvents("rp-antivirus", policyData,
+                [this](const nlohmann::json& event) {
+                    std::string type = event.value("type", "");
+                    LOG_INFO("PolicyManager [rp-antivirus]: {}", event.dump());
+                    if (statusCallback_ && (type == "complete" || type == "threat")) {
+                        statusCallback_("av_scan", event);
+                    }
+                });
+            result = true;
         } else if (policyType == "status_request") {
-            // Manager is requesting current status
             sendStatusReport();
             result = true;
         } else {
@@ -58,44 +96,29 @@ public:
     }
 
     /**
-     * Collect status from all modules and send via callback.
+     * Request status from each subprocess worker and send via callback.
      */
     void sendStatusReport() {
         nlohmann::json report;
         report["timestamp"] = getCurrentTimestamp();
 
-        if (patchManager_) {
-            report["patch_management"] = patchManager_->getStatus();
-        }
-        if (webBlocker_) {
-            report["web_blocking"] = webBlocker_->getStatus();
-        }
-        if (softwareBlocker_) {
-            report["software_blocking"] = softwareBlocker_->getStatus();
+        if (workerManager_) {
+            auto webResp = workerManager_->sendCommand("rp-webblock",
+                {{"action", "get_status"}}, 3000);
+            if (webResp.value("ok", false)) {
+                report["web_blocking"] = webResp.value("status", nlohmann::json{});
+            }
+
+            auto sbResp = workerManager_->sendCommand("rp-softblock",
+                {{"action", "get_status"}}, 3000);
+            if (sbResp.value("ok", false)) {
+                report["software_blocking"] = sbResp.value("status", nlohmann::json{});
+            }
         }
 
         if (statusCallback_) {
             statusCallback_("module_status", report);
         }
-    }
-
-    /**
-     * Get combined status JSON for all modules.
-     */
-    nlohmann::json getFullStatus() const {
-        nlohmann::json status;
-
-        if (patchManager_) {
-            status["patch_management"] = patchManager_->getStatus();
-        }
-        if (webBlocker_) {
-            status["web_blocking"] = webBlocker_->getStatus();
-        }
-        if (softwareBlocker_) {
-            status["software_blocking"] = softwareBlocker_->getStatus();
-        }
-
-        return status;
     }
 
 private:
@@ -106,9 +129,7 @@ private:
         return std::string(buf);
     }
 
-    PatchManager* patchManager_ = nullptr;
-    WebBlocker* webBlocker_ = nullptr;
-    SoftwareBlocker* softwareBlocker_ = nullptr;
+    WorkerManager* workerManager_ = nullptr;
     StatusReportCallback statusCallback_;
 };
 

@@ -232,92 +232,49 @@ bool Agent::initialize(const std::string& configPath) {
         }
     }
     
-    // ─── Security Modules ───
-    std::string configDir = resolveConfigDir();
-    
-    // Initialize Patch Management if enabled
-    const auto& patchCfg = config.getPatchConfig();
-    if (patchCfg.enabled) {
-        LOG_INFO("Initializing Patch Management...");
-        patchManager_ = std::make_unique<PatchManager>();
-        
-        PatchConfig pmConfig;
-        pmConfig.enabled = patchCfg.enabled;
-        pmConfig.autoScan = patchCfg.auto_scan;
-        pmConfig.scanIntervalHours = patchCfg.scan_interval_hours;
-        pmConfig.autoInstall = patchCfg.auto_install;
-        pmConfig.excludeKBs = patchCfg.exclude_kbs;
-        
-        if (!patchManager_->initialize(pmConfig)) {
-            LOG_WARN("Failed to initialize Patch Management - continuing without it");
-            patchManager_.reset();
-        } else {
-            patchManager_->setEventCallback([this](const nlohmann::json& event) {
-                Event ev;
-                ev.channel = "PatchManagement";
-                ev.eventId = 0;
-                time_t now = time(nullptr);
-                char buf[64];
-                strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
-                ev.timestamp = buf;
-                ev.data = event.dump();
-                queue_->push(std::move(ev));
-            });
-        }
-    }
-    
-    // Initialize Web Blocking if enabled
+    // ─── Security Worker Subprocesses ───
+    // Initialize WorkerManager - the broker for all worker subprocess IPC.
+    workerManager_ = std::make_unique<WorkerManager>();
+
+    // Spawn persistent workers (they run for the lifetime of the Agent and
+    // are automatically restarted by the WorkerManager watchdog if they crash).
     const auto& webCfg = config.getWebBlockConfig();
     if (webCfg.enabled) {
-        LOG_INFO("Initializing Web Blocking...");
-        webBlocker_ = std::make_unique<WebBlocker>();
-        
-        WebBlockConfig wbConfig;
-        wbConfig.enabled = true;
-        wbConfig.configPath = configDir + "/blocked_urls.json";
-        
-        if (!webBlocker_->initialize(wbConfig)) {
-            LOG_WARN("Failed to initialize Web Blocking - continuing without it");
-            webBlocker_.reset();
+        LOG_INFO("Spawning rp-webblock.exe subprocess...");
+        if (workerManager_->spawnWorker("rp-webblock.exe", "rp-webblock", /*persistent=*/true)) {
+            LOG_INFO("rp-webblock.exe spawned successfully");
+        } else {
+            LOG_WARN("Failed to spawn rp-webblock.exe - web blocking unavailable");
         }
     }
-    
-    // Initialize Software Blocking if enabled
+
     const auto& appCfg = config.getAppBlockConfig();
     if (appCfg.enabled) {
-        LOG_INFO("Initializing Software Blocking...");
-        softwareBlocker_ = std::make_unique<SoftwareBlocker>();
-        
-        AppBlockConfig abConfig;
-        abConfig.enabled = true;
-        abConfig.configPath = configDir + "/blocked_apps.json";
-        abConfig.monitorIntervalMs = appCfg.monitor_interval_ms;
-        
-        if (!softwareBlocker_->initialize(abConfig)) {
-            LOG_WARN("Failed to initialize Software Blocking - continuing without it");
-            softwareBlocker_.reset();
+        LOG_INFO("Spawning rp-softblock.exe subprocess...");
+        if (workerManager_->spawnWorker("rp-softblock.exe", "rp-softblock", /*persistent=*/true)) {
+            LOG_INFO("rp-softblock.exe spawned successfully");
         } else {
-            softwareBlocker_->setEventCallback([this](const nlohmann::json& event) {
-                Event ev;
-                ev.channel = "SoftwareBlocking";
-                ev.eventId = 0;
-                time_t now = time(nullptr);
-                char buf[64];
-                strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
-                ev.timestamp = buf;
-                ev.data = event.dump();
-                queue_->push(std::move(ev));
-            });
+            LOG_WARN("Failed to spawn rp-softblock.exe - software blocking unavailable");
         }
     }
-    
-    // Initialize Policy Manager and Command Queue
+    // Note: rp-patch.exe and rp-antivirus.exe are on-demand workers spawned
+    // per-request by PolicyManager, not persistent background processes.
+
+    // Setup PolicyManager - dispatches policies to workers via Named Pipe IPC
     policyManager_ = std::make_unique<PolicyManager>();
-    commandQueue_ = std::make_unique<CommandQueue>();
-    
-    policyManager_->setPatchManager(patchManager_.get());
-    policyManager_->setWebBlocker(webBlocker_.get());
-    policyManager_->setSoftwareBlocker(softwareBlocker_.get());
+    policyManager_->setWorkerManager(workerManager_.get());
+
+    // Wire status reports to flow back through the mTLS tunnel to the Manager
+    if (managementSender_) {
+        std::string agentId = config.getAgentId();
+        policyManager_->setStatusReportCallback(
+            [this, agentId](const std::string& reportType, const nlohmann::json& data) {
+                auto* tls = dynamic_cast<TlsSender*>(managementSender_.get());
+                if (tls && tls->isConnected()) {
+                    tls->sendStatusReport(agentId, reportType, data);
+                }
+            });
+    }
     
     LOG_INFO("Agent initialized successfully");
     LOG_INFO("  Agent ID: {}", config.getAgentId());
@@ -337,9 +294,10 @@ bool Agent::initialize(const std::string& configPath) {
         LOG_INFO("  System Info: enabled (startup={}, interval={}h)", 
                  collectSysInfoOnStartup_, sysInfoInterval_.count());
     }
-    if (patchManager_) LOG_INFO("  Patch Management: enabled");
-    if (webBlocker_) LOG_INFO("  Web Blocking: enabled");
-    if (softwareBlocker_) LOG_INFO("  Software Blocking: enabled");
+    if (webCfg.enabled) LOG_INFO("  Web Blocking: rp-webblock.exe (subprocess)");
+    if (appCfg.enabled) LOG_INFO("  Software Blocking: rp-softblock.exe (subprocess)");
+    const auto& patchCfg2 = config.getPatchConfig();
+    if (patchCfg2.enabled) LOG_INFO("  Patch Management: rp-patch.exe (on-demand subprocess)");
     
     return true;
 }
@@ -483,25 +441,10 @@ int Agent::run() {
         LOG_INFO("FIM monitoring started");
     }
     
-    // Start security modules
-    if (patchManager_) {
-        patchManager_->start();
-        LOG_INFO("Patch Management started");
-    }
-    if (webBlocker_) {
-        webBlocker_->start();
-        LOG_INFO("Web Blocking started");
-    }
-    if (softwareBlocker_) {
-        softwareBlocker_->start();
-        LOG_INFO("Software Blocking started");
-    }
+    // Workers are already running as subprocesses (spawned during initialize())
+    LOG_INFO("Security worker subprocesses active");
     
-    // Start policy processing thread
-    if (commandQueue_) {
-        policyThread_ = std::thread(&Agent::policyProcessingLoop, this);
-        LOG_INFO("Policy processing thread started");
-    }
+
     
     // Collect system info once at startup if enabled
     if (sysInfoCollector_ && collectSysInfoOnStartup_) {
@@ -556,28 +499,17 @@ int Agent::run() {
         managementThread_.join();
     }
     
-    // Stop policy processing thread
-    if (policyThread_.joinable()) {
-        policyThread_.join();
-    }
+
     
     // Stop system info thread if running
     if (sysInfoThread_.joinable()) {
         sysInfoThread_.join();
     }
     
-    // Stop security modules
-    if (softwareBlocker_) {
-        softwareBlocker_->stop();
-        LOG_INFO("Software Blocking stopped");
-    }
-    if (webBlocker_) {
-        webBlocker_->stop();
-        LOG_INFO("Web Blocking stopped");
-    }
-    if (patchManager_) {
-        patchManager_->stop();
-        LOG_INFO("Patch Management stopped");
+    // Worker subprocesses are terminated via WorkerManager::stopAll()
+    if (workerManager_) {
+        workerManager_->stopAll();
+        LOG_INFO("Worker subprocesses stopped");
     }
     
     // Stop components in order
@@ -802,7 +734,12 @@ void Agent::managementLoop() {
                             policyData = nlohmann::json::parse(raw, nullptr, false);
                             if (policyData.is_discarded()) policyData = nlohmann::json{};
                         }
-                        policyManager_->handlePolicyUpdate(policyType, policyData);
+                        bool applied = policyManager_->handlePolicyUpdate(policyType, policyData);
+
+                        // Send ACK back to Manager so it knows the outcome
+                        tlsSender->sendPolicyAck(
+                            agentId, policyType, applied,
+                            applied ? "Policy applied successfully" : "Policy apply failed");
                     }
                 }
             }
@@ -840,9 +777,12 @@ void Agent::writeStatusFile() {
         status["eventsCollected"] = collector_ ? collector_->getEventsCollected() : 0;
         status["eventsSent"] = batchSender_ ? batchSender_->getEventsSent() : 0;
 
-        // Security modules status
-        if (policyManager_) {
-            status["securityModules"] = policyManager_->getFullStatus();
+        // Security worker subprocess status
+        if (workerManager_) {
+            nlohmann::json workers;
+            workers["rp-webblock"]  = workerManager_->isRunning("rp-webblock");
+            workers["rp-softblock"] = workerManager_->isRunning("rp-softblock");
+            status["workers"] = workers;
         }
 
         // Timestamp
@@ -865,42 +805,7 @@ void Agent::writeStatusFile() {
     }
 }
 
-void Agent::policyProcessingLoop() {
-    LOG_DEBUG("Policy processing thread started");
 
-    while (!shouldStop()) {
-        auto cmd = commandQueue_->waitPop(std::chrono::milliseconds(500));
-        if (!cmd.has_value()) continue;
-
-        LOG_INFO("Processing policy command: type={}", cmd->policyType);
-
-        bool result = policyManager_->handlePolicyUpdate(
-            cmd->policyType, cmd->policyData);
-
-        // Send ack back to Manager if we have a management connection
-        if (managementSender_ && !cmd->commandId.empty()) {
-            auto tlsSender = dynamic_cast<TlsSender*>(managementSender_.get());
-            if (tlsSender) {
-                PolicyUpdateAck ack;
-                ack.agentId = ConfigManager::instance().getAgentId();
-                ack.policyType = cmd->policyType;
-                ack.applied = result;
-                ack.message = result ? "Policy applied successfully" : "Policy apply failed";
-
-                time_t now = time(nullptr);
-                char buf[64];
-                strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
-                ack.timestamp = buf;
-
-                // Build and send the ack message via the TLS sender's raw send
-                // (This uses the existing protocol infrastructure)
-                LOG_DEBUG("Policy ack sent for command {}", cmd->commandId);
-            }
-        }
-    }
-
-    LOG_DEBUG("Policy processing thread stopped");
-}
 
 std::string Agent::resolveConfigDir() const {
     const char* programData = std::getenv("ProgramData");

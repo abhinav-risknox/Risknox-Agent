@@ -70,8 +70,6 @@ test_agent_tls_tmp/
 *.db-shm
 *.db-wal
 *.db-journal
-db/
-
 # ==========================
 # Logs
 # ==========================
@@ -94,6 +92,8 @@ fluent-bit.conf
 # Third-party (vendored)
 # ==========================
 thirdparty/
+# ClamAV binaries & virus databases (~210 MB) - store in artifact storage, not Git
+vendor/clamav/
 
 # ==========================
 # OS Files
