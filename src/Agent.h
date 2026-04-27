@@ -13,6 +13,7 @@
 #include "agent/registration/RegistrationClient.h"
 #include "agent/network/TlsSender.h"
 #include "policy/PolicyManager.h"
+#include "policy/ModuleController.h"
 #include "workers/WorkerManager.h"
 
 #include <memory>
@@ -58,8 +59,9 @@ private:
     std::unique_ptr<SystemInfoCollector> sysInfoCollector_;
     
     // Policy dispatch + subprocess management
-    std::unique_ptr<WorkerManager> workerManager_;
-    std::unique_ptr<PolicyManager> policyManager_;
+    std::unique_ptr<WorkerManager>  workerManager_;
+    std::unique_ptr<PolicyManager>  policyManager_;
+    std::unique_ptr<ModuleController> moduleController_;
     
     // Registration components
     std::unique_ptr<CertificateStore> certStore_;
@@ -68,6 +70,15 @@ private:
     std::atomic<bool> stopRequested_{false};
     bool useRegistration_ = false;  // True when manager registration is configured
     bool licenseSuspended_ = false; // True when license invalid, collectors stopped
+    
+    // Agent lifecycle phase (for GUI display)
+    std::string agentPhase_ = "initializing";
+    
+    // Cached config path for writeStatusFile to read manager host/port
+    std::string configPath_;
+
+    // Set when a MODULE_COMMAND 'agent_restart' is received
+    std::atomic<bool> restartRequested_{false};
     
     // License/status info for GUI (written to status.json)
     std::string licenseMessage_ = "Checking...";
@@ -91,6 +102,14 @@ private:
     
     // System info collection loop
     void sysInfoLoop();
+
+    // Antivirus scheduled scan thread and configuration
+    std::thread avScanThread_;
+    std::chrono::hours avScanInterval_{24};
+    std::chrono::hours avUpdateInterval_{12};
+
+    // Antivirus scheduled scan loop
+    void avScanLoop();
     
     // Helper to resolve config dir path
     std::string resolveConfigDir() const;

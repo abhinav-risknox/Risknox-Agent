@@ -161,6 +161,22 @@ bool ConfigManager::load(const std::string& configPath) {
             appBlockConfig_.enabled = ab.value("enabled", false);
             appBlockConfig_.monitor_interval_ms = ab.value("monitor_interval_ms", 300);
         }
+
+        // Antivirus config (optional)
+        if (config.contains("antivirus")) {
+            auto& av = config["antivirus"];
+            avConfig_.enabled                 = av.value("enabled", false);
+            avConfig_.auto_scan               = av.value("auto_scan", false);
+            avConfig_.scan_interval_hours     = av.value("scan_interval_hours", 24);
+            avConfig_.auto_update_definitions = av.value("auto_update_definitions", true);
+            avConfig_.update_interval_hours   = av.value("update_interval_hours", 12);
+            if (av.contains("scan_paths")) {
+                avConfig_.scan_paths = av["scan_paths"].get<std::vector<std::string>>();
+            }
+            if (avConfig_.scan_paths.empty()) {
+                avConfig_.scan_paths = { "C:\\Users" };  // sensible default
+            }
+        }
         
         loaded_ = true;
         LOG_INFO("Configuration loaded successfully from: {}", configPath);
@@ -186,6 +202,11 @@ bool ConfigManager::load(const std::string& configPath) {
         if (appBlockConfig_.enabled) {
             LOG_INFO("Software Blocking enabled: monitorInterval={}ms",
                      appBlockConfig_.monitor_interval_ms);
+        }
+        if (avConfig_.enabled) {
+            LOG_INFO("Antivirus enabled: autoScan={}, interval={}h, paths={}",
+                     avConfig_.auto_scan, avConfig_.scan_interval_hours,
+                     avConfig_.scan_paths.size());
         }
         
         return true;

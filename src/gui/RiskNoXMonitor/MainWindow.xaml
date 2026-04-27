@@ -134,6 +134,7 @@
                             </Ellipse.Effect>
                         </Ellipse>
                         <TextBlock x:Name="StatusText" Text="NOT INSTALLED" FontSize="13" FontWeight="Bold" Foreground="#FFFFFF" VerticalAlignment="Center" />
+                        <TextBlock x:Name="TxtPhase" Text="" FontSize="11" Foreground="#888888" VerticalAlignment="Center" Margin="8,0,0,0" />
                     </StackPanel>
                 </Border>
             </StackPanel>
@@ -202,6 +203,14 @@
                         <StackPanel>
                             <TextBlock Text="⚠  ISSUE DETECTED" FontSize="10" FontWeight="Bold" Foreground="#FF8C42" Margin="0,0,0,6"/>
                             <TextBlock x:Name="TxtError" Text="" Foreground="#FFAA66" FontSize="11" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Agent Components Card -->
+                    <Border x:Name="ComponentsCard" Background="#2B2B2C" CornerRadius="8" Padding="18" Margin="0,15,0,0" BorderBrush="#333334" BorderThickness="1" Visibility="Collapsed">
+                        <StackPanel>
+                            <TextBlock Text="AGENT COMPONENTS" FontSize="10" FontWeight="Bold" Foreground="#888888" Margin="0,0,0,10" />
+                            <StackPanel x:Name="ComponentRows" />
                         </StackPanel>
                     </Border>
                 </StackPanel>

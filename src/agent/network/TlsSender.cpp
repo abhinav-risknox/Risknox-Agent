@@ -364,8 +364,10 @@ bool TlsSender::readNextMessage(MessageType& outType, std::string& outPayload) {
 }
 
 bool TlsSender::readExpectedMessage(MessageType expected, std::string& outPayload) {
-    // Keep reading messages. If we get a POLICY_UPDATE while waiting for our
-    // ACK, queue it for later retrieval via tryReadInbound(). 
+    // Keep reading messages while waiting for our ACK.
+    // POLICY_UPDATE and MODULE_COMMAND may arrive asynchronously from the Manager
+    // at any point — queue them for retrieval via tryReadInbound() rather than
+    // discarding them.  Anything else is truly unexpected and gets a warning.
     for (int safety = 0; safety < 10; ++safety) {
         MessageType type;
         std::string payload;
@@ -376,12 +378,19 @@ bool TlsSender::readExpectedMessage(MessageType expected, std::string& outPayloa
             return true;
         }
 
-        // Got something else (almost certainly POLICY_UPDATE) — queue it
-        if (type == MessageType::POLICY_UPDATE) {
+        // Queue inbound async messages for later dispatch by managementLoop
+        if (type == MessageType::POLICY_UPDATE ||
+            type == MessageType::MODULE_COMMAND) {
+
             auto j = nlohmann::json::parse(payload, nullptr, false);
             if (!j.is_discarded()) {
+                // Annotate so tryReadInbound() can branch correctly
+                j["_msgType"] = (type == MessageType::POLICY_UPDATE)
+                                    ? "policy_update"
+                                    : "module_command";
                 pendingInbound_.push(std::move(j));
-                LOG_DEBUG("Queued inbound POLICY_UPDATE while waiting for ACK (queue={})",
+                LOG_DEBUG("Queued inbound {} while waiting for ACK (queue={})",
+                          (type == MessageType::POLICY_UPDATE ? "POLICY_UPDATE" : "MODULE_COMMAND"),
                           pendingInbound_.size());
             }
         } else {
@@ -394,6 +403,7 @@ bool TlsSender::readExpectedMessage(MessageType expected, std::string& outPayloa
               static_cast<uint8_t>(expected));
     return false;
 }
+
 
 SendResult TlsSender::sendHeartbeat(const std::string& agentId, uint64_t eventsCollected, uint64_t eventsSent) {
     if (!sslCtx_) {
@@ -604,6 +614,42 @@ SendResult TlsSender::sendStatusReport(const std::string& agentId,
     return SendResult::Success;
 }
 
+void TlsSender::enqueueStatusReport(const std::string& agentId,
+                                    const std::string& reportType,
+                                    const nlohmann::json& reportData) {
+    std::lock_guard<std::mutex> lock(pendingReportsMutex_);
+    pendingReports_.push({ agentId, reportType, reportData });
+    LOG_DEBUG("Status report queued for sending: type={} (queue={})",
+              reportType, pendingReports_.size());
+}
+
+int TlsSender::flushPendingStatusReports() {
+    // Drain into a local snapshot so we release the lock before doing SSL I/O
+    std::queue<PendingReport> local;
+    {
+        std::lock_guard<std::mutex> lock(pendingReportsMutex_);
+        std::swap(local, pendingReports_);
+    }
+
+    int sent = 0;
+    while (!local.empty()) {
+        auto& r = local.front();
+        auto result = sendStatusReport(r.agentId, r.reportType, r.data);
+        if (result == SendResult::Success) {
+            ++sent;
+        } else {
+            LOG_WARN("flushPendingStatusReports: failed to send type={}: {}",
+                     r.reportType, lastError_);
+            // Re-queue on failure so we retry next tick
+            std::lock_guard<std::mutex> lock(pendingReportsMutex_);
+            pendingReports_.push(std::move(r));
+            break;  // stop on first failure (connection may be down)
+        }
+        local.pop();
+    }
+    return sent;
+}
+
 SendResult TlsSender::sendPolicyAck(const std::string& agentId,
                                      const std::string& policyType,
                                      bool applied,
@@ -650,6 +696,40 @@ SendResult TlsSender::sendPolicyAck(const std::string& agentId,
     return SendResult::Success;
 }
 
+SendResult TlsSender::sendModuleCommandResult(const std::string& agentId,
+                                               const ModuleCommandResult& result) {
+    if (!sslCtx_) {
+        lastError_ = "TLS sender not initialized";
+        return SendResult::NetworkError;
+    }
+
+    std::string payload = nlohmann::json(result).dump();
+
+    MessageHeader header;
+    header.type          = static_cast<uint8_t>(MessageType::MODULE_COMMAND_RESULT);
+    header.payloadLength = static_cast<uint32_t>(payload.size());
+
+    uint8_t headerBuf[MESSAGE_HEADER_SIZE];
+    serializeHeader(header, headerBuf);
+
+    if (!connected_.load()) {
+        lastError_ = "Not connected";
+        return SendResult::NetworkError;
+    }
+
+    // Fire-and-forget: no ACK expected back from Manager for this message
+    if (!sslSendRaw(headerBuf, MESSAGE_HEADER_SIZE) ||
+        !sslSendRaw(payload.c_str(), payload.size())) {
+        disconnect();
+        return SendResult::NetworkError;
+    }
+
+    bytesSent_ += MESSAGE_HEADER_SIZE + payload.size();
+    LOG_INFO("MODULE_COMMAND_RESULT sent: verb={} status={} commandId={}",
+             result.verb, result.status, result.commandId);
+    return SendResult::Success;
+}
+
 bool TlsSender::tryReadInbound(nlohmann::json& out) {
     std::lock_guard<std::mutex> lock(mutex_);
 
@@ -669,14 +749,22 @@ bool TlsSender::tryReadInbound(nlohmann::json& out) {
     std::string payload;
     if (!readNextMessage(type, payload)) return false;
 
-    // Only surface POLICY_UPDATE messages; discard anything else
-    if (type != MessageType::POLICY_UPDATE) {
-        LOG_DEBUG("tryReadInbound: discarding unexpected type 0x{:02X}", static_cast<uint8_t>(type));
-        return false;
+    // Surface POLICY_UPDATE and MODULE_COMMAND; annotate with _msgType; discard others
+    if (type == MessageType::POLICY_UPDATE) {
+        out = nlohmann::json::parse(payload, nullptr, false);
+        if (out.is_discarded()) return false;
+        out["_msgType"] = "policy_update";
+        return true;
+    }
+    if (type == MessageType::MODULE_COMMAND) {
+        out = nlohmann::json::parse(payload, nullptr, false);
+        if (out.is_discarded()) return false;
+        out["_msgType"] = "module_command";
+        return true;
     }
 
-    out = nlohmann::json::parse(payload, nullptr, false);
-    return !out.is_discarded();
+    LOG_DEBUG("tryReadInbound: discarding unexpected type 0x{:02X}", static_cast<uint8_t>(type));
+    return false;
 }
 
 } // namespace ResolutePulse

@@ -13,6 +13,26 @@ param(
     [int]$Port = 1515
 )
 
+function Send-Module {
+    param(
+        [string]$Description,
+        [string]$Verb,
+        [hashtable]$Params = @{}
+    )
+    $cid  = "$($AgentId.Substring(0,[Math]::Min(8,$AgentId.Length)))-$Verb-$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())"
+    $body = @{ command_type='module'; agent_id=$AgentId; command_id=$cid; verb=$Verb; params=$Params } | ConvertTo-Json -Compress -Depth 5
+    Write-Host "`n[$Description]" -ForegroundColor Cyan
+    Write-Host "  Verb: $Verb  CommandId: $cid" -ForegroundColor DarkGray
+    try {
+        $tcp=$null; $tcp = New-Object System.Net.Sockets.TcpClient($ManagerHost,$Port)
+        $s = $tcp.GetStream()
+        $b = [System.Text.Encoding]::UTF8.GetBytes($body)
+        $s.Write($b,0,$b.Length); $s.Flush(); $s.Close(); $tcp.Close()
+        Write-Host "  => Sent OK" -ForegroundColor Green
+    } catch { Write-Host "  => FAILED: $_" -ForegroundColor Red }
+    Start-Sleep -Milliseconds 700
+}
+
 function Send-Policy {
     param([string]$Description, [string]$Body)
 
@@ -168,6 +188,54 @@ if ($Test -in "all", "status") {
 
     Write-Host "  >> Agent will query each worker subprocess and send a status report to the Manager." -ForegroundColor DarkYellow
     Write-Host "  >> Check Manager terminal output for 'STATUS_REPORT received'." -ForegroundColor DarkYellow
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MODULE COMMANDS  (command_type="module")
+# Use -Test module  to run only this section
+# ─────────────────────────────────────────────────────────────────────────────
+if ($Test -in "all", "module") {
+    Write-Host "`n=== MODULE COMMANDS ===" -ForegroundColor Magenta
+
+    # Diagnostics — safe read-only, always first
+    Send-Module "Get live counters (diagnostics)" -Verb "diagnostics"
+    Write-Host "  >> Agent logs: MODULE_COMMAND_RESULT verb=diagnostics status=success" -ForegroundColor DarkYellow
+
+    # Status request
+    Send-Module "Force immediate status flush" -Verb "status_request"
+
+    # Collector pause/resume
+    Send-Module "Pause event collection" -Verb "collector_stop"
+    Start-Sleep -Seconds 2
+    Send-Module "Resume event collection" -Verb "collector_start"
+
+    # FIM pause/resume
+    Send-Module "Pause FIM" -Verb "fim_stop"
+    Start-Sleep -Seconds 1
+    Send-Module "Resume FIM" -Verb "fim_start"
+
+    # Worker restart
+    Send-Module "Restart worker subprocesses" -Verb "worker_restart"
+    Start-Sleep -Seconds 3
+    Write-Host "  >> Checking workers after restart:" -ForegroundColor DarkYellow
+    @("rp-webblock","rp-softblock") | ForEach-Object {
+        $p = Get-Process $_ -ErrorAction SilentlyContinue
+        if ($p) { Write-Host "     [OK] $_.exe PID=$($p.Id)" -ForegroundColor Green }
+        else     { Write-Host "     [MISSING] $_.exe - check agent.log" -ForegroundColor Red }
+    }
+
+    # Config push
+    Send-Module "Push patch_management config" -Verb "config_push" -Params @{
+        section = "patch_management"
+        config  = @{ enabled=$true; auto_scan=$true; auto_install=$false; scan_interval_hours=12 }
+    }
+    Write-Host "  >> Verify: Get-Content '$env:ProgramFiles\Risknox Pulse\config.json' | ConvertFrom-Json | Select -Expand patch_management" -ForegroundColor DarkYellow
+
+    # Invalid verb (error path validation)
+    Send-Module "Invalid verb (should return unsupported)" -Verb "__invalid_verb_test__"
+    Write-Host "  >> Expected: ModuleController: unknown verb '__invalid_verb_test__' in agent log" -ForegroundColor DarkYellow
+
+    Write-Host "`n  Full module command test suite: .\tests\test_module_commands.ps1" -ForegroundColor DarkGray
 }
 
 # ─────────────────────────────────────────────────────────────────────────────

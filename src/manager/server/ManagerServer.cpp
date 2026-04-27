@@ -444,10 +444,29 @@ void ManagerServer::commandIngestLoop() {
         try {
             auto cmd        = nlohmann::json::parse(buf);
             std::string aid = cmd.at("agent_id").get<std::string>();
-            std::string pt  = cmd.at("policy_type").get<std::string>();
-            auto pd         = cmd.at("policy_data");
-            LOG_INFO("Command ingest: agent={} type={}", aid, pt);
-            dispatchCommand(aid, pt, pd);
+
+            // command_type distinguishes module control commands from policy updates.
+            // Defaults to "policy" for full backward compatibility with existing callers.
+            std::string cmdClass = cmd.value("command_type", "policy");
+
+            if (cmdClass == "module") {
+                // MODULE_COMMAND: verb + optional params
+                std::string verb      = cmd.at("verb").get<std::string>();
+                std::string commandId = cmd.value("command_id", "");
+                if (commandId.empty()) {
+                    // Generate a simple UUID-like ID if caller didn't provide one
+                    commandId = aid + "-" + verb + "-" + std::to_string(time(nullptr));
+                }
+                auto params = cmd.value("params", nlohmann::json::object());
+                LOG_INFO("Command ingest [module]: agent={} verb={} commandId={}", aid, verb, commandId);
+                dispatchModuleCommand(aid, commandId, verb, params);
+            } else {
+                // POLICY_UPDATE (legacy / default path)
+                std::string pt  = cmd.at("policy_type").get<std::string>();
+                auto pd         = cmd.at("policy_data");
+                LOG_INFO("Command ingest [policy]: agent={} type={}", aid, pt);
+                dispatchCommand(aid, pt, pd);
+            }
         } catch (const std::exception& e) {
             LOG_WARN("Command ingest: malformed JSON - {}", e.what());
         }
@@ -478,6 +497,38 @@ void ManagerServer::dispatchCommand(const std::string& agentId,
         LOG_INFO("Policy '{}' dispatched to agent {}", policyType, agentId);
     } else {
         LOG_ERROR("Failed to dispatch policy '{}' to agent {}", policyType, agentId);
+    }
+}
+
+void ManagerServer::dispatchModuleCommand(const std::string& agentId,
+                                           const std::string& commandId,
+                                           const std::string& verb,
+                                           const nlohmann::json& params) {
+    SSL* ssl = nullptr;
+    {
+        std::lock_guard<std::mutex> lk(sessionsMutex_);
+        auto it = activeSessions_.find(agentId);
+        if (it != activeSessions_.end()) ssl = it->second;
+    }
+
+    if (!ssl) {
+        LOG_INFO("dispatchModuleCommand: agent {} not connected - queuing (verb={})",
+                 agentId, verb);
+        // Store as a module-class command in the DB for offline drain
+        db_->queueModuleCommand(agentId, commandId, verb, params.dump());
+        return;
+    }
+
+    AgentHandler handler(*ca_, *db_, this);
+    bool ok = handler.pushModuleCommand(ssl, agentId, commandId, verb, params);
+    if (ok) {
+        LOG_INFO("MODULE_COMMAND '{}' dispatched to agent {} (commandId={})",
+                 verb, agentId, commandId);
+        // Record dispatch time
+        db_->updateCommandDispatched(commandId);
+    } else {
+        LOG_ERROR("Failed to dispatch MODULE_COMMAND '{}' to agent {}", verb, agentId);
+        db_->queueModuleCommand(agentId, commandId, verb, params.dump());
     }
 }
 

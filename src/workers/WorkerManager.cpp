@@ -1,4 +1,4 @@
-﻿#include "WorkerManager.h"
+#include "WorkerManager.h"
 #include "utils/Logger.h"
 
 #include <filesystem>

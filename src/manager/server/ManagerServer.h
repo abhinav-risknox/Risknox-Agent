@@ -85,6 +85,12 @@ private:
                          const std::string& policyType,
                          const nlohmann::json& policyData);
 
+    // Dispatch a MODULE_COMMAND to an agent's live SSL socket (or queue if offline)
+    void dispatchModuleCommand(const std::string& agentId,
+                               const std::string& commandId,
+                               const std::string& verb,
+                               const nlohmann::json& params);
+
     int               port_ = 1514;
     CertificateAuthority* ca_ = nullptr;
     PostgresClient*       db_ = nullptr;

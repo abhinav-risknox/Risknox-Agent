@@ -517,5 +517,88 @@ bool PostgresClient::storeStatusReport(const std::string& agentId,
     return ok;
 }
 
+// ─────────────────────────────────────────────────────────────
+// Module Command Methods (V6 audit columns)
+// ─────────────────────────────────────────────────────────────
+
+bool PostgresClient::queueModuleCommand(const std::string& agentId,
+                                         const std::string& commandId,
+                                         const std::string& verb,
+                                         const std::string& paramsJson) {
+    if (!isConnected() && !reconnect()) return false;
+
+    const char* paramValues[4] = {
+        agentId.c_str(),
+        commandId.c_str(),
+        verb.c_str(),
+        paramsJson.c_str()
+    };
+
+    PGresult* res = PQexecParams(conn_,
+        "INSERT INTO agent_commands "
+        "  (agent_id, command_id, policy_type, policy_data, status, command_class) "
+        "VALUES ($1, $2, $3, $4::jsonb, 'pending', 'module')",
+        4, nullptr, paramValues, nullptr, nullptr, 0);
+
+    bool ok = PQresultStatus(res) == PGRES_COMMAND_OK;
+    if (!ok) {
+        lastError_ = "queueModuleCommand failed: " + std::string(PQerrorMessage(conn_));
+        LOG_ERROR("{}", lastError_);
+    } else {
+        LOG_INFO("Queued MODULE_COMMAND: agent={} verb={} commandId={}", agentId, verb, commandId);
+    }
+    PQclear(res);
+    return ok;
+}
+
+bool PostgresClient::updateCommandDispatched(const std::string& commandId) {
+    if (!isConnected() && !reconnect()) return false;
+
+    const char* paramValues[1] = { commandId.c_str() };
+
+    PGresult* res = PQexecParams(conn_,
+        "UPDATE agent_commands "
+        "SET status = 'sent', dispatched_at = NOW() "
+        "WHERE command_id = $1",
+        1, nullptr, paramValues, nullptr, nullptr, 0);
+
+    bool ok = PQresultStatus(res) == PGRES_COMMAND_OK;
+    if (!ok) {
+        lastError_ = "updateCommandDispatched failed: " + std::string(PQerrorMessage(conn_));
+        LOG_ERROR("{}", lastError_);
+    }
+    PQclear(res);
+    return ok;
+}
+
+bool PostgresClient::updateCommandAck(const std::string& commandId,
+                                       const std::string& ackStatus,
+                                       const std::string& ackMessage) {
+    if (!isConnected() && !reconnect()) return false;
+
+    const char* paramValues[3] = {
+        ackStatus.c_str(),
+        ackMessage.c_str(),
+        commandId.c_str()
+    };
+
+    PGresult* res = PQexecParams(conn_,
+        "UPDATE agent_commands "
+        "SET ack_status = $1, ack_message = $2, ack_at = NOW() "
+        "WHERE command_id = $3",
+        3, nullptr, paramValues, nullptr, nullptr, 0);
+
+    bool ok = PQresultStatus(res) == PGRES_COMMAND_OK;
+    if (!ok) {
+        lastError_ = "updateCommandAck failed: " + std::string(PQerrorMessage(conn_));
+        LOG_ERROR("{}", lastError_);
+    } else {
+        LOG_INFO("Command ACK recorded: commandId={} status={}", commandId, ackStatus);
+    }
+    PQclear(res);
+    return ok;
+}
+
 } // namespace ResolutePulse
+
 

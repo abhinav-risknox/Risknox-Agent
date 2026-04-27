@@ -193,17 +193,38 @@ size_t BaselineScanner::scan() {
         scanDirectory(normalizedDir, allRecords);
     }
     
-    // Store all records in database
+    // Store all records in database inside a single transaction.
+    // Without a transaction every upsertFile() is its own implicit write,
+    // creating thousands of lock-acquire/release cycles that race with the
+    // USN journal callback thread → "database is locked".
     LOG_INFO("Storing {} file records in database", allRecords.size());
-    
+
+    bool txOk = db_->beginTransaction();
+    if (!txOk) {
+        LOG_WARN("FIM: could not begin transaction, falling back to auto-commit");
+    }
+
+    bool anyError = false;
     for (const auto& record : allRecords) {
         if (stopRequested_) break;
-        db_->upsertFile(record);
+        if (!db_->upsertFile(record)) {
+            anyError = true;
+            break;
+        }
     }
-    
+
+    if (txOk) {
+        if (anyError || stopRequested_) {
+            db_->rollbackTransaction();
+            LOG_WARN("FIM baseline scan transaction rolled back");
+        } else {
+            db_->commitTransaction();
+        }
+    }
+
     scanning_ = false;
     LOG_INFO("Baseline scan complete: {} files", filesScanned_);
-    
+
     return filesScanned_;
 }
 

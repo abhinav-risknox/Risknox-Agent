@@ -1,4 +1,4 @@
-﻿#include "PipeChannel.h"
+#include "PipeChannel.h"
 #include "utils/Logger.h"
 
 #include <cstring>

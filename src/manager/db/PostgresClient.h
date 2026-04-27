@@ -142,6 +142,20 @@ public:
     bool updateCommandStatus(int commandId, const std::string& status,
                              const std::string& errorMessage = "");
 
+    // Queue a MODULE_COMMAND for offline delivery
+    bool queueModuleCommand(const std::string& agentId,
+                            const std::string& commandId,
+                            const std::string& verb,
+                            const std::string& paramsJson);
+
+    // Record when a MODULE_COMMAND was dispatched to the live agent
+    bool updateCommandDispatched(const std::string& commandId);
+
+    // Record the MODULE_COMMAND_RESULT ack: status + output from agent
+    bool updateCommandAck(const std::string& commandId,
+                          const std::string& ackStatus,
+                          const std::string& ackMessage);
+
     // ── Status reports ──
 
     // Store a status report from an agent (patch scan results, install outcomes, etc.)

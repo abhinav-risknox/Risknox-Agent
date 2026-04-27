@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "manager/ca/CertificateAuthority.h"
 #include "manager/db/PostgresClient.h"
@@ -28,6 +28,13 @@ public:
     bool pushPolicyUpdate(SSL* ssl, const std::string& agentId,
                           const std::string& policyType,
                           const nlohmann::json& policyData);
+
+    // Push a MODULE_COMMAND to a connected agent
+    // commandId is echoed back in the MODULE_COMMAND_RESULT for audit correlation.
+    bool pushModuleCommand(SSL* ssl, const std::string& agentId,
+                           const std::string& commandId,
+                           const std::string& verb,
+                           const nlohmann::json& params);
 
 private:
     // Handle registration request (one-way TLS - no client cert)

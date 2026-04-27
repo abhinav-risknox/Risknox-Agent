@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <cstdint>
 #include <string>
@@ -23,7 +23,9 @@ enum class MessageType : uint8_t {
     POLICY_UPDATE        = 0x50,
     POLICY_UPDATE_ACK    = 0x51,
     STATUS_REPORT        = 0x60,
-    STATUS_REPORT_ACK    = 0x61
+    STATUS_REPORT_ACK    = 0x61,
+    MODULE_COMMAND       = 0x70,  // Manager → Agent: control a module
+    MODULE_COMMAND_RESULT= 0x71   // Agent → Manager: result of a module command
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -196,6 +198,36 @@ struct StatusReportAck {
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(StatusReportAck,
         agentId, timestamp, received)
+};
+
+// ─────────────────────────────────────────────────────────────
+// Module Command Messages (Manager ↔ Agent)  — 0x70 / 0x71
+// Used for direct control of agent modules beyond policy updates.
+// ─────────────────────────────────────────────────────────────
+
+struct ModuleCommand {
+    std::string commandId;   // UUID for ack correlation and audit
+    std::string agentId;
+    std::string verb;        // e.g. "collector_start", "fim_stop", "config_push",
+                             //      "status_request", "diagnostics", "worker_restart",
+                             //      "agent_restart"
+    nlohmann::json params;   // verb-specific payload (may be null/{})
+    std::string timestamp;
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(ModuleCommand,
+        commandId, agentId, verb, params, timestamp)
+};
+
+struct ModuleCommandResult {
+    std::string commandId;   // echoes ModuleCommand::commandId
+    std::string agentId;
+    std::string verb;        // echoes ModuleCommand::verb
+    std::string status;      // "success" | "failed" | "unsupported"
+    std::string output;      // human-readable detail or structured JSON string
+    std::string timestamp;
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(ModuleCommandResult,
+        commandId, agentId, verb, status, output, timestamp)
 };
 
 // ─────────────────────────────────────────────────────────────

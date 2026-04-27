@@ -20,6 +20,9 @@ Agent::~Agent() {
 
 bool Agent::initialize(const std::string& configPath) {
     LOG_INFO("Initializing Resolute Pulse Agent...");
+    configPath_ = configPath;
+    agentPhase_ = "initializing";
+    writeStatusFile();  // Immediate feedback to GUI
     
     // Load configuration
     auto& config = ConfigManager::instance();
@@ -73,6 +76,8 @@ bool Agent::initialize(const std::string& configPath) {
     }
     
     if (useRegistration_) {
+        agentPhase_ = "registering";
+        writeStatusFile();
         if (!performRegistration()) {
             LOG_ERROR("Registration failed");
             return false;
@@ -264,18 +269,63 @@ bool Agent::initialize(const std::string& configPath) {
     policyManager_ = std::make_unique<PolicyManager>();
     policyManager_->setWorkerManager(workerManager_.get());
 
-    // Wire status reports to flow back through the mTLS tunnel to the Manager
+    // Wire status reports to flow back through the mTLS tunnel.
+    // IMPORTANT: the statusCallback fires from background threads (avScanLoop,
+    // sysInfoLoop, PolicyManager's streamEvents thread). We must NOT call
+    // sendStatusReport() directly from those threads — it is not SSL-safe.
+    // Instead, enqueue and let the management loop thread drain the queue.
     if (managementSender_) {
         std::string agentId = config.getAgentId();
         policyManager_->setStatusReportCallback(
             [this, agentId](const std::string& reportType, const nlohmann::json& data) {
                 auto* tls = dynamic_cast<TlsSender*>(managementSender_.get());
-                if (tls && tls->isConnected()) {
-                    tls->sendStatusReport(agentId, reportType, data);
+                if (tls) {
+                    tls->enqueueStatusReport(agentId, reportType, data);
                 }
             });
     }
+
+    // ── ModuleController ─────────────────────────────────────────
+    // Controls all agent modules via MODULE_COMMAND verbs from the Manager.
+    moduleController_ = std::make_unique<ModuleController>();
+    moduleController_->setCollector(collector_.get());
+    moduleController_->setBatchSender(batchSender_.get());
+    moduleController_->setFimMonitor(fimMonitor_.get());
+    moduleController_->setWorkerManager(workerManager_.get());
+    moduleController_->setConfigPath(configPath_);
+    moduleController_->setAgentId(config.getAgentId());
+
+    // Resolve exe dir (same directory as the agent itself)
+    {
+        wchar_t exePath[MAX_PATH] = {};
+        GetModuleFileNameW(nullptr, exePath, MAX_PATH);
+        std::string exeDir = std::filesystem::path(exePath).parent_path().string();
+        moduleController_->setWorkerExeDir(exeDir);
+    }
+
+    // Status-flush callback: force an immediate status.json write
+    moduleController_->setStatusFlushCallback([this]() {
+        writeStatusFile();
+    });
+
+    // Status-report callback: push a STATUS_REPORT over mTLS immediately
+    if (managementSender_) {
+        std::string agentId = config.getAgentId();
+        moduleController_->setStatusReportCallback([this, agentId]() {
+            auto* tls = dynamic_cast<TlsSender*>(managementSender_.get());
+            if (tls && tls->isConnected()) {
+                // Build a lightweight status payload
+                nlohmann::json statusData;
+                statusData["phase"]           = agentPhase_;
+                statusData["licenseSuspended"] = licenseSuspended_;
+                statusData["eventsCollected"]  = collector_ ? collector_->getEventsCollected() : 0;
+                statusData["eventsSent"]       = batchSender_ ? batchSender_->getEventsSent() : 0;
+                tls->sendStatusReport(agentId, "module_status", statusData);
+            }
+        });
+    }
     
+    agentPhase_ = "initialized";
     LOG_INFO("Agent initialized successfully");
     LOG_INFO("  Agent ID: {}", config.getAgentId());
     if (useRegistration_) {
@@ -299,6 +349,7 @@ bool Agent::initialize(const std::string& configPath) {
     const auto& patchCfg2 = config.getPatchConfig();
     if (patchCfg2.enabled) LOG_INFO("  Patch Management: rp-patch.exe (on-demand subprocess)");
     
+    writeStatusFile();  // Write enriched status after full init
     return true;
 }
 
@@ -407,9 +458,12 @@ int Agent::run() {
     LOG_INFO("Starting agent...");
     running_ = true;
     stopRequested_ = false;
+    agentPhase_ = "starting";
     
     // Start management thread if registered
     if (managementSender_) {
+        agentPhase_ = "connecting";
+        writeStatusFile();
         managementThread_ = std::thread(&Agent::managementLoop, this);
         LOG_INFO("Management loop started");
         
@@ -471,27 +525,60 @@ int Agent::run() {
         sysInfoThread_ = std::thread(&Agent::sysInfoLoop, this);
         LOG_INFO("System info periodic collection started ({}h interval)", sysInfoInterval_.count());
     }
+
+    // Start scheduled antivirus scan thread if enabled
+    {
+        const auto& avCfg = ConfigManager::instance().getAntivirusConfig();
+        if (avCfg.enabled && avCfg.auto_scan) {
+            avScanInterval_  = std::chrono::hours(avCfg.scan_interval_hours);
+            avUpdateInterval_= std::chrono::hours(avCfg.update_interval_hours);
+            avScanThread_ = std::thread(&Agent::avScanLoop, this);
+            LOG_INFO("AV scheduled scan started (interval={}h, updateDefs={})",
+                     avCfg.scan_interval_hours, avCfg.auto_update_definitions);
+        }
+    }
     
+    agentPhase_ = licenseSuspended_ ? "suspended" : "operational";
+    writeStatusFile();
     LOG_INFO("Agent running. Press Ctrl+C to stop (console mode).");
     
     // Main loop - just wait for stop signal
+    auto lastStatusWrite = std::chrono::steady_clock::now();
+    auto lastStatusLog   = std::chrono::steady_clock::now();
     while (!shouldStop()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+        // Check if ModuleController received an 'agent_restart' verb
+        if (moduleController_ && moduleController_->restartRequested()) {
+            LOG_WARN("Agent restart requested by Manager MODULE_COMMAND");
+            moduleController_->clearRestartRequest();
+            restartRequested_ = true;
+            break;
+        }
+        
+        auto now = std::chrono::steady_clock::now();
+        
+        // Periodic status file update (every 5 seconds for GUI)
+        if (std::chrono::duration_cast<std::chrono::seconds>(now - lastStatusWrite).count() >= 5) {
+            agentPhase_ = licenseSuspended_ ? "suspended" : "operational";
+            writeStatusFile();
+            lastStatusWrite = now;
+        }
         
         // Periodic status log (every 60 seconds)
-        static auto lastStatus = std::chrono::steady_clock::now();
-        auto now = std::chrono::steady_clock::now();
-        if (std::chrono::duration_cast<std::chrono::seconds>(now - lastStatus).count() >= 60) {
+        if (std::chrono::duration_cast<std::chrono::seconds>(now - lastStatusLog).count() >= 60) {
             LOG_INFO("Status: Collected={}, Filtered={}, Sent={}, Queued={}, Buffered={}",
                      collector_->getEventsCollected(),
                      collector_->getEventsFiltered(),
                      batchSender_->getEventsSent(),
                      queue_->size(),
                      buffer_->getEventCount());
-            lastStatus = now;
+            lastStatusLog = now;
         }
     }
     
+    agentPhase_ = "stopping";
+    writeStatusFile();
     LOG_INFO("Stopping agent...");
     
     // Stop management thread if running
@@ -504,6 +591,11 @@ int Agent::run() {
     // Stop system info thread if running
     if (sysInfoThread_.joinable()) {
         sysInfoThread_.join();
+    }
+
+    // Stop AV scan thread if running
+    if (avScanThread_.joinable()) {
+        avScanThread_.join();
     }
     
     // Worker subprocesses are terminated via WorkerManager::stopAll()
@@ -589,6 +681,58 @@ void Agent::sysInfoLoop() {
     LOG_DEBUG("System info collection thread stopped");
 }
 
+void Agent::avScanLoop() {
+    auto& cfg = ConfigManager::instance();
+    const auto& avCfg = cfg.getAntivirusConfig();
+
+    LOG_INFO("AV scheduled scan thread started (interval={}h, paths={})",
+             avScanInterval_.count(), avCfg.scan_paths.size());
+
+    // Update definitions once at startup if configured
+    if (avCfg.auto_update_definitions && policyManager_) {
+        LOG_INFO("AV: running initial definition update...");
+        policyManager_->handlePolicyUpdate("antivirus",
+            nlohmann::json{ {"action", "update_definitions"} });
+    }
+
+    auto lastDefUpdate = std::chrono::steady_clock::now();
+
+    while (!shouldStop()) {
+        // ── Wait for scan interval, wake every second to check stop ──
+        auto scanDue = std::chrono::steady_clock::now() + avScanInterval_;
+        while (std::chrono::steady_clock::now() < scanDue && !shouldStop()) {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+        if (shouldStop()) break;
+
+        // ── Optional: refresh definitions before scan ──
+        if (avCfg.auto_update_definitions) {
+            auto now = std::chrono::steady_clock::now();
+            auto elapsed = std::chrono::duration_cast<std::chrono::hours>(now - lastDefUpdate);
+            if (elapsed >= avUpdateInterval_) {
+                LOG_INFO("AV: updating virus definitions (scheduled)");
+                if (policyManager_) {
+                    policyManager_->handlePolicyUpdate("antivirus",
+                        nlohmann::json{ {"action", "update_definitions"} });
+                }
+                lastDefUpdate = now;
+            }
+        }
+
+        // ── Run a scan for each configured path ──
+        for (const auto& path : avCfg.scan_paths) {
+            if (shouldStop()) break;
+            LOG_INFO("AV: starting scheduled quick_scan of '{}'", path);
+            if (policyManager_) {
+                policyManager_->handlePolicyUpdate("antivirus",
+                    nlohmann::json{ {"action", "quick_scan"}, {"path", path} });
+            }
+        }
+    }
+
+    LOG_DEBUG("AV scheduled scan thread stopped");
+}
+
 void Agent::managementLoop() {
     LOG_DEBUG("Management loop background thread started");
     auto& config = ConfigManager::instance();
@@ -618,12 +762,25 @@ void Agent::managementLoop() {
             if (result == SendResult::Success) {
                 LOG_DEBUG("Heartbeat acknowledged by manager");
                 lastError_.clear();
+
+                // Flush any queued STATUS_REPORTs (av_scan, patch_scan, module_status).
+                // These are enqueued by background threads; we send them here on the
+                // SSL-owning thread to avoid concurrent SSL write races.
+                auto* tls = dynamic_cast<TlsSender*>(managementSender_.get());
+                if (tls) {
+                    int flushed = tls->flushPendingStatusReports();
+                    if (flushed > 0) {
+                        LOG_DEBUG("Flushed {} pending status report(s)", flushed);
+                    }
+                }
+
                 // Auto-resume if previously suspended
                 if (licenseSuspended_) {
                     LOG_INFO("License restored - resuming telemetry collection.");
                     if (collector_) collector_->start();
                     if (batchSender_) batchSender_->start();
                     if (fimMonitor_) fimMonitor_->start();
+
                     licenseSuspended_ = false;
                     licenseMessage_ = "License active";
                 }
@@ -717,29 +874,45 @@ void Agent::managementLoop() {
             lastCertCheck = std::chrono::steady_clock::now();
         }
         
-        // ── Check for inbound POLICY_UPDATE from Manager ──────────────────
+        // ── Check for inbound POLICY_UPDATE or MODULE_COMMAND from Manager ──
         // tryReadInbound uses SSL_pending() - zero CPU when nothing is queued.
         if (managementSender_) {
             auto* tlsSender = dynamic_cast<TlsSender*>(managementSender_.get());
             if (tlsSender && tlsSender->isConnected()) {
                 nlohmann::json cmd;
                 while (tlsSender->tryReadInbound(cmd)) {
-                    std::string policyType = cmd.value("policyType", "");
-                    if (!policyType.empty() && policyManager_) {
-                        LOG_INFO("POLICY_UPDATE received: type={}", policyType);
-                        // policyData arrives as a JSON-encoded string — parse it back
-                        nlohmann::json policyData;
-                        auto raw = cmd.value("policyData", std::string{});
-                        if (!raw.empty()) {
-                            policyData = nlohmann::json::parse(raw, nullptr, false);
-                            if (policyData.is_discarded()) policyData = nlohmann::json{};
-                        }
-                        bool applied = policyManager_->handlePolicyUpdate(policyType, policyData);
+                    std::string msgType = cmd.value("_msgType", "policy_update");
 
-                        // Send ACK back to Manager so it knows the outcome
-                        tlsSender->sendPolicyAck(
-                            agentId, policyType, applied,
-                            applied ? "Policy applied successfully" : "Policy apply failed");
+                    if (msgType == "module_command" && moduleController_) {
+                        // ── MODULE_COMMAND: delegate to ModuleController ──
+                        try {
+                            ModuleCommand mc = cmd.get<ModuleCommand>();
+                            LOG_INFO("MODULE_COMMAND received: verb={} commandId={}",
+                                     mc.verb, mc.commandId);
+                            auto result = moduleController_->execute(mc);
+                            tlsSender->sendModuleCommandResult(agentId, result);
+                        } catch (const std::exception& e) {
+                            LOG_ERROR("Failed to parse MODULE_COMMAND: {}", e.what());
+                        }
+
+                    } else {
+                        // ── POLICY_UPDATE: existing path ──
+                        std::string policyType = cmd.value("policyType", "");
+                        if (!policyType.empty() && policyManager_) {
+                            LOG_INFO("POLICY_UPDATE received: type={}", policyType);
+                            nlohmann::json policyData;
+                            auto raw = cmd.value("policyData", std::string{});
+                            if (!raw.empty()) {
+                                policyData = nlohmann::json::parse(raw, nullptr, false);
+                                if (policyData.is_discarded()) policyData = nlohmann::json{};
+                            }
+                            bool applied = policyManager_->handlePolicyUpdate(policyType, policyData);
+
+                            // Send ACK back to Manager so it knows the outcome
+                            tlsSender->sendPolicyAck(
+                                agentId, policyType, applied,
+                                applied ? "Policy applied successfully" : "Policy apply failed");
+                        }
                     }
                 }
             }
@@ -761,28 +934,128 @@ void Agent::writeStatusFile() {
 
         nlohmann::json status;
         status["status"] = licenseSuspended_ ? "suspended" : (running_.load() ? "running" : "stopped");
+        status["phase"] = agentPhase_;
+        status["lastError"] = lastError_;
+
+        // ── Connection info ──
+        {
+            nlohmann::json conn;
+            if (managementSender_) {
+                conn["mTLS"] = managementSender_->isConnected() ? "connected" : "disconnected";
+            } else {
+                conn["mTLS"] = "not_configured";
+            }
+            conn["telemetry"] = telemetrySender_ ? (telemetrySender_->isConnected() ? "connected" : "disconnected") : "not_configured";
+
+            // Read manager host:port from cached config
+            if (useRegistration_ && !configPath_.empty()) {
+                try {
+                    std::ifstream cfgFile(configPath_);
+                    if (cfgFile) {
+                        nlohmann::json cfgJson;
+                        cfgFile >> cfgJson;
+                        if (cfgJson.contains("manager")) {
+                            auto& mgr = cfgJson["manager"];
+                            conn["managerHost"] = mgr.value("host", "localhost") + ":" + std::to_string(mgr.value("port", 1514));
+                        }
+                    }
+                } catch (...) {}
+            }
+            status["connection"] = conn;
+        }
+
+        // ── Component statuses ──
+        {
+            nlohmann::json components;
+
+            // Event Collector
+            if (collector_) {
+                nlohmann::json ec;
+                ec["status"] = "running";
+                ec["eventsCollected"] = collector_->getEventsCollected();
+                ec["eventsFiltered"] = collector_->getEventsFiltered();
+                components["eventCollector"] = ec;
+            }
+
+            // Batch Sender
+            if (batchSender_) {
+                nlohmann::json bs;
+                bs["status"] = batchSender_->isRunning() ? "running" : "stopped";
+                bs["eventsSent"] = batchSender_->getEventsSent();
+                bs["batchesSent"] = batchSender_->getBatchesSent();
+                bs["eventsBuffered"] = buffer_ ? buffer_->getEventCount() : 0;
+                components["batchSender"] = bs;
+            }
+
+            // FIM
+            if (fimMonitor_) {
+                nlohmann::json fim;
+                fim["status"] = "running";
+                components["fim"] = fim;
+            }
+
+            // System Info
+            if (sysInfoCollector_) {
+                nlohmann::json si;
+                si["status"] = "idle";
+                si["intervalHours"] = sysInfoInterval_.count();
+                components["sysInfo"] = si;
+            }
+
+            status["components"] = components;
+        }
+
+        // ── Worker subprocess statuses ──
+        {
+            nlohmann::json workers;
+            auto addWorker = [&](const std::string& name) {
+                nlohmann::json w;
+                if (workerManager_ && workerManager_->isRunning(name)) {
+                    w["status"] = "running";
+                } else {
+                    w["status"] = "idle";
+                }
+                workers[name] = w;
+            };
+
+            auto& config = ConfigManager::instance();
+            if (config.getWebBlockConfig().enabled)  addWorker("rp-webblock");
+            if (config.getAppBlockConfig().enabled)  addWorker("rp-softblock");
+            if (config.getPatchConfig().enabled)      addWorker("rp-patch");
+            // antivirus is always shown as on-demand if workers exist
+            addWorker("rp-antivirus");
+
+            status["workers"] = workers;
+        }
+
+        // ── License info (structured) ──
+        {
+            nlohmann::json lic;
+            lic["suspended"] = licenseSuspended_;
+            lic["message"] = licenseMessage_;
+            lic["type"] = licenseType_;
+            lic["expiry"] = licenseExpiry_;
+            status["license"] = lic;
+        }
+
+        // ── Cert info ──
+        if (certStore_) {
+            nlohmann::json cert;
+            int daysLeft = certStore_->daysUntilExpiry();
+            cert["daysLeft"] = daysLeft;
+            cert["renewable"] = (daysLeft > 0 && daysLeft <= 30);
+            status["cert"] = cert;
+        }
+
+        // ── Legacy fields (backward compat with existing GUI) ──
         status["licenseSuspended"] = licenseSuspended_;
         status["licenseMessage"] = licenseMessage_;
         status["licenseType"] = licenseType_;
         status["licenseExpiry"] = licenseExpiry_;
-        status["lastError"] = lastError_;
-
-        // Cert info
-        if (certStore_) {
-            int daysLeft = certStore_->daysUntilExpiry();
-            status["certDaysLeft"] = daysLeft;
-        }
-
-        // Stats
         status["eventsCollected"] = collector_ ? collector_->getEventsCollected() : 0;
         status["eventsSent"] = batchSender_ ? batchSender_->getEventsSent() : 0;
-
-        // Security worker subprocess status
-        if (workerManager_) {
-            nlohmann::json workers;
-            workers["rp-webblock"]  = workerManager_->isRunning("rp-webblock");
-            workers["rp-softblock"] = workerManager_->isRunning("rp-softblock");
-            status["workers"] = workers;
+        if (certStore_) {
+            status["certDaysLeft"] = certStore_->daysUntilExpiry();
         }
 
         // Timestamp

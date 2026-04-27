@@ -47,6 +47,11 @@ int main(int argc, char* argv[]) {
         std::string arg = argv[i];
         if ((arg == "--db" || arg == "-d") && i + 1 < argc) {
             dbConnString = argv[++i];
+            // If the caller didn't include a password, still append from env
+            if (dbConnString.find("password") == std::string::npos && envDbPass) {
+                dbConnString += " password=";
+                dbConnString += envDbPass;
+            }
         } else if ((arg == "--ca-dir") && i + 1 < argc) {
             caDir = argv[++i];
         } else if ((arg == "--port" || arg == "-p") && i + 1 < argc) {
@@ -56,6 +61,7 @@ int main(int argc, char* argv[]) {
             std::cout << "Usage: " << argv[0] << " [options]" << std::endl;
             std::cout << "Options:" << std::endl;
             std::cout << "  --db, -d CONN      PostgreSQL connection string" << std::endl;
+            std::cout << "                     (DB_PASSWORD env var appended if password= absent)" << std::endl;
             std::cout << "  --ca-dir DIR       CA directory (default: ca)" << std::endl;
             std::cout << "  --port, -p PORT    Listen port (default: 1514)" << std::endl;
             std::cout << "  --help, -h         Show this help" << std::endl;

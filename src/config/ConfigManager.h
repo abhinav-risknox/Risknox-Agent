@@ -67,6 +67,15 @@ struct PatchConfigData {
     std::vector<std::string> exclude_kbs;
 };
 
+struct AntivirusConfigData {
+    bool enabled = false;
+    bool auto_scan = false;              // run scheduled scans automatically
+    int scan_interval_hours = 24;        // how often
+    bool auto_update_definitions = true; // run freshclam before each scan
+    int update_interval_hours = 12;      // how often to update defs independently
+    std::vector<std::string> scan_paths; // paths to scan (defaults to C:\Users)
+};
+
 struct WebBlockConfigData {
     bool enabled = false;
 };
@@ -103,6 +112,7 @@ public:
     const PatchConfigData& getPatchConfig() const { return patchConfig_; }
     const WebBlockConfigData& getWebBlockConfig() const { return webBlockConfig_; }
     const AppBlockConfigData& getAppBlockConfig() const { return appBlockConfig_; }
+    const AntivirusConfigData& getAntivirusConfig() const { return avConfig_; }
     
     // Check if an event should be collected
     bool shouldCollectEvent(const std::string& channel, int eventId) const;
@@ -133,6 +143,7 @@ private:
     PatchConfigData patchConfig_;
     WebBlockConfigData webBlockConfig_;
     AppBlockConfigData appBlockConfig_;
+    AntivirusConfigData avConfig_;
 };
 
 } // namespace ResolutePulse

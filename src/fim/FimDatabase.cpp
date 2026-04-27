@@ -241,4 +241,41 @@ void FimDatabase::close() {
     }
 }
 
+bool FimDatabase::beginTransaction() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!db_) return false;
+    char* errMsg = nullptr;
+    int rc = sqlite3_exec(db_, "BEGIN IMMEDIATE;", nullptr, nullptr, &errMsg);
+    if (rc != SQLITE_OK) {
+        LOG_ERROR("FimDatabase: BEGIN IMMEDIATE failed: {}",
+                  errMsg ? errMsg : sqlite3_errmsg(db_));
+        if (errMsg) sqlite3_free(errMsg);
+        return false;
+    }
+    return true;
+}
+
+bool FimDatabase::commitTransaction() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!db_) return false;
+    char* errMsg = nullptr;
+    int rc = sqlite3_exec(db_, "COMMIT;", nullptr, nullptr, &errMsg);
+    if (rc != SQLITE_OK) {
+        LOG_ERROR("FimDatabase: COMMIT failed: {}",
+                  errMsg ? errMsg : sqlite3_errmsg(db_));
+        if (errMsg) sqlite3_free(errMsg);
+        return false;
+    }
+    return true;
+}
+
+bool FimDatabase::rollbackTransaction() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!db_) return false;
+    char* errMsg = nullptr;
+    sqlite3_exec(db_, "ROLLBACK;", nullptr, nullptr, &errMsg);
+    if (errMsg) sqlite3_free(errMsg);
+    return true;
+}
+
 } // namespace ResolutePulse

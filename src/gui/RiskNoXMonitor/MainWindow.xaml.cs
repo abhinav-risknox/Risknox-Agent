@@ -4,6 +4,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.ServiceProcess;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -39,6 +40,7 @@ namespace RisknoxMonitor
         {
             UpdateStatus();
             UpdateLicenseStatus();
+            UpdateComponentsStatus();
             if (LogViewerGrid.Visibility == Visibility.Visible)
             {
                 RefreshLogs();
@@ -146,6 +148,29 @@ namespace RisknoxMonitor
                     {
                         ErrorBanner.Visibility = Visibility.Collapsed;
                     }
+
+                    // Phase display in hero area
+                    string phase = root.TryGetProperty("phase", out var phaseProp) ? phaseProp.GetString() ?? "" : "";
+                    if (!string.IsNullOrEmpty(phase) && phase != "operational")
+                    {
+                        string phaseDisplay = phase switch
+                        {
+                            "initializing" => "⚙ Initializing...",
+                            "registering" => "🔑 Registering...",
+                            "connecting" => "🔌 Connecting...",
+                            "starting" => "▶ Starting...",
+                            "initialized" => "✅ Initialized",
+                            "suspended" => "⚠ Suspended",
+                            "degraded" => "⚠ Degraded",
+                            "stopping" => "⏹ Stopping...",
+                            _ => phase
+                        };
+                        TxtPhase.Text = phaseDisplay;
+                    }
+                    else
+                    {
+                        TxtPhase.Text = "";
+                    }
                 }
                 else
                 {
@@ -202,6 +227,208 @@ namespace RisknoxMonitor
                 TxtExpiry.Text = "Error";
                 TxtExpiry.Foreground = _colorRed;
             }
+        }
+
+        private void UpdateComponentsStatus()
+        {
+            try
+            {
+                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                string[] possiblePaths = new string[]
+                {
+                    Path.Combine(baseDir, "status.json"),
+                    Path.Combine(baseDir, "..", "..", "..", "..", "..", "build", "status.json"),
+                    Path.Combine(baseDir, "..", "..", "..", "..", "build", "status.json"),
+                    @"C:\Users\User\Desktop\Agent\build\status.json"
+                };
+
+                string statusPath = "";
+                foreach (var p in possiblePaths)
+                {
+                    if (File.Exists(p)) { statusPath = p; break; }
+                }
+
+                if (string.IsNullOrEmpty(statusPath))
+                {
+                    ComponentsCard.Visibility = Visibility.Collapsed;
+                    return;
+                }
+
+                string json;
+                using (var fs = new FileStream(statusPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                using (var sr = new StreamReader(fs))
+                {
+                    json = sr.ReadToEnd();
+                }
+
+                using var doc = System.Text.Json.JsonDocument.Parse(json);
+                var root = doc.RootElement;
+
+                // Only show components card when enriched status is present
+                if (!root.TryGetProperty("components", out var comps) &&
+                    !root.TryGetProperty("connection", out _) &&
+                    !root.TryGetProperty("workers", out _))
+                {
+                    ComponentsCard.Visibility = Visibility.Collapsed;
+                    return;
+                }
+
+                ComponentsCard.Visibility = Visibility.Visible;
+                ComponentRows.Children.Clear();
+
+                // Connection rows
+                if (root.TryGetProperty("connection", out var connEl))
+                {
+                    if (connEl.TryGetProperty("mTLS", out var mtlsProp) && mtlsProp.GetString() != "not_configured")
+                    {
+                        string mtlsStatus = mtlsProp.GetString() ?? "disconnected";
+                        string label = "mTLS Connection";
+                        if (connEl.TryGetProperty("managerHost", out var hostProp))
+                            label = $"mTLS  →  {hostProp.GetString()}";
+                        AddComponentRow(label, mtlsStatus);
+                    }
+
+                    if (connEl.TryGetProperty("telemetry", out var telProp) && telProp.GetString() != "not_configured")
+                    {
+                        AddComponentRow("Telemetry", telProp.GetString() ?? "disconnected");
+                    }
+                }
+
+                // Component rows
+                if (root.TryGetProperty("components", out var compsEl))
+                {
+                    foreach (var comp in compsEl.EnumerateObject())
+                    {
+                        string displayName = comp.Name switch
+                        {
+                            "eventCollector" => "Event Collector",
+                            "batchSender" => "Batch Sender",
+                            "fim" => "File Integrity",
+                            "sysInfo" => "System Info",
+                            _ => comp.Name
+                        };
+
+                        string compStatus = "unknown";
+                        if (comp.Value.TryGetProperty("status", out var csProp))
+                            compStatus = csProp.GetString() ?? "unknown";
+
+                        AddComponentRow(displayName, compStatus);
+                    }
+                }
+
+                // Worker rows (skip legacy boolean format from old agent builds)
+                if (root.TryGetProperty("workers", out var workersEl) &&
+                    workersEl.ValueKind == System.Text.Json.JsonValueKind.Object)
+                {
+                    foreach (var worker in workersEl.EnumerateObject())
+                    {
+                        // Skip legacy format where value is a boolean instead of an object
+                        if (worker.Value.ValueKind != System.Text.Json.JsonValueKind.Object)
+                            continue;
+
+                        string displayName = worker.Name switch
+                        {
+                            "rp-webblock" => "Web Blocking",
+                            "rp-softblock" => "Software Blocking",
+                            "rp-patch" => "Patch Management",
+                            "rp-antivirus" => "Antivirus",
+                            _ => worker.Name
+                        };
+
+                        string wStatus = "idle";
+                        if (worker.Value.TryGetProperty("status", out var wsProp))
+                            wStatus = wsProp.GetString() ?? "idle";
+
+                        AddComponentRow(displayName, wStatus);
+                    }
+                }
+
+                // Hide card if no rows were populated (e.g. old status.json format)
+                if (ComponentRows.Children.Count == 0)
+                {
+                    ComponentsCard.Visibility = Visibility.Collapsed;
+                }
+            }
+            catch
+            {
+                // Silently ignore — the card stays in its last known state
+            }
+        }
+
+        private void AddComponentRow(string label, string status)
+        {
+            // Determine dot color and display text
+            Brush dotColor;
+            string displayStatus;
+
+            switch (status.ToLowerInvariant())
+            {
+                case "running":
+                case "connected":
+                case "active":
+                    dotColor = (Brush)new BrushConverter().ConvertFromString("#4CAF50")!;
+                    displayStatus = status == "connected" ? "Connected" : "Running";
+                    break;
+                case "idle":
+                case "starting":
+                    dotColor = _colorLimeCream;
+                    displayStatus = status == "idle" ? "Idle" : "Starting";
+                    break;
+                case "stopped":
+                case "disconnected":
+                case "error":
+                    dotColor = _colorRed;
+                    displayStatus = status == "disconnected" ? "Disconnected" : status == "error" ? "Error" : "Stopped";
+                    break;
+                case "degraded":
+                case "suspended":
+                    dotColor = _colorOrange;
+                    displayStatus = status == "suspended" ? "Suspended" : "Degraded";
+                    break;
+                default:
+                    dotColor = _colorPlatinum;
+                    displayStatus = status;
+                    break;
+            }
+
+            var row = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var labelText = new TextBlock
+            {
+                Text = label,
+                Foreground = (Brush)new BrushConverter().ConvertFromString("#A0A0A0")!,
+                FontSize = 12,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(labelText, 0);
+
+            var statusPanel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            var dot = new System.Windows.Shapes.Ellipse
+            {
+                Width = 8,
+                Height = 8,
+                Fill = dotColor,
+                Margin = new Thickness(0, 0, 6, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            var statusText = new TextBlock
+            {
+                Text = displayStatus,
+                Foreground = (Brush)new BrushConverter().ConvertFromString("#FFFFFF")!,
+                FontSize = 12,
+                FontWeight = FontWeights.Medium,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            statusPanel.Children.Add(dot);
+            statusPanel.Children.Add(statusText);
+            Grid.SetColumn(statusPanel, 1);
+
+            row.Children.Add(labelText);
+            row.Children.Add(statusPanel);
+
+            ComponentRows.Children.Add(row);
         }
 
         private void UpdateStatus()

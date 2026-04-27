@@ -48,10 +48,20 @@ public:
     // Send a license check to the manager
     SendResult checkLicense(const std::string& agentId);
 
-    // Send a status report back to the manager
+    // Send a status report back to the manager (called from the management thread only)
     SendResult sendStatusReport(const std::string& agentId,
                                 const std::string& reportType,
                                 const nlohmann::json& reportData);
+
+    // Thread-safe: enqueue a status report to be sent by the management loop thread.
+    // Safe to call from any background thread (avScanLoop, sysInfoLoop, etc.).
+    void enqueueStatusReport(const std::string& agentId,
+                             const std::string& reportType,
+                             const nlohmann::json& reportData);
+
+    // Drain the pending status report queue. Called by managementLoop on each tick.
+    // Returns the number of reports sent.
+    int flushPendingStatusReports();
 
     // Send a policy update acknowledgement back to the manager
     SendResult sendPolicyAck(const std::string& agentId,
@@ -59,14 +69,19 @@ public:
                              bool applied,
                              const std::string& message);
 
+    // Send the result of a MODULE_COMMAND back to the manager
+    SendResult sendModuleCommandResult(const std::string& agentId,
+                                       const ModuleCommandResult& result);
+
     // Check if connected via mTLS
     bool isConnected() const override { return connected_.load(); }
 
     // Disconnect
     void disconnect();
 
-    // Try to read an inbound POLICY_UPDATE from the Manager (non-blocking).
-    // Returns true and populates `out` if a message was available.
+    // Try to read an inbound POLICY_UPDATE or MODULE_COMMAND from the Manager
+    // (non-blocking). Returns true and populates `out` if a message was available.
+    // The caller must check out["_msgType"] to distinguish the two.
     // Returns false immediately if no data is pending.
     bool tryReadInbound(nlohmann::json& out);
 
@@ -131,8 +146,17 @@ private:
     std::atomic<uint64_t> failedSends_{0};
     std::atomic<uint64_t> reconnections_{0};
 
-    // Queue for POLICY_UPDATE messages that arrived while waiting for an ACK
+    // Queue for POLICY_UPDATE / MODULE_COMMAND messages arriving while waiting for an ACK
     std::queue<nlohmann::json> pendingInbound_;
+
+    // Thread-safe outbound queue: background threads post here, management loop drains it
+    struct PendingReport {
+        std::string agentId;
+        std::string reportType;
+        nlohmann::json data;
+    };
+    std::queue<PendingReport> pendingReports_;
+    std::mutex                pendingReportsMutex_;
 
     static constexpr int MAX_RECONNECT_ATTEMPTS = 3;
     static constexpr int CONNECT_TIMEOUT_MS = 5000;

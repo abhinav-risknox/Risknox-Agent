@@ -89,6 +89,25 @@ bool AgentHandler::handleConnection(SSL* ssl, const std::string& clientAddr, boo
             break;
         }
 
+        case MessageType::MODULE_COMMAND_RESULT: {
+            if (!hasClientCert) {
+                LOG_WARN("MODULE_COMMAND_RESULT from unauthenticated client {}", clientAddr);
+                return false;
+            }
+            std::string agentId = extractAgentIdFromCert(ssl);
+            try {
+                auto j      = nlohmann::json::parse(payload);
+                auto result = j.get<ModuleCommandResult>();
+                LOG_INFO("MODULE_COMMAND_RESULT: agent={} verb={} commandId={} status={}",
+                         agentId, result.verb, result.commandId, result.status);
+                // Persist the ACK outcome to the audit log
+                db_.updateCommandAck(result.commandId, result.status, result.output);
+            } catch (const std::exception& e) {
+                LOG_ERROR("Failed to parse MODULE_COMMAND_RESULT from {}: {}", agentId, e.what());
+            }
+            break;
+        }
+
         default:
             LOG_WARN("Unknown message type 0x{:02X} from {}", header.type, clientAddr);
             return false;
@@ -487,6 +506,28 @@ bool AgentHandler::pushPolicyUpdate(SSL* ssl, const std::string& agentId,
 
     return sslSendMessage(ssl, MessageType::POLICY_UPDATE,
                           nlohmann::json(update).dump());
+}
+
+bool AgentHandler::pushModuleCommand(SSL* ssl, const std::string& agentId,
+                                      const std::string& commandId,
+                                      const std::string& verb,
+                                      const nlohmann::json& params) {
+    LOG_INFO("Pushing MODULE_COMMAND to agent {}: verb={} commandId={}",
+             agentId, verb, commandId);
+
+    ModuleCommand cmd;
+    cmd.commandId = commandId;
+    cmd.agentId   = agentId;
+    cmd.verb      = verb;
+    cmd.params    = params;
+
+    time_t now = time(nullptr);
+    char buf[64];
+    strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+    cmd.timestamp = buf;
+
+    return sslSendMessage(ssl, MessageType::MODULE_COMMAND,
+                          nlohmann::json(cmd).dump());
 }
 
 } // namespace ResolutePulse

@@ -1,0 +1,283 @@
+#pragma once
+
+// ModuleController.h
+// Handles MODULE_COMMAND verbs sent from the Manager and executes them
+// against live agent subsystems.  All verbs return a ModuleCommandResult
+// that is sent back to the Manager via MODULE_COMMAND_RESULT.
+//
+// Supported verbs:
+//   collector_start   - Resume event collection + batch sender
+//   collector_stop    - Pause event collection + batch sender
+//   fim_start         - Resume FIM monitoring
+//   fim_stop          - Pause FIM monitoring
+//   worker_restart    - Stop + re-spawn all persistent worker subprocesses
+//   status_request    - Force an immediate status flush and STATUS_REPORT
+//   diagnostics       - Return live counters + last log lines
+//   config_push       - Accept a new JSON config section, persist, apply
+//   agent_restart     - Schedule a graceful restart (sets flag for run() loop)
+
+#include "collector/EventCollector.h"
+#include "sender/BatchSender.h"
+#include "fim/FimMonitor.h"
+#include "workers/WorkerManager.h"
+#include "utils/Logger.h"
+#include "common/Protocol.h"
+
+#include <nlohmann/json.hpp>
+#include <string>
+#include <functional>
+#include <atomic>
+#include <fstream>
+#include <filesystem>
+#include <chrono>
+
+namespace ResolutePulse {
+
+class ModuleController {
+public:
+    // Callbacks wired by Agent after construction
+    using StatusFlushFn  = std::function<void()>;          // Force a status.json flush
+    using StatusReportFn = std::function<void()>;          // Send STATUS_REPORT via mTLS
+
+    ModuleController() = default;
+
+    // Wire the live subsystem pointers (any may be nullptr if not enabled)
+    void setCollector(EventCollector* c)    { collector_   = c; }
+    void setBatchSender(BatchSender* bs)    { batchSender_ = bs; }
+    void setFimMonitor(FimMonitor* fim)     { fimMonitor_  = fim; }
+    void setWorkerManager(WorkerManager* wm){ workerManager_ = wm; }
+
+    // Callbacks
+    void setStatusFlushCallback(StatusFlushFn fn)   { statusFlushCb_  = std::move(fn); }
+    void setStatusReportCallback(StatusReportFn fn) { statusReportCb_ = std::move(fn); }
+
+    // Set the agent config file path (for config_push)
+    void setConfigPath(const std::string& p) { configPath_ = p; }
+    // Set the agent ID (echoed in results)
+    void setAgentId(const std::string& id)   { agentId_ = id; }
+
+    // Set path to the persistent workers exe directory (for worker_restart)
+    void setWorkerExeDir(const std::string& d) { workerExeDir_ = d; }
+
+    // Whether an agent restart was requested via the 'agent_restart' verb
+    bool restartRequested() const { return restartRequested_.load(); }
+    void clearRestartRequest()    { restartRequested_ = false; }
+
+    // Execute a MODULE_COMMAND and return the result.
+    // This is called from the management loop on the management thread.
+    ModuleCommandResult execute(const ModuleCommand& cmd) {
+        LOG_INFO("ModuleController: verb={} commandId={}", cmd.verb, cmd.commandId);
+
+        ModuleCommandResult result;
+        result.commandId = cmd.commandId;
+        result.agentId   = agentId_;
+        result.verb      = cmd.verb;
+        result.timestamp = currentTimestamp();
+
+        if      (cmd.verb == "collector_start")  handleCollectorStart(result);
+        else if (cmd.verb == "collector_stop")   handleCollectorStop(result);
+        else if (cmd.verb == "fim_start")        handleFimStart(result);
+        else if (cmd.verb == "fim_stop")         handleFimStop(result);
+        else if (cmd.verb == "worker_restart")   handleWorkerRestart(result);
+        else if (cmd.verb == "status_request")   handleStatusRequest(result);
+        else if (cmd.verb == "diagnostics")      handleDiagnostics(result);
+        else if (cmd.verb == "config_push")      handleConfigPush(cmd.params, result);
+        else if (cmd.verb == "agent_restart")    handleAgentRestart(result);
+        else {
+            result.status = "unsupported";
+            result.output = "Unknown verb: " + cmd.verb;
+            LOG_WARN("ModuleController: unknown verb '{}'", cmd.verb);
+        }
+
+        return result;
+    }
+
+private:
+    // ── Verb handlers ────────────────────────────────────────────
+
+    void handleCollectorStart(ModuleCommandResult& r) {
+        if (!collector_ || !batchSender_) {
+            r.status = "failed";
+            r.output = "Event collector not initialised";
+            return;
+        }
+        collector_->start();
+        batchSender_->start();
+        r.status = "success";
+        r.output = "Event collection resumed";
+        if (statusFlushCb_) statusFlushCb_();
+        LOG_INFO("ModuleController: event collection started by Manager command");
+    }
+
+    void handleCollectorStop(ModuleCommandResult& r) {
+        if (!collector_ || !batchSender_) {
+            r.status = "failed";
+            r.output = "Event collector not initialised";
+            return;
+        }
+        collector_->stop();
+        batchSender_->stop();
+        r.status = "success";
+        r.output = "Event collection paused";
+        if (statusFlushCb_) statusFlushCb_();
+        LOG_INFO("ModuleController: event collection stopped by Manager command");
+    }
+
+    void handleFimStart(ModuleCommandResult& r) {
+        if (!fimMonitor_) {
+            r.status = "failed";
+            r.output = "FIM monitor not initialised";
+            return;
+        }
+        fimMonitor_->start();
+        r.status = "success";
+        r.output = "FIM monitoring resumed";
+        if (statusFlushCb_) statusFlushCb_();
+        LOG_INFO("ModuleController: FIM started by Manager command");
+    }
+
+    void handleFimStop(ModuleCommandResult& r) {
+        if (!fimMonitor_) {
+            r.status = "failed";
+            r.output = "FIM monitor not initialised";
+            return;
+        }
+        fimMonitor_->stop();
+        r.status = "success";
+        r.output = "FIM monitoring paused";
+        if (statusFlushCb_) statusFlushCb_();
+        LOG_INFO("ModuleController: FIM stopped by Manager command");
+    }
+
+    void handleWorkerRestart(ModuleCommandResult& r) {
+        if (!workerManager_) {
+            r.status = "failed";
+            r.output = "WorkerManager not initialised";
+            return;
+        }
+        workerManager_->stopAll();
+        // Re-spawn persistent workers from the configured exe directory
+        std::string dir = workerExeDir_.empty() ? "" : (workerExeDir_ + "/");
+        bool wb = workerManager_->spawnWorker(dir + "rp-webblock.exe",  "rp-webblock",  true);
+        bool sb = workerManager_->spawnWorker(dir + "rp-softblock.exe", "rp-softblock", true);
+        r.status = (wb && sb) ? "success" : "failed";
+        r.output = "rp-webblock=" + std::string(wb ? "ok" : "fail")
+                 + " rp-softblock=" + std::string(sb ? "ok" : "fail");
+        if (statusFlushCb_) statusFlushCb_();
+        LOG_INFO("ModuleController: workers restarted by Manager command");
+    }
+
+    void handleStatusRequest(ModuleCommandResult& r) {
+        if (statusFlushCb_)  statusFlushCb_();
+        if (statusReportCb_) statusReportCb_();
+        r.status = "success";
+        r.output = "Status report sent";
+    }
+
+    void handleDiagnostics(ModuleCommandResult& r) {
+        nlohmann::json diag;
+        if (collector_) {
+            diag["eventsCollected"] = collector_->getEventsCollected();
+            diag["eventsFiltered"]  = collector_->getEventsFiltered();
+        }
+        if (batchSender_) {
+            diag["eventsSent"]   = batchSender_->getEventsSent();
+            diag["batchesSent"]  = batchSender_->getBatchesSent();
+            diag["senderRunning"]= batchSender_->isRunning();
+        }
+        if (workerManager_) {
+            diag["workerWebblock"]  = workerManager_->isRunning("rp-webblock");
+            diag["workerSoftblock"] = workerManager_->isRunning("rp-softblock");
+        }
+        if (fimMonitor_) {
+            diag["fimActive"] = true;
+        }
+        r.status = "success";
+        r.output = diag.dump();
+    }
+
+    void handleConfigPush(const nlohmann::json& params, ModuleCommandResult& r) {
+        // params expected: { "section": "patch_management" | "web_blocking" | ...,
+        //                    "config":  { ... section-specific fields ... } }
+        if (!params.contains("section") || !params.contains("config")) {
+            r.status = "failed";
+            r.output = "params must contain 'section' and 'config' keys";
+            return;
+        }
+
+        std::string section = params["section"].get<std::string>();
+        auto newConfig      = params["config"];
+
+        if (configPath_.empty() || !std::filesystem::exists(configPath_)) {
+            r.status = "failed";
+            r.output = "config.json path not accessible";
+            return;
+        }
+
+        try {
+            // Read current config
+            nlohmann::json fullConfig;
+            {
+                std::ifstream in(configPath_);
+                in >> fullConfig;
+            }
+
+            // Merge the pushed section (shallow merge: new keys override, extra keys kept)
+            if (!fullConfig.contains(section)) {
+                fullConfig[section] = nlohmann::json::object();
+            }
+            for (auto& [k, v] : newConfig.items()) {
+                fullConfig[section][k] = v;
+            }
+
+            // Write atomically
+            std::string tmp = configPath_ + ".tmp";
+            {
+                std::ofstream out(tmp);
+                out << fullConfig.dump(4);
+            }
+            std::filesystem::rename(tmp, configPath_);
+
+            r.status = "success";
+            r.output = "Section '" + section + "' updated. Agent will use new config on next reload.";
+            LOG_INFO("ModuleController: config section '{}' updated by Manager", section);
+        } catch (const std::exception& e) {
+            r.status = "failed";
+            r.output = std::string("config_push failed: ") + e.what();
+            LOG_ERROR("ModuleController: config_push failed: {}", e.what());
+        }
+    }
+
+    void handleAgentRestart(ModuleCommandResult& r) {
+        restartRequested_ = true;
+        r.status = "success";
+        r.output = "Agent restart scheduled";
+        LOG_WARN("ModuleController: graceful restart requested by Manager");
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────
+
+    static std::string currentTimestamp() {
+        time_t now = time(nullptr);
+        char buf[32];
+        strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+        return std::string(buf);
+    }
+
+    // Subsystem pointers (not owned)
+    EventCollector*  collector_    = nullptr;
+    BatchSender*     batchSender_  = nullptr;
+    FimMonitor*      fimMonitor_   = nullptr;
+    WorkerManager*   workerManager_= nullptr;
+
+    StatusFlushFn  statusFlushCb_;
+    StatusReportFn statusReportCb_;
+
+    std::string configPath_;
+    std::string agentId_;
+    std::string workerExeDir_;
+
+    std::atomic<bool> restartRequested_{false};
+};
+
+} // namespace ResolutePulse

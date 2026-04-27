@@ -53,7 +53,14 @@ public:
     void close();
     
     bool isInitialized() const { return db_ != nullptr; }
-    
+
+    // Transaction helpers for bulk writes.
+    // BEGIN IMMEDIATE acquires the write lock upfront, preventing
+    // the USN callback thread from stealing it mid-scan.
+    bool beginTransaction();
+    bool commitTransaction();
+    bool rollbackTransaction();
+
 private:
     bool createSchema();
     bool prepareStatements();
