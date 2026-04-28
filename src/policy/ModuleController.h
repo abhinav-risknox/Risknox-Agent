@@ -15,6 +15,8 @@
 //   diagnostics       - Return live counters + last log lines
 //   config_push       - Accept a new JSON config section, persist, apply
 //   agent_restart     - Schedule a graceful restart (sets flag for run() loop)
+//   av_update         - Trigger on-demand freshclam update via rp-antivirus
+//   av_version        - Query ClamAV DB metadata via rp-antivirus
 
 #include "collector/EventCollector.h"
 #include "sender/BatchSender.h"
@@ -30,6 +32,7 @@
 #include <fstream>
 #include <filesystem>
 #include <chrono>
+#include <windows.h>
 
 namespace ResolutePulse {
 
@@ -83,6 +86,8 @@ public:
         else if (cmd.verb == "diagnostics")      handleDiagnostics(result);
         else if (cmd.verb == "config_push")      handleConfigPush(cmd.params, result);
         else if (cmd.verb == "agent_restart")    handleAgentRestart(result);
+        else if (cmd.verb == "av_update")        handleAvUpdate(result);
+        else if (cmd.verb == "av_version")       handleAvVersion(result);
         else {
             result.status = "unsupported";
             result.output = "Unknown verb: " + cmd.verb;
@@ -253,6 +258,79 @@ private:
         r.status = "success";
         r.output = "Agent restart scheduled";
         LOG_WARN("ModuleController: graceful restart requested by Manager");
+    }
+
+    void handleAvUpdate(ModuleCommandResult& r) {
+        auto resp = runAntivirusAction({{"action", "update_definitions"}}, 10 * 60 * 1000);
+        bool ok = resp.value("success", false);
+        r.status = ok ? "success" : "failed";
+        r.output = resp.dump();
+    }
+
+    void handleAvVersion(ModuleCommandResult& r) {
+        auto resp = runAntivirusAction({{"action", "database_info"}}, 30000);
+        bool ok = resp.value("success", false);
+        r.status = ok ? "success" : "failed";
+        r.output = resp.dump();
+    }
+
+    nlohmann::json runAntivirusAction(const nlohmann::json& actionCmd, DWORD timeoutMs) {
+        if (!workerManager_) {
+            return {
+                {"type", "complete"},
+                {"success", false},
+                {"error", "WorkerManager not initialised"},
+                {"action", actionCmd.value("action", "")}
+            };
+        }
+
+        std::string exe = workerExeDir_.empty()
+            ? "rp-antivirus.exe"
+            : (workerExeDir_ + "/rp-antivirus.exe");
+
+        if (!workerManager_->spawnWorker(exe, "rp-antivirus", /*persistent=*/false)) {
+            return {
+                {"type", "complete"},
+                {"success", false},
+                {"error", "Failed to spawn rp-antivirus.exe"},
+                {"action", actionCmd.value("action", "")}
+            };
+        }
+
+        nlohmann::json terminalEvent;
+        bool gotTerminalEvent = false;
+
+        workerManager_->streamEvents(
+            "rp-antivirus",
+            actionCmd,
+            [&](const nlohmann::json& event) {
+                std::string type = event.value("type", "");
+                if (type == "complete" || type == "error") {
+                    terminalEvent = event;
+                    gotTerminalEvent = true;
+                }
+            },
+            timeoutMs);
+
+        if (!gotTerminalEvent) {
+            return {
+                {"type", "complete"},
+                {"success", false},
+                {"error", "Timeout waiting for rp-antivirus response"},
+                {"action", actionCmd.value("action", "")}
+            };
+        }
+
+        if (terminalEvent.value("type", "") == "error") {
+            return {
+                {"type", "complete"},
+                {"success", false},
+                {"error", terminalEvent.value("message", "worker error")},
+                {"action", actionCmd.value("action", "")}
+            };
+        }
+
+        return terminalEvent;
     }
 
     // ── Helpers ──────────────────────────────────────────────────

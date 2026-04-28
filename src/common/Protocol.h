@@ -160,6 +160,7 @@ struct CommandResult {
 // ─────────────────────────────────────────────────────────────
 
 struct PolicyUpdate {
+    std::string commandId;      // Correlation ID echoed back in PolicyUpdateAck
     std::string agentId;
     std::string policyType;     // "patch", "web_blocking", "software_blocking"
     std::string policyData;     // JSON-encoded policy rules
@@ -167,10 +168,11 @@ struct PolicyUpdate {
     std::string policyVersion;  // For conflict resolution
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(PolicyUpdate,
-        agentId, policyType, policyData, timestamp, policyVersion)
+        commandId, agentId, policyType, policyData, timestamp, policyVersion)
 };
 
 struct PolicyUpdateAck {
+    std::string commandId;   // Echoed from PolicyUpdate::commandId for correlation
     std::string agentId;
     std::string policyType;
     bool applied = false;
@@ -178,7 +180,7 @@ struct PolicyUpdateAck {
     std::string timestamp;
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(PolicyUpdateAck,
-        agentId, policyType, applied, message, timestamp)
+        commandId, agentId, policyType, applied, message, timestamp)
 };
 
 struct StatusReport {

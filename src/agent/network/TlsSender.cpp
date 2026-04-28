@@ -651,6 +651,7 @@ int TlsSender::flushPendingStatusReports() {
 }
 
 SendResult TlsSender::sendPolicyAck(const std::string& agentId,
+                                     const std::string& commandId,
                                      const std::string& policyType,
                                      bool applied,
                                      const std::string& message) {
@@ -660,10 +661,11 @@ SendResult TlsSender::sendPolicyAck(const std::string& agentId,
     }
 
     PolicyUpdateAck ack;
-    ack.agentId = agentId;
+    ack.commandId  = commandId;   // echo back for Manager correlation
+    ack.agentId    = agentId;
     ack.policyType = policyType;
-    ack.applied = applied;
-    ack.message = message;
+    ack.applied    = applied;
+    ack.message    = message;
 
     time_t now = time(nullptr);
     char buf[64];
@@ -692,7 +694,7 @@ SendResult TlsSender::sendPolicyAck(const std::string& agentId,
     }
 
     bytesSent_ += MESSAGE_HEADER_SIZE + payload.size();
-    LOG_INFO("Policy ACK sent: type={} applied={}", policyType, applied);
+    LOG_INFO("Policy ACK sent: type={} applied={} commandId={}", policyType, applied, commandId);
     return SendResult::Success;
 }
 

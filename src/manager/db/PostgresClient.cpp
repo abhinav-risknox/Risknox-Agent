@@ -395,50 +395,111 @@ bool PostgresClient::insertLicense(const LicenseRecord& license) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Agent Command Queue
+// Policy Commands (policy_commands table)
 // ─────────────────────────────────────────────────────────────
 
-bool PostgresClient::queueCommand(const std::string& agentId, const std::string& policyType,
-                                   const std::string& policyDataJson) {
+bool PostgresClient::recordPolicyCommand(const std::string& agentId,
+                                          const std::string& commandId,
+                                          const std::string& policyType,
+                                          const std::string& policyDataJson,
+                                          bool pending) {
     if (!isConnected() && !reconnect()) return false;
 
-    const char* paramValues[3] = {
+    const char* paramValues[4] = {
         agentId.c_str(),
+        commandId.c_str(),
         policyType.c_str(),
         policyDataJson.c_str()
     };
 
-    PGresult* res = PQexecParams(conn_,
-        "INSERT INTO agent_commands (agent_id, policy_type, policy_data, status) "
-        "VALUES ($1, $2, $3::jsonb, 'pending')",
-        3, nullptr, paramValues, nullptr, nullptr, 0);
+    // Online dispatch: status='sent', dispatched_at=NOW()
+    // Offline queue:   status='pending', dispatched_at=NULL
+    const char* sql = pending
+        ? "INSERT INTO policy_commands "
+          "  (agent_id, command_id, policy_type, policy_data, status) "
+          "VALUES ($1, $2, $3, $4::jsonb, 'pending')"
+        : "INSERT INTO policy_commands "
+          "  (agent_id, command_id, policy_type, policy_data, status, dispatched_at) "
+          "VALUES ($1, $2, $3, $4::jsonb, 'sent', NOW())";
+
+    PGresult* res = PQexecParams(conn_, sql, 4, nullptr, paramValues, nullptr, nullptr, 0);
 
     bool ok = PQresultStatus(res) == PGRES_COMMAND_OK;
     if (!ok) {
-        lastError_ = "queueCommand failed: " + std::string(PQerrorMessage(conn_));
+        lastError_ = "recordPolicyCommand failed: " + std::string(PQerrorMessage(conn_));
         LOG_ERROR("{}", lastError_);
     } else {
-        LOG_INFO("Queued offline command: agent={} type={}", agentId, policyType);
+        LOG_DEBUG("Recorded policy command: agent={} type={} commandId={} pending={}",
+                  agentId, policyType, commandId, pending);
     }
     PQclear(res);
     return ok;
 }
 
-std::vector<AgentCommand> PostgresClient::fetchPendingCommands(const std::string& agentId) {
-    std::vector<AgentCommand> commands;
+bool PostgresClient::ackPolicyCommand(const std::string& commandId,
+                                       bool applied,
+                                       const std::string& message) {
+    if (!isConnected() && !reconnect()) return false;
+
+    std::string ackStatus = applied ? "applied" : "failed";
+    const char* paramValues[3] = {
+        ackStatus.c_str(),
+        message.c_str(),
+        commandId.c_str()
+    };
+
+    PGresult* res = PQexecParams(conn_,
+        "UPDATE policy_commands "
+        "SET ack_status = $1, ack_message = $2, ack_at = NOW(), status = 'acked' "
+        "WHERE command_id = $3",
+        3, nullptr, paramValues, nullptr, nullptr, 0);
+
+    bool ok = PQresultStatus(res) == PGRES_COMMAND_OK;
+    if (!ok) {
+        lastError_ = "ackPolicyCommand failed: " + std::string(PQerrorMessage(conn_));
+        LOG_ERROR("{}", lastError_);
+    } else {
+        LOG_INFO("Policy ACK recorded: commandId={} status={}", commandId, ackStatus);
+    }
+    PQclear(res);
+    return ok;
+}
+
+bool PostgresClient::markPolicyCommandDispatched(const std::string& commandId) {
+    if (!isConnected() && !reconnect()) return false;
+
+    const char* paramValues[1] = { commandId.c_str() };
+
+    PGresult* res = PQexecParams(conn_,
+        "UPDATE policy_commands "
+        "SET status = 'sent', dispatched_at = NOW() "
+        "WHERE command_id = $1",
+        1, nullptr, paramValues, nullptr, nullptr, 0);
+
+    bool ok = PQresultStatus(res) == PGRES_COMMAND_OK;
+    if (!ok) {
+        lastError_ = "markPolicyCommandDispatched failed: " + std::string(PQerrorMessage(conn_));
+        LOG_ERROR("{}", lastError_);
+    }
+    PQclear(res);
+    return ok;
+}
+
+std::vector<PolicyCommand> PostgresClient::fetchPendingPolicies(const std::string& agentId) {
+    std::vector<PolicyCommand> commands;
     if (!isConnected() && !reconnect()) return commands;
 
     const char* paramValues[1] = { agentId.c_str() };
 
     PGresult* res = PQexecParams(conn_,
-        "SELECT id, agent_id, policy_type, policy_data::text, status, created_at::text "
-        "FROM agent_commands "
+        "SELECT id, agent_id, command_id, policy_type, policy_data::text, status, created_at::text "
+        "FROM policy_commands "
         "WHERE agent_id = $1 AND status = 'pending' "
         "ORDER BY created_at ASC",
         1, nullptr, paramValues, nullptr, nullptr, 0);
 
     if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-        lastError_ = "fetchPendingCommands failed: " + std::string(PQerrorMessage(conn_));
+        lastError_ = "fetchPendingPolicies failed: " + std::string(PQerrorMessage(conn_));
         LOG_ERROR("{}", lastError_);
         PQclear(res);
         return commands;
@@ -447,48 +508,204 @@ std::vector<AgentCommand> PostgresClient::fetchPendingCommands(const std::string
     int rows = PQntuples(res);
     commands.reserve(rows);
     for (int i = 0; i < rows; i++) {
-        AgentCommand cmd;
+        PolicyCommand cmd;
         cmd.id         = std::stoi(PQgetvalue(res, i, 0));
         cmd.agentId    = PQgetvalue(res, i, 1);
-        cmd.policyType = PQgetvalue(res, i, 2);
-        cmd.policyData = PQgetvalue(res, i, 3);
-        cmd.status     = PQgetvalue(res, i, 4);
-        cmd.createdAt  = PQgetisnull(res, i, 5) ? "" : PQgetvalue(res, i, 5);
+        cmd.commandId  = PQgetvalue(res, i, 2);
+        cmd.policyType = PQgetvalue(res, i, 3);
+        cmd.policyData = PQgetvalue(res, i, 4);
+        cmd.status     = PQgetvalue(res, i, 5);
+        cmd.createdAt  = PQgetisnull(res, i, 6) ? "" : PQgetvalue(res, i, 6);
         commands.push_back(std::move(cmd));
     }
 
     PQclear(res);
-    LOG_DEBUG("Fetched {} pending commands for agent {}", commands.size(), agentId);
+    LOG_DEBUG("Fetched {} pending policy commands for agent {}", commands.size(), agentId);
     return commands;
 }
 
-bool PostgresClient::updateCommandStatus(int commandId, const std::string& status,
-                                          const std::string& errorMessage) {
+bool PostgresClient::updatePolicyCommandStatus(const std::string& commandId,
+                                                const std::string& status,
+                                                const std::string& errorMsg) {
     if (!isConnected() && !reconnect()) return false;
 
-    std::string idStr = std::to_string(commandId);
     const char* paramValues[3] = {
         status.c_str(),
-        errorMessage.empty() ? nullptr : errorMessage.c_str(),
-        idStr.c_str()
+        errorMsg.empty() ? nullptr : errorMsg.c_str(),
+        commandId.c_str()
     };
-    int paramLengths[3] = { 0, 0, 0 };
-    int paramFormats[3] = { 0, 0, 0 };
 
     PGresult* res = PQexecParams(conn_,
-        "UPDATE agent_commands "
-        "SET status = $1, error_message = $2, dispatched_at = NOW() "
-        "WHERE id = $3",
-        3, nullptr, paramValues, paramLengths, paramFormats, 0);
+        "UPDATE policy_commands "
+        "SET status = $1, ack_message = COALESCE($2, ack_message) "
+        "WHERE command_id = $3",
+        3, nullptr, paramValues, nullptr, nullptr, 0);
 
     bool ok = PQresultStatus(res) == PGRES_COMMAND_OK;
     if (!ok) {
-        lastError_ = "updateCommandStatus failed: " + std::string(PQerrorMessage(conn_));
+        lastError_ = "updatePolicyCommandStatus failed: " + std::string(PQerrorMessage(conn_));
         LOG_ERROR("{}", lastError_);
     }
     PQclear(res);
     return ok;
 }
+
+// ─────────────────────────────────────────────────────────────
+// Module Commands (module_commands table)
+// ─────────────────────────────────────────────────────────────
+
+bool PostgresClient::recordModuleCommand(const std::string& agentId,
+                                          const std::string& commandId,
+                                          const std::string& verb,
+                                          const std::string& paramsJson,
+                                          bool pending) {
+    if (!isConnected() && !reconnect()) return false;
+
+    const char* paramValues[4] = {
+        agentId.c_str(),
+        commandId.c_str(),
+        verb.c_str(),
+        paramsJson.c_str()
+    };
+
+    const char* sql = pending
+        ? "INSERT INTO module_commands "
+          "  (agent_id, command_id, verb, params, status) "
+          "VALUES ($1, $2, $3, $4::jsonb, 'pending')"
+        : "INSERT INTO module_commands "
+          "  (agent_id, command_id, verb, params, status, dispatched_at) "
+          "VALUES ($1, $2, $3, $4::jsonb, 'sent', NOW())";
+
+    PGresult* res = PQexecParams(conn_, sql, 4, nullptr, paramValues, nullptr, nullptr, 0);
+
+    bool ok = PQresultStatus(res) == PGRES_COMMAND_OK;
+    if (!ok) {
+        lastError_ = "recordModuleCommand failed: " + std::string(PQerrorMessage(conn_));
+        LOG_ERROR("{}", lastError_);
+    } else {
+        LOG_DEBUG("Recorded module command: agent={} verb={} commandId={} pending={}",
+                  agentId, verb, commandId, pending);
+    }
+    PQclear(res);
+    return ok;
+}
+
+bool PostgresClient::markModuleCommandDispatched(const std::string& commandId) {
+    if (!isConnected() && !reconnect()) return false;
+
+    const char* paramValues[1] = { commandId.c_str() };
+
+    PGresult* res = PQexecParams(conn_,
+        "UPDATE module_commands "
+        "SET status = 'sent', dispatched_at = NOW() "
+        "WHERE command_id = $1",
+        1, nullptr, paramValues, nullptr, nullptr, 0);
+
+    bool ok = PQresultStatus(res) == PGRES_COMMAND_OK;
+    if (!ok) {
+        lastError_ = "markModuleCommandDispatched failed: " + std::string(PQerrorMessage(conn_));
+        LOG_ERROR("{}", lastError_);
+    }
+    PQclear(res);
+    return ok;
+}
+
+bool PostgresClient::ackModuleCommand(const std::string& commandId,
+                                       const std::string& ackStatus,
+                                       const std::string& resultPayload) {
+    if (!isConnected() && !reconnect()) return false;
+
+    const char* paramValues[3] = {
+        ackStatus.c_str(),
+        resultPayload.c_str(),
+        commandId.c_str()
+    };
+
+    PGresult* res = PQexecParams(conn_,
+        "UPDATE module_commands "
+        "SET ack_status = $1, result_payload = $2, ack_at = NOW(), status = 'acked' "
+        "WHERE command_id = $3",
+        3, nullptr, paramValues, nullptr, nullptr, 0);
+
+    bool ok = PQresultStatus(res) == PGRES_COMMAND_OK;
+    if (!ok) {
+        lastError_ = "ackModuleCommand failed: " + std::string(PQerrorMessage(conn_));
+        LOG_ERROR("{}", lastError_);
+    } else {
+        LOG_INFO("Command ACK recorded: commandId={} status={}", commandId, ackStatus);
+    }
+    PQclear(res);
+    return ok;
+}
+
+std::vector<ModuleCommandRecord> PostgresClient::fetchPendingModuleCommands(const std::string& agentId) {
+    std::vector<ModuleCommandRecord> commands;
+    if (!isConnected() && !reconnect()) return commands;
+
+    const char* paramValues[1] = { agentId.c_str() };
+
+    PGresult* res = PQexecParams(conn_,
+        "SELECT id, agent_id, command_id, verb, params::text, status, created_at::text "
+        "FROM module_commands "
+        "WHERE agent_id = $1 AND status = 'pending' "
+        "ORDER BY created_at ASC",
+        1, nullptr, paramValues, nullptr, nullptr, 0);
+
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        lastError_ = "fetchPendingModuleCommands failed: " + std::string(PQerrorMessage(conn_));
+        LOG_ERROR("{}", lastError_);
+        PQclear(res);
+        return commands;
+    }
+
+    int rows = PQntuples(res);
+    commands.reserve(rows);
+    for (int i = 0; i < rows; i++) {
+        ModuleCommandRecord cmd;
+        cmd.id        = std::stoi(PQgetvalue(res, i, 0));
+        cmd.agentId   = PQgetvalue(res, i, 1);
+        cmd.commandId = PQgetvalue(res, i, 2);
+        cmd.verb      = PQgetvalue(res, i, 3);
+        cmd.params    = PQgetvalue(res, i, 4);
+        cmd.status    = PQgetvalue(res, i, 5);
+        cmd.createdAt = PQgetisnull(res, i, 6) ? "" : PQgetvalue(res, i, 6);
+        commands.push_back(std::move(cmd));
+    }
+
+    PQclear(res);
+    LOG_DEBUG("Fetched {} pending module commands for agent {}", commands.size(), agentId);
+    return commands;
+}
+
+bool PostgresClient::updateModuleCommandStatus(const std::string& commandId,
+                                                const std::string& status,
+                                                const std::string& errorMsg) {
+    if (!isConnected() && !reconnect()) return false;
+
+    const char* paramValues[3] = {
+        status.c_str(),
+        errorMsg.empty() ? nullptr : errorMsg.c_str(),
+        commandId.c_str()
+    };
+
+    PGresult* res = PQexecParams(conn_,
+        "UPDATE module_commands "
+        "SET status = $1, result_payload = COALESCE($2, result_payload) "
+        "WHERE command_id = $3",
+        3, nullptr, paramValues, nullptr, nullptr, 0);
+
+    bool ok = PQresultStatus(res) == PGRES_COMMAND_OK;
+    if (!ok) {
+        lastError_ = "updateModuleCommandStatus failed: " + std::string(PQerrorMessage(conn_));
+        LOG_ERROR("{}", lastError_);
+    }
+    PQclear(res);
+    return ok;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Status Reports (agent_status_reports table)
+// ─────────────────────────────────────────────────────────────
 
 bool PostgresClient::storeStatusReport(const std::string& agentId,
                                         const std::string& reportType,
@@ -517,88 +734,4 @@ bool PostgresClient::storeStatusReport(const std::string& agentId,
     return ok;
 }
 
-// ─────────────────────────────────────────────────────────────
-// Module Command Methods (V6 audit columns)
-// ─────────────────────────────────────────────────────────────
-
-bool PostgresClient::queueModuleCommand(const std::string& agentId,
-                                         const std::string& commandId,
-                                         const std::string& verb,
-                                         const std::string& paramsJson) {
-    if (!isConnected() && !reconnect()) return false;
-
-    const char* paramValues[4] = {
-        agentId.c_str(),
-        commandId.c_str(),
-        verb.c_str(),
-        paramsJson.c_str()
-    };
-
-    PGresult* res = PQexecParams(conn_,
-        "INSERT INTO agent_commands "
-        "  (agent_id, command_id, policy_type, policy_data, status, command_class) "
-        "VALUES ($1, $2, $3, $4::jsonb, 'pending', 'module')",
-        4, nullptr, paramValues, nullptr, nullptr, 0);
-
-    bool ok = PQresultStatus(res) == PGRES_COMMAND_OK;
-    if (!ok) {
-        lastError_ = "queueModuleCommand failed: " + std::string(PQerrorMessage(conn_));
-        LOG_ERROR("{}", lastError_);
-    } else {
-        LOG_INFO("Queued MODULE_COMMAND: agent={} verb={} commandId={}", agentId, verb, commandId);
-    }
-    PQclear(res);
-    return ok;
-}
-
-bool PostgresClient::updateCommandDispatched(const std::string& commandId) {
-    if (!isConnected() && !reconnect()) return false;
-
-    const char* paramValues[1] = { commandId.c_str() };
-
-    PGresult* res = PQexecParams(conn_,
-        "UPDATE agent_commands "
-        "SET status = 'sent', dispatched_at = NOW() "
-        "WHERE command_id = $1",
-        1, nullptr, paramValues, nullptr, nullptr, 0);
-
-    bool ok = PQresultStatus(res) == PGRES_COMMAND_OK;
-    if (!ok) {
-        lastError_ = "updateCommandDispatched failed: " + std::string(PQerrorMessage(conn_));
-        LOG_ERROR("{}", lastError_);
-    }
-    PQclear(res);
-    return ok;
-}
-
-bool PostgresClient::updateCommandAck(const std::string& commandId,
-                                       const std::string& ackStatus,
-                                       const std::string& ackMessage) {
-    if (!isConnected() && !reconnect()) return false;
-
-    const char* paramValues[3] = {
-        ackStatus.c_str(),
-        ackMessage.c_str(),
-        commandId.c_str()
-    };
-
-    PGresult* res = PQexecParams(conn_,
-        "UPDATE agent_commands "
-        "SET ack_status = $1, ack_message = $2, ack_at = NOW() "
-        "WHERE command_id = $3",
-        3, nullptr, paramValues, nullptr, nullptr, 0);
-
-    bool ok = PQresultStatus(res) == PGRES_COMMAND_OK;
-    if (!ok) {
-        lastError_ = "updateCommandAck failed: " + std::string(PQerrorMessage(conn_));
-        LOG_ERROR("{}", lastError_);
-    } else {
-        LOG_INFO("Command ACK recorded: commandId={} status={}", commandId, ackStatus);
-    }
-    PQclear(res);
-    return ok;
-}
-
 } // namespace ResolutePulse
-
-

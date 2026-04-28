@@ -63,8 +63,10 @@ public:
     // Returns the number of reports sent.
     int flushPendingStatusReports();
 
-    // Send a policy update acknowledgement back to the manager
+    // Send a policy update acknowledgement back to the manager.
+    // commandId is echoed from the received PolicyUpdate for correlation.
     SendResult sendPolicyAck(const std::string& agentId,
+                             const std::string& commandId,
                              const std::string& policyType,
                              bool applied,
                              const std::string& message);

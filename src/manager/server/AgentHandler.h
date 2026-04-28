@@ -24,8 +24,10 @@ public:
     // Returns the last successfully authenticated agent_id (empty until first heartbeat/license)
     const std::string& getLastAgentId() const { return lastAgentId_; }
 
-    // Push a policy update to a connected agent
+    // Push a policy update to a connected agent.
+    // commandId is echoed back in POLICY_UPDATE_ACK for audit correlation.
     bool pushPolicyUpdate(SSL* ssl, const std::string& agentId,
+                          const std::string& commandId,
                           const std::string& policyType,
                           const nlohmann::json& policyData);
 

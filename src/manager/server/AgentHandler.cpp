@@ -85,7 +85,18 @@ bool AgentHandler::handleConnection(SSL* ssl, const std::string& clientAddr, boo
                 return false;
             }
             std::string agentId = extractAgentIdFromCert(ssl);
-            LOG_INFO("Policy update acknowledged by agent: {}", agentId);
+            try {
+                auto j   = nlohmann::json::parse(payload);
+                auto ack = j.get<PolicyUpdateAck>();
+                LOG_INFO("Policy ACK from agent {}: type={} applied={} commandId={}",
+                         agentId, ack.policyType, ack.applied, ack.commandId);
+                if (!ack.commandId.empty()) {
+                    db_.ackPolicyCommand(ack.commandId, ack.applied, ack.message);
+                }
+            } catch (const std::exception& e) {
+                LOG_WARN("POLICY_UPDATE_ACK parse error from {}: {}", agentId, e.what());
+                LOG_INFO("Policy update acknowledged by agent: {}", agentId);
+            }
             break;
         }
 
@@ -101,7 +112,7 @@ bool AgentHandler::handleConnection(SSL* ssl, const std::string& clientAddr, boo
                 LOG_INFO("MODULE_COMMAND_RESULT: agent={} verb={} commandId={} status={}",
                          agentId, result.verb, result.commandId, result.status);
                 // Persist the ACK outcome to the audit log
-                db_.updateCommandAck(result.commandId, result.status, result.output);
+                db_.ackModuleCommand(result.commandId, result.status, result.output);
             } catch (const std::exception& e) {
                 LOG_ERROR("Failed to parse MODULE_COMMAND_RESULT from {}: {}", agentId, e.what());
             }
@@ -323,19 +334,41 @@ void AgentHandler::handleHeartbeat(SSL* ssl, const std::string& agentId,
     sslSendMessage(ssl, MessageType::HEARTBEAT_ACK,
                    nlohmann::json(ack).dump());
 
-    // Drain any pending offline commands for this agent
-    auto pending = db_.fetchPendingCommands(agentId);
-    for (auto& cmd : pending) {
-        LOG_INFO("Delivering offline command id={} type={} to agent {}",
-                 cmd.id, cmd.policyType, agentId);
+    // ── Drain pending POLICY commands ─────────────────────────────────────
+    auto pendingPolicies = db_.fetchPendingPolicies(agentId);
+    for (auto& cmd : pendingPolicies) {
+        LOG_INFO("Draining pending policy: commandId={} type={} to agent {}",
+                 cmd.commandId, cmd.policyType, agentId);
         auto policyData = nlohmann::json::parse(cmd.policyData, nullptr, false);
         if (policyData.is_discarded()) {
-            db_.updateCommandStatus(cmd.id, "failed", "Invalid JSON in policy_data");
+            // Permanently bad JSON — mark failed so it's never retried
+            db_.updatePolicyCommandStatus(cmd.commandId, "failed",
+                                          "Invalid JSON in policy_data");
             continue;
         }
-        bool ok = pushPolicyUpdate(ssl, agentId, cmd.policyType, policyData);
-        db_.updateCommandStatus(cmd.id, ok ? "sent" : "failed",
-                                 ok ? "" : "SSL write error during offline drain");
+        bool ok = pushPolicyUpdate(ssl, agentId, cmd.commandId, cmd.policyType, policyData);
+        if (ok) {
+            // Mark as sent and stamp dispatched_at — ACK will promote to 'acked'
+            db_.markPolicyCommandDispatched(cmd.commandId);
+        }
+        // On SSL failure: leave as 'pending' so it retries on the next heartbeat.
+        // Do NOT call updatePolicyCommandStatus("failed") here — that would
+        // suppress future retries.
+    }
+
+    // ── Drain pending MODULE commands ─────────────────────────────────────
+    auto pendingModules = db_.fetchPendingModuleCommands(agentId);
+    for (auto& cmd : pendingModules) {
+        LOG_INFO("Draining pending module command: commandId={} verb={} to agent {}",
+                 cmd.commandId, cmd.verb, agentId);
+        auto params = nlohmann::json::parse(cmd.params, nullptr, false);
+        if (params.is_discarded()) params = nlohmann::json::object();
+        bool ok = pushModuleCommand(ssl, agentId, cmd.commandId, cmd.verb, params);
+        if (ok) {
+            // Mark as sent and stamp dispatched_at — ACK will promote to 'acked'
+            db_.markModuleCommandDispatched(cmd.commandId);
+        }
+        // On SSL failure: leave as 'pending' so it retries on the next heartbeat.
     }
 }
 
@@ -489,14 +522,17 @@ void AgentHandler::handleStatusReport(SSL* ssl, const std::string& agentId,
 }
 
 bool AgentHandler::pushPolicyUpdate(SSL* ssl, const std::string& agentId,
+                                     const std::string& commandId,
                                      const std::string& policyType,
                                      const nlohmann::json& policyData) {
-    LOG_INFO("Pushing policy update to agent {}: type={}", agentId, policyType);
+    LOG_INFO("Pushing policy update to agent {}: type={} commandId={}",
+             agentId, policyType, commandId);
 
     PolicyUpdate update;
-    update.agentId = agentId;
-    update.policyType = policyType;
-    update.policyData = policyData.dump();
+    update.commandId     = commandId;
+    update.agentId       = agentId;
+    update.policyType    = policyType;
+    update.policyData    = policyData.dump();
     update.policyVersion = "1";
 
     time_t now = time(nullptr);

@@ -5,6 +5,7 @@
 // streams scan events back to the core agent via Named Pipe.
 
 #include <string>
+#include <nlohmann/json.hpp>
 
 namespace ResolutePulse {
 
@@ -27,6 +28,9 @@ public:
     // Run freshclam to update virus definitions.
     // Returns true on success.
     bool updateDefinitions();
+
+    // Inspect ClamAV database files and return metadata summary.
+    nlohmann::json getDatabaseInfo() const;
 
 private:
     std::string clamDir_;  // e.g. "vendor/clamav"

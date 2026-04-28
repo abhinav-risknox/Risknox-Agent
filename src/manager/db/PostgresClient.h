@@ -53,15 +53,30 @@ struct LicenseRecord {
 };
 
 // ─────────────────────────────────────────────────────────────
-// Agent command queue (offline delivery + audit)
+// policy_commands table row
 // ─────────────────────────────────────────────────────────────
 
-struct AgentCommand {
+struct PolicyCommand {
     int         id = 0;
     std::string agentId;
-    std::string policyType;   // 'software_blocking' | 'web_blocking' | etc.
+    std::string commandId;    // correlation ID for ACK matching
+    std::string policyType;   // 'antivirus' | 'patch_management' | 'web_blocking' | 'software_blocking'
     std::string policyData;   // raw JSON string from JSONB column
-    std::string status;
+    std::string status;       // pending | sent | acked | failed
+    std::string createdAt;
+};
+
+// ─────────────────────────────────────────────────────────────
+// module_commands table row
+// ─────────────────────────────────────────────────────────────
+
+struct ModuleCommandRecord {
+    int         id = 0;
+    std::string agentId;
+    std::string commandId;    // correlation ID for MODULE_COMMAND_RESULT matching
+    std::string verb;         // 'av_version' | 'av_update' | 'diagnostics' | 'agent_restart' | etc.
+    std::string params;       // raw JSON string from JSONB column
+    std::string status;       // pending | sent | acked | failed
     std::string createdAt;
 };
 
@@ -129,36 +144,63 @@ public:
     // Insert a new license record
     bool insertLicense(const LicenseRecord& license);
 
-    // ── Agent command queue ──
+    // ── Policy commands (policy_commands table) ──────────────────────────────
 
-    // Queue a command for offline delivery (inserted when agent is not connected)
-    bool queueCommand(const std::string& agentId, const std::string& policyType,
-                      const std::string& policyDataJson);
+    // Insert a policy command row.
+    // pending=false  → status='sent', dispatched_at=NOW() (online dispatch)
+    // pending=true   → status='pending'                   (offline queue)
+    bool recordPolicyCommand(const std::string& agentId,
+                             const std::string& commandId,
+                             const std::string& policyType,
+                             const std::string& policyDataJson,
+                             bool pending = false);
 
-    // Fetch all pending commands for a specific agent (called on reconnect)
-    std::vector<AgentCommand> fetchPendingCommands(const std::string& agentId);
+    // Mark dispatched_at when a pending policy command is sent live.
+    bool markPolicyCommandDispatched(const std::string& commandId);
 
-    // Update command status: 'sent' | 'failed' | 'offline'
-    bool updateCommandStatus(int commandId, const std::string& status,
-                             const std::string& errorMessage = "");
+    // Close the audit loop when POLICY_UPDATE_ACK is received.
+    bool ackPolicyCommand(const std::string& commandId,
+                          bool applied,
+                          const std::string& message);
 
-    // Queue a MODULE_COMMAND for offline delivery
-    bool queueModuleCommand(const std::string& agentId,
-                            const std::string& commandId,
-                            const std::string& verb,
-                            const std::string& paramsJson);
+    // Fetch pending policy rows for offline drain (called on agent reconnect).
+    std::vector<PolicyCommand> fetchPendingPolicies(const std::string& agentId);
 
-    // Record when a MODULE_COMMAND was dispatched to the live agent
-    bool updateCommandDispatched(const std::string& commandId);
+    // Mark a pending policy command as 'sent' or 'failed' after drain attempt.
+    bool updatePolicyCommandStatus(const std::string& commandId,
+                                   const std::string& status,
+                                   const std::string& errorMsg = "");
 
-    // Record the MODULE_COMMAND_RESULT ack: status + output from agent
-    bool updateCommandAck(const std::string& commandId,
+    // ── Module commands (module_commands table) ──────────────────────────────
+
+    // Insert a module command row.
+    // pending=false  → status='sent', dispatched_at=NOW() (online dispatch)
+    // pending=true   → status='pending'                   (offline queue)
+    bool recordModuleCommand(const std::string& agentId,
+                             const std::string& commandId,
+                             const std::string& verb,
+                             const std::string& paramsJson,
+                             bool pending = false);
+
+    // Record dispatched_at when a pending module command is sent live.
+    bool markModuleCommandDispatched(const std::string& commandId);
+
+    // Close the audit loop when MODULE_COMMAND_RESULT is received.
+    bool ackModuleCommand(const std::string& commandId,
                           const std::string& ackStatus,
-                          const std::string& ackMessage);
+                          const std::string& resultPayload);
 
-    // ── Status reports ──
+    // Fetch pending module command rows for offline drain.
+    std::vector<ModuleCommandRecord> fetchPendingModuleCommands(const std::string& agentId);
 
-    // Store a status report from an agent (patch scan results, install outcomes, etc.)
+    // Mark a pending module command as 'sent' or 'failed' after drain attempt.
+    bool updateModuleCommandStatus(const std::string& commandId,
+                                   const std::string& status,
+                                   const std::string& errorMsg = "");
+
+    // ── Status reports ──────────────────────────────────────────────────────
+
+    // Store a status report from an agent (av_scan, patch_scan, patch_install, etc.)
     bool storeStatusReport(const std::string& agentId,
                            const std::string& reportType,
                            const std::string& reportDataJson);

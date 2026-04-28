@@ -6,6 +6,9 @@
 #include <filesystem>
 #include <string>
 #include <regex>
+#include <vector>
+#include <algorithm>
+#include <chrono>
 
 namespace ResolutePulse {
 
@@ -202,6 +205,89 @@ bool AntivirusWorker::updateDefinitions() {
     return true;
 }
 
+nlohmann::json AntivirusWorker::getDatabaseInfo() const {
+    namespace fs = std::filesystem;
+
+    auto toIsoUtc = [](std::time_t ts) -> std::string {
+        if (ts <= 0) return "";
+        std::tm tmUtc{};
+        gmtime_s(&tmUtc, &ts);
+        char buf[32] = {};
+        std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &tmUtc);
+        return std::string(buf);
+    };
+
+    auto toEpochSeconds = [](fs::file_time_type ftime) -> std::int64_t {
+        const auto sysNow = std::chrono::system_clock::now();
+        const auto fsNow = fs::file_time_type::clock::now();
+        const auto sysTp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+            ftime - fsNow + sysNow);
+        return static_cast<std::int64_t>(std::chrono::system_clock::to_time_t(sysTp));
+    };
+
+    fs::path dbDir = fs::path(clamDir_) / "database";
+
+    nlohmann::json out;
+    out["databaseDir"] = dbDir.string();
+    out["files"] = nlohmann::json::array();
+    out["filesFound"] = 0;
+    out["filesExpected"] = 6;
+    out["totalSizeBytes"] = 0;
+    out["totalSizeMb"] = 0.0;
+    out["latestModifiedEpoch"] = 0;
+    out["latestModified"] = "";
+
+    if (!fs::exists(dbDir)) {
+        out["error"] = "database directory not found";
+        return out;
+    }
+
+    const std::vector<std::string> names = {"main", "daily", "bytecode"};
+    const std::vector<std::string> exts = {".cld", ".cvd"};
+
+    std::uintmax_t totalSizeBytes = 0;
+    std::int64_t latestEpoch = 0;
+
+    for (const auto& name : names) {
+        for (const auto& ext : exts) {
+            fs::path p = dbDir / (name + ext);
+            if (!fs::exists(p)) {
+                continue;
+            }
+
+            std::error_code ec;
+            std::uintmax_t sizeBytes = fs::file_size(p, ec);
+            if (ec) sizeBytes = 0;
+
+            auto lastWrite = fs::last_write_time(p, ec);
+            std::int64_t mtimeEpoch = 0;
+            if (!ec) {
+                mtimeEpoch = toEpochSeconds(lastWrite);
+            }
+
+            nlohmann::json file;
+            file["name"] = p.filename().string();
+            file["path"] = p.string();
+            file["sizeBytes"] = sizeBytes;
+            file["sizeMb"] = static_cast<double>(sizeBytes) / (1024.0 * 1024.0);
+            file["lastModifiedEpoch"] = mtimeEpoch;
+            file["lastModified"] = toIsoUtc(static_cast<std::time_t>(mtimeEpoch));
+
+            out["files"].push_back(file);
+            totalSizeBytes += sizeBytes;
+            latestEpoch = std::max(latestEpoch, mtimeEpoch);
+        }
+    }
+
+    out["filesFound"] = out["files"].size();
+    out["totalSizeBytes"] = totalSizeBytes;
+    out["totalSizeMb"] = static_cast<double>(totalSizeBytes) / (1024.0 * 1024.0);
+    out["latestModifiedEpoch"] = latestEpoch;
+    out["latestModified"] = toIsoUtc(static_cast<std::time_t>(latestEpoch));
+
+    return out;
+}
+
 } // namespace ResolutePulse
 
 
@@ -249,7 +335,17 @@ int main() {
         bool ok = worker.updateDefinitions();
         pipe.sendJson({
             {"type",    "complete"},
+            {"action",  "update_definitions"},
             {"success", ok}
+        });
+    } else if (action == "database_info") {
+        auto info = worker.getDatabaseInfo();
+        bool ok = !info.contains("error");
+        pipe.sendJson({
+            {"type",     "complete"},
+            {"action",   "database_info"},
+            {"success",  ok},
+            {"database", info}
         });
     } else {
         // quick_scan or full_scan

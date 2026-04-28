@@ -15,6 +15,7 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <atomic>
 
 namespace ResolutePulse {
 
@@ -478,6 +479,17 @@ void ManagerServer::commandIngestLoop() {
 void ManagerServer::dispatchCommand(const std::string& agentId,
                                      const std::string& policyType,
                                      const nlohmann::json& policyData) {
+    // Collision-safe commandId: timestamp + monotonic counter
+    static std::atomic<uint64_t> seq{0};
+    std::string commandId = agentId + "-" + policyType + "-" +
+                            std::to_string(time(nullptr)) + "-" +
+                            std::to_string(seq.fetch_add(1));
+
+    // Step 1: write-ahead — always insert as 'pending' so an audit row exists
+    // regardless of whether the agent is currently connected.
+    db_->recordPolicyCommand(agentId, commandId, policyType, policyData.dump(), /*pending=*/true);
+
+    // Step 2: attempt immediate online delivery
     SSL* ssl = nullptr;
     {
         std::lock_guard<std::mutex> lk(sessionsMutex_);
@@ -486,17 +498,19 @@ void ManagerServer::dispatchCommand(const std::string& agentId,
     }
 
     if (!ssl) {
-        LOG_INFO("dispatchCommand: agent {} not connected - queuing for offline delivery", agentId);
-        db_->queueCommand(agentId, policyType, policyData.dump());
-        return;
+        LOG_INFO("dispatchCommand: agent {} offline — command queued for heartbeat drain", agentId);
+        return;  // row stays 'pending'; heartbeat drain retries on reconnect
     }
 
     AgentHandler handler(*ca_, *db_, this);
-    bool ok = handler.pushPolicyUpdate(ssl, agentId, policyType, policyData);
+    bool ok = handler.pushPolicyUpdate(ssl, agentId, commandId, policyType, policyData);
     if (ok) {
         LOG_INFO("Policy '{}' dispatched to agent {}", policyType, agentId);
+        db_->markPolicyCommandDispatched(commandId);  // pending → sent
     } else {
-        LOG_ERROR("Failed to dispatch policy '{}' to agent {}", policyType, agentId);
+        LOG_ERROR("Policy '{}' push failed for agent {} — will retry on next heartbeat",
+                  policyType, agentId);
+        // row stays 'pending'; heartbeat drain retries automatically
     }
 }
 
@@ -504,6 +518,9 @@ void ManagerServer::dispatchModuleCommand(const std::string& agentId,
                                            const std::string& commandId,
                                            const std::string& verb,
                                            const nlohmann::json& params) {
+    // Always insert the command into the DB first (online and offline paths both need an audit row)
+    db_->recordModuleCommand(agentId, commandId, verb, params.dump(), /*pending=*/true);
+
     SSL* ssl = nullptr;
     {
         std::lock_guard<std::mutex> lk(sessionsMutex_);
@@ -512,10 +529,8 @@ void ManagerServer::dispatchModuleCommand(const std::string& agentId,
     }
 
     if (!ssl) {
-        LOG_INFO("dispatchModuleCommand: agent {} not connected - queuing (verb={})",
+        LOG_INFO("dispatchModuleCommand: agent {} not connected - leaving queued (verb={})",
                  agentId, verb);
-        // Store as a module-class command in the DB for offline drain
-        db_->queueModuleCommand(agentId, commandId, verb, params.dump());
         return;
     }
 
@@ -524,11 +539,10 @@ void ManagerServer::dispatchModuleCommand(const std::string& agentId,
     if (ok) {
         LOG_INFO("MODULE_COMMAND '{}' dispatched to agent {} (commandId={})",
                  verb, agentId, commandId);
-        // Record dispatch time
-        db_->updateCommandDispatched(commandId);
+        // Update status to 'sent' and set dispatched_at
+        db_->markModuleCommandDispatched(commandId);
     } else {
-        LOG_ERROR("Failed to dispatch MODULE_COMMAND '{}' to agent {}", verb, agentId);
-        db_->queueModuleCommand(agentId, commandId, verb, params.dump());
+        LOG_ERROR("Failed to dispatch MODULE_COMMAND '{}' to agent {} - left as pending for offline delivery", verb, agentId);
     }
 }
 

@@ -898,8 +898,9 @@ void Agent::managementLoop() {
                     } else {
                         // ── POLICY_UPDATE: existing path ──
                         std::string policyType = cmd.value("policyType", "");
+                        std::string commandId  = cmd.value("commandId", "");
                         if (!policyType.empty() && policyManager_) {
-                            LOG_INFO("POLICY_UPDATE received: type={}", policyType);
+                            LOG_INFO("POLICY_UPDATE received: type={} commandId={}", policyType, commandId);
                             nlohmann::json policyData;
                             auto raw = cmd.value("policyData", std::string{});
                             if (!raw.empty()) {
@@ -908,9 +909,9 @@ void Agent::managementLoop() {
                             }
                             bool applied = policyManager_->handlePolicyUpdate(policyType, policyData);
 
-                            // Send ACK back to Manager so it knows the outcome
+                            // Echo commandId back so Manager can correlate the ACK to the DB row
                             tlsSender->sendPolicyAck(
-                                agentId, policyType, applied,
+                                agentId, commandId, policyType, applied,
                                 applied ? "Policy applied successfully" : "Policy apply failed");
                         }
                     }
