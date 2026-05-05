@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Effects;
 using System.Windows.Threading;
 
 namespace RisknoxMonitor
@@ -16,6 +17,7 @@ namespace RisknoxMonitor
     {
         private const string ServiceName = "ResolutePulse";
         private DispatcherTimer _timer;
+        private int _activeTab = 0; // 0=Overview 1=Components 2=Logs
 
         private readonly Brush _colorLimeCream = (Brush)new BrushConverter().ConvertFromString("#FFFD98")!;
         private readonly Brush _colorPlatinum = (Brush)new BrushConverter().ConvertFromString("#EAEAEB")!;
@@ -41,10 +43,7 @@ namespace RisknoxMonitor
             UpdateStatus();
             UpdateLicenseStatus();
             UpdateComponentsStatus();
-            if (LogViewerGrid.Visibility == Visibility.Visible)
-            {
-                RefreshLogs();
-            }
+            if (_activeTab == 2) RefreshLogs();
         }
 
         private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -274,80 +273,106 @@ namespace RisknoxMonitor
                 }
 
                 ComponentsCard.Visibility = Visibility.Visible;
-                ComponentRows.Children.Clear();
+                ComponentsSections.Children.Clear();
+                bool anySection = false;
 
-                // Connection rows
+                // ── CONNECTIONS ────────────────────────────────────────
                 if (root.TryGetProperty("connection", out var connEl))
                 {
+                    var connTiles = new System.Collections.Generic.List<(string label, string icon, string status)>();
+
                     if (connEl.TryGetProperty("mTLS", out var mtlsProp) && mtlsProp.GetString() != "not_configured")
-                    {
-                        string mtlsStatus = mtlsProp.GetString() ?? "disconnected";
-                        string label = "mTLS Connection";
-                        if (connEl.TryGetProperty("managerHost", out var hostProp))
-                            label = $"mTLS  →  {hostProp.GetString()}";
-                        AddComponentRow(label, mtlsStatus);
-                    }
+                        connTiles.Add(("mTLS", "⇄", mtlsProp.GetString() ?? "disconnected"));
 
                     if (connEl.TryGetProperty("telemetry", out var telProp) && telProp.GetString() != "not_configured")
+                        connTiles.Add(("Telemetry", "◎", telProp.GetString() ?? "disconnected"));
+
+                    if (connTiles.Count > 0)
                     {
-                        AddComponentRow("Telemetry", telProp.GetString() ?? "disconnected");
+                        AddSectionHeader("CONNECTIONS");
+                        var wrap = CreateSectionPanel();
+                        foreach (var t in connTiles) AddComponentTile(t.label, t.icon, t.status, wrap);
+                        ComponentsSections.Children.Add(wrap);
+                        anySection = true;
                     }
                 }
 
-                // Component rows
+                // ── COMPONENTS ─────────────────────────────────────────
                 if (root.TryGetProperty("components", out var compsEl))
                 {
+                    var compTiles = new System.Collections.Generic.List<(string label, string icon, string status)>();
                     foreach (var comp in compsEl.EnumerateObject())
                     {
                         string displayName = comp.Name switch
                         {
-                            "eventCollector" => "Event Collector",
-                            "batchSender" => "Batch Sender",
-                            "fim" => "File Integrity",
-                            "sysInfo" => "System Info",
-                            _ => comp.Name
+                            "eventCollector" => "Events",
+                            "batchSender"   => "Sender",
+                            "fim"           => "Integrity",
+                            "sysInfo"       => "Sys Info",
+                            _               => comp.Name
                         };
-
-                        string compStatus = "unknown";
-                        if (comp.Value.TryGetProperty("status", out var csProp))
-                            compStatus = csProp.GetString() ?? "unknown";
-
-                        AddComponentRow(displayName, compStatus);
+                        string icon = comp.Name switch
+                        {
+                            "eventCollector" => "≡",
+                            "batchSender"   => "⬆",
+                            "fim"           => "⊟",
+                            "sysInfo"       => "⊞",
+                            _               => "◉"
+                        };
+                        string compStatus = comp.Value.TryGetProperty("status", out var csProp)
+                            ? csProp.GetString() ?? "unknown" : "unknown";
+                        compTiles.Add((displayName, icon, compStatus));
+                    }
+                    if (compTiles.Count > 0)
+                    {
+                        AddSectionHeader("COMPONENTS");
+                        var wrap = CreateSectionPanel();
+                        foreach (var t in compTiles) AddComponentTile(t.label, t.icon, t.status, wrap);
+                        ComponentsSections.Children.Add(wrap);
+                        anySection = true;
                     }
                 }
 
-                // Worker rows (skip legacy boolean format from old agent builds)
+                // ── WORKERS ────────────────────────────────────────────
                 if (root.TryGetProperty("workers", out var workersEl) &&
                     workersEl.ValueKind == System.Text.Json.JsonValueKind.Object)
                 {
+                    var workerTiles = new System.Collections.Generic.List<(string label, string icon, string status)>();
                     foreach (var worker in workersEl.EnumerateObject())
                     {
-                        // Skip legacy format where value is a boolean instead of an object
-                        if (worker.Value.ValueKind != System.Text.Json.JsonValueKind.Object)
-                            continue;
-
+                        if (worker.Value.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
                         string displayName = worker.Name switch
                         {
-                            "rp-webblock" => "Web Blocking",
-                            "rp-softblock" => "Software Blocking",
-                            "rp-patch" => "Patch Management",
+                            "rp-webblock"  => "Web Block",
+                            "rp-softblock" => "App Block",
+                            "rp-patch"     => "Patching",
                             "rp-antivirus" => "Antivirus",
-                            _ => worker.Name
+                            _              => worker.Name
                         };
-
-                        string wStatus = "idle";
-                        if (worker.Value.TryGetProperty("status", out var wsProp))
-                            wStatus = wsProp.GetString() ?? "idle";
-
-                        AddComponentRow(displayName, wStatus);
+                        string icon = worker.Name switch
+                        {
+                            "rp-webblock"  => "⊕",
+                            "rp-softblock" => "⊘",
+                            "rp-patch"     => "⬡",
+                            "rp-antivirus" => "◈",
+                            _              => "◉"
+                        };
+                        string wStatus = worker.Value.TryGetProperty("status", out var wsProp)
+                            ? wsProp.GetString() ?? "idle" : "idle";
+                        workerTiles.Add((displayName, icon, wStatus));
+                    }
+                    if (workerTiles.Count > 0)
+                    {
+                        AddSectionHeader("WORKERS");
+                        var wrap = CreateSectionPanel();
+                        foreach (var t in workerTiles) AddComponentTile(t.label, t.icon, t.status, wrap);
+                        ComponentsSections.Children.Add(wrap);
+                        anySection = true;
                     }
                 }
 
-                // Hide card if no rows were populated (e.g. old status.json format)
-                if (ComponentRows.Children.Count == 0)
-                {
+                if (!anySection)
                     ComponentsCard.Visibility = Visibility.Collapsed;
-                }
             }
             catch
             {
@@ -355,80 +380,155 @@ namespace RisknoxMonitor
             }
         }
 
-        private void AddComponentRow(string label, string status)
+        // ── Status table helpers ─────────────────────────────────────────
+
+        private StackPanel CreateSectionPanel() =>
+            new StackPanel { Margin = new Thickness(0, 4, 0, 0) };
+
+        private void AddSectionHeader(string title)
         {
-            // Determine dot color and display text
-            Brush dotColor;
-            string displayStatus;
+            bool isFirst = ComponentsSections.Children.Count == 0;
+
+            // Row: [label]  [──────────── line ────────────]
+            var header = new Grid
+            {
+                Margin = new Thickness(0, isFirst ? 8 : 14, 0, 4)
+            };
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var label = new TextBlock
+            {
+                Text              = title,
+                FontSize          = 9,
+                FontWeight        = FontWeights.Bold,
+                Foreground        = (Brush)new BrushConverter().ConvertFromString("#505056")!,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin            = new Thickness(0, 0, 8, 0)
+            };
+            Grid.SetColumn(label, 0);
+
+            var line = new System.Windows.Shapes.Rectangle
+            {
+                Height            = 1,
+                Fill              = (Brush)new BrushConverter().ConvertFromString("#272729")!,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(line, 1);
+
+            header.Children.Add(label);
+            header.Children.Add(line);
+            ComponentsSections.Children.Add(header);
+        }
+
+        private void AddComponentTile(string label, string icon, string status, Panel target)
+        {
+            // ── Colour semantics ────────────────────────────────────────
+            Brush pipColor;
+            string chipLabel;
 
             switch (status.ToLowerInvariant())
             {
                 case "running":
                 case "connected":
                 case "active":
-                    dotColor = (Brush)new BrushConverter().ConvertFromString("#4CAF50")!;
-                    displayStatus = status == "connected" ? "Connected" : "Running";
+                    pipColor  = (Brush)new BrushConverter().ConvertFromString("#22C55E")!;
+                    chipLabel = status == "connected" ? "connected" : "running";
                     break;
                 case "idle":
                 case "starting":
-                    dotColor = _colorLimeCream;
-                    displayStatus = status == "idle" ? "Idle" : "Starting";
+                    pipColor  = (Brush)new BrushConverter().ConvertFromString("#D4C84A")!;
+                    chipLabel = status == "idle" ? "idle" : "starting";
                     break;
                 case "stopped":
                 case "disconnected":
                 case "error":
-                    dotColor = _colorRed;
-                    displayStatus = status == "disconnected" ? "Disconnected" : status == "error" ? "Error" : "Stopped";
+                    pipColor  = (Brush)new BrushConverter().ConvertFromString("#EF4444")!;
+                    chipLabel = status == "disconnected" ? "offline" : status == "error" ? "error" : "stopped";
                     break;
                 case "degraded":
                 case "suspended":
-                    dotColor = _colorOrange;
-                    displayStatus = status == "suspended" ? "Suspended" : "Degraded";
+                    pipColor  = (Brush)new BrushConverter().ConvertFromString("#F97316")!;
+                    chipLabel = status == "suspended" ? "suspended" : "degraded";
                     break;
                 default:
-                    dotColor = _colorPlatinum;
-                    displayStatus = status;
+                    pipColor  = (Brush)new BrushConverter().ConvertFromString("#505052")!;
+                    chipLabel = status;
                     break;
             }
 
-            var row = new Grid { Margin = new Thickness(0, 0, 0, 8) };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            // ── Row grid: [icon] | [name *] | [chip] ────────────────────
+            var row = new Grid();
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });                   // icon
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // label
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });                      // chip
 
-            var labelText = new TextBlock
+            var iconTb = new TextBlock
             {
-                Text = label,
-                Foreground = (Brush)new BrushConverter().ConvertFromString("#A0A0A0")!,
-                FontSize = 12,
+                Text                = icon,
+                FontSize            = 13,
+                Foreground          = (Brush)new BrushConverter().ConvertFromString("#484850")!,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment   = VerticalAlignment.Center
+            };
+            Grid.SetColumn(iconTb, 0);
+
+            var nameTb = new TextBlock
+            {
+                Text              = label,
+                FontSize          = 12,
+                Foreground        = (Brush)new BrushConverter().ConvertFromString("#A0A0A4")!,
                 VerticalAlignment = VerticalAlignment.Center
             };
-            Grid.SetColumn(labelText, 0);
+            Grid.SetColumn(nameTb, 1);
 
-            var statusPanel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-            var dot = new System.Windows.Shapes.Ellipse
+            // Status pill chip
+            var chipBorder = new Border
             {
-                Width = 8,
-                Height = 8,
-                Fill = dotColor,
-                Margin = new Thickness(0, 0, 6, 0),
-                VerticalAlignment = VerticalAlignment.Center
+                CornerRadius        = new CornerRadius(10),
+                Padding             = new Thickness(7, 2, 7, 2),
+                Background          = (Brush)new BrushConverter().ConvertFromString("#1C1C1E")!,
+                VerticalAlignment   = VerticalAlignment.Center
             };
-            var statusText = new TextBlock
+            var chipInner = new StackPanel { Orientation = Orientation.Horizontal };
+            chipInner.Children.Add(new System.Windows.Shapes.Ellipse
             {
-                Text = displayStatus,
-                Foreground = (Brush)new BrushConverter().ConvertFromString("#FFFFFF")!,
-                FontSize = 12,
-                FontWeight = FontWeights.Medium,
+                Width             = 5,
+                Height            = 5,
+                Fill              = pipColor,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin            = new Thickness(0, 0, 5, 0)
+            });
+            chipInner.Children.Add(new TextBlock
+            {
+                Text              = chipLabel,
+                FontSize          = 9,
+                FontWeight        = FontWeights.SemiBold,
+                Foreground        = pipColor,
                 VerticalAlignment = VerticalAlignment.Center
+            });
+            chipBorder.Child = chipInner;
+            Grid.SetColumn(chipBorder, 2);
+
+            row.Children.Add(iconTb);
+            row.Children.Add(nameTb);
+            row.Children.Add(chipBorder);
+
+            // ── Hover wrapper ────────────────────────────────────────────
+            var wrapper = new Border
+            {
+                CornerRadius = new CornerRadius(6),
+                Padding      = new Thickness(6, 5, 8, 5),
+                Margin       = new Thickness(0, 0, 0, 1),
+                Background   = Brushes.Transparent,
+                Child        = row
             };
-            statusPanel.Children.Add(dot);
-            statusPanel.Children.Add(statusText);
-            Grid.SetColumn(statusPanel, 1);
+            wrapper.MouseEnter += (s, _) =>
+                ((Border)s).Background = (Brush)new BrushConverter().ConvertFromString("#212123")!;
+            wrapper.MouseLeave += (s, _) =>
+                ((Border)s).Background = Brushes.Transparent;
 
-            row.Children.Add(labelText);
-            row.Children.Add(statusPanel);
-
-            ComponentRows.Children.Add(row);
+            target.Children.Add(wrapper);
         }
 
         private void UpdateStatus()
@@ -508,25 +608,43 @@ namespace RisknoxMonitor
             }
         }
 
-        private void BtnOpenLogs_Click(object sender, RoutedEventArgs e)
+        // ── Tab navigation ────────────────────────────────────────────────
+
+        private void TabOverview_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+            => SwitchTab(0);
+        private void TabComponents_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+            => SwitchTab(1);
+        private void TabLogs_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
-            if (LogViewerGrid.Visibility == Visibility.Visible)
-            {
-                BtnCloseLogs_Click(sender, e);
-            }
-            else
-            {
-                LogViewerGrid.Visibility = Visibility.Visible;
-                this.SizeToContent = SizeToContent.Height;
-                RefreshLogs();
-            }
+            SwitchTab(2);
+            RefreshLogs();
         }
 
-        private void BtnCloseLogs_Click(object sender, RoutedEventArgs e)
+        private void SwitchTab(int tab)
         {
-            LogViewerGrid.Visibility = Visibility.Collapsed;
-            this.SizeToContent = SizeToContent.Height;
+            _activeTab = tab;
+
+            TabOverviewPanel.Visibility    = tab == 0 ? Visibility.Visible : Visibility.Collapsed;
+            TabComponentsPanel.Visibility  = tab == 1 ? Visibility.Visible : Visibility.Collapsed;
+            TabLogsPanel.Visibility        = tab == 2 ? Visibility.Visible : Visibility.Collapsed;
+
+            var active   = (Brush)new BrushConverter().ConvertFromString("#FFFFFF")!;
+            var inactive = (Brush)new BrushConverter().ConvertFromString("#484850")!;
+
+            TabLblOverview.Foreground   = tab == 0 ? active : inactive;
+            TabLblComponents.Foreground = tab == 1 ? active : inactive;
+            TabLblLogs.Foreground       = tab == 2 ? active : inactive;
+
+            TabBarOverview.Visibility   = tab == 0 ? Visibility.Visible : Visibility.Collapsed;
+            TabBarComponents.Visibility = tab == 1 ? Visibility.Visible : Visibility.Collapsed;
+            TabBarLogs.Visibility       = tab == 2 ? Visibility.Visible : Visibility.Collapsed;
         }
+
+        private void BtnOpenLogs_Click(object sender, RoutedEventArgs e)
+            => SwitchTab(2);
+
+        private void BtnCloseLogs_Click(object sender, RoutedEventArgs e)
+            => SwitchTab(0);
 
         private void RefreshLogs()
         {

@@ -30,7 +30,7 @@ int main(int argc, char* argv[]) {
     LOG_INFO("===========================================");
 
     // Configuration defaults
-    std::string dbConnString = "host=127.0.0.1 port=5432 dbname=risknox user=abhi1243";
+    std::string dbConnString = "host=127.0.0.1 port=5432 dbname=risknox user=postgres password=abhi1243";
 
     // Append password from environment variable to avoid hardcoding
     const char* envDbPass = std::getenv("DB_PASSWORD");

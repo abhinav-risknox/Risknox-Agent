@@ -86,6 +86,7 @@ services:
       - RPLS_PORT=1514
     ports:
       - 1514:1514
+      - 1515:1515
     volumes:
       - manager-ca-data:/app/ca
     networks:
