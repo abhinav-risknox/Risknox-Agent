@@ -190,6 +190,7 @@ if(EXISTS "${LIBPQ_DLL}" AND LIBPQ_INCLUDE_DIR)
         src/manager/server/AgentHandler.cpp
         src/manager/registry/AgentRegistry.cpp
         src/manager/registry/LicenseManager.cpp
+        src/manager/api/RestApi.cpp
         src/utils/Logger.cpp
     )
 
@@ -200,6 +201,7 @@ if(EXISTS "${LIBPQ_DLL}" AND LIBPQ_INCLUDE_DIR)
         src/manager/server/AgentHandler.h
         src/manager/registry/AgentRegistry.h
         src/manager/registry/LicenseManager.h
+        src/manager/api/RestApi.h
         src/utils/Logger.h
         ${COMMON_HEADERS}
     )

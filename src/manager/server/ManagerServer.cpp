@@ -546,5 +546,54 @@ void ManagerServer::dispatchModuleCommand(const std::string& agentId,
     }
 }
 
+// ─────────────────────────────────────────────────────────────
+// REST API bridge methods
+// ─────────────────────────────────────────────────────────────
+
+bool ManagerServer::isAgentOnline(const std::string& agentId) {
+    std::lock_guard<std::mutex> lk(sessionsMutex_);
+    return activeSessions_.find(agentId) != activeSessions_.end();
+}
+
+void ManagerServer::dispatchModuleCommandFromApi(const std::string& agentId,
+                                                   const std::string& commandId,
+                                                   const std::string& verb,
+                                                   const nlohmann::json& params) {
+    // The RestApi has already inserted the DB row via recordModuleCommandWithOperator.
+    // Here we attempt immediate online dispatch.
+    SSL* ssl = nullptr;
+    {
+        std::lock_guard<std::mutex> lk(sessionsMutex_);
+        auto it = activeSessions_.find(agentId);
+        if (it != activeSessions_.end()) ssl = it->second;
+    }
+
+    if (!ssl) {
+        LOG_INFO("dispatchModuleCommandFromApi: agent {} not connected - command stays queued", agentId);
+        return;
+    }
+
+    AgentHandler handler(*ca_, *db_, this);
+    bool ok = handler.pushModuleCommand(ssl, agentId, commandId, verb, params);
+    if (ok) {
+        LOG_INFO("REST API: MODULE_COMMAND '{}' dispatched to agent {} (commandId={})",
+                 verb, agentId, commandId);
+        db_->markModuleCommandDispatched(commandId);
+    } else {
+        LOG_ERROR("REST API: Failed to dispatch MODULE_COMMAND '{}' to agent {} - left as pending",
+                  verb, agentId);
+    }
+}
+
+void ManagerServer::dispatchPolicyFromApi(const std::string& agentId,
+                                            const std::string& policyType,
+                                            const nlohmann::json& policyData,
+                                            const std::string& initiatedBy) {
+    // Re-use the existing dispatchCommand which handles commandId generation,
+    // DB recording, and online/offline dispatch.
+    (void)initiatedBy; // TODO: pass to DB when initiated_by column exists on policy_commands
+    dispatchCommand(agentId, policyType, policyData);
+}
+
 } // namespace ResolutePulse
 

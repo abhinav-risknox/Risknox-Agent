@@ -1,0 +1,41 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Poppins:wght@300;400;500;600&display=swap');
+@import "tailwindcss";
+
+
+@theme {
+  --color-rn-orange: #FF5B00;
+  --color-rn-black: #1E1E1F;
+  --color-rn-white: #FFFFFF;
+  --color-rn-platinum: #EAEAEB;
+  --color-rn-lime: #FFFD98;
+  --color-rn-orange-dim: #CC4900;
+  --color-rn-black-soft: #2A2A2B;
+  --color-rn-black-card: #242425;
+
+  --font-sans: "Poppins", sans-serif;
+  --font-display: "DM Sans", sans-serif;
+
+  --radius-lg: 0.5rem;
+  --radius-md: calc(0.5rem - 2px);
+  --radius-sm: calc(0.5rem - 4px);
+}
+
+@layer base {
+  * {
+    @apply border-rn-white/10;
+  }
+  body {
+    @apply bg-rn-black text-rn-white font-sans;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display;
+  }
+}
+
+.glass-panel {
+  @apply bg-rn-black-card/80 backdrop-blur-md border border-rn-white/10;
+}
+
+.rn-gradient-text {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-rn-orange to-orange-400;
+}

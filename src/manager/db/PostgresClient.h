@@ -6,6 +6,9 @@
 #include <optional>
 #include <ctime>
 
+#include <nlohmann/json.hpp>
+#include <mutex>
+
 // Forward declare libpq types to avoid including libpq-fe.h in the header
 struct pg_conn;
 typedef struct pg_conn PGconn;
@@ -205,6 +208,52 @@ public:
                            const std::string& reportType,
                            const std::string& reportDataJson);
 
+    // ── REST API query methods ──────────────────────────────────────────────
+
+    // List all agents (for dashboard)
+    std::vector<AgentRecord> listAgents();
+
+    // List module commands with optional agent filter and pagination
+    std::vector<ModuleCommandRecord> listModuleCommands(const std::string& agentId = "",
+                                                         int limit = 50, int offset = 0);
+
+    // List policy commands with optional agent filter and pagination
+    std::vector<PolicyCommand> listPolicyCommands(const std::string& agentId = "",
+                                                    int limit = 50, int offset = 0);
+
+    // Get a single module command by command_id
+    std::optional<ModuleCommandRecord> getModuleCommandByCommandId(const std::string& commandId);
+
+    // Get a single policy command by command_id
+    std::optional<PolicyCommand> getPolicyCommandByCommandId(const std::string& commandId);
+
+    // Status report record (returned by getLatestStatusReports)
+    struct StatusReportRecord {
+        std::string agentId;
+        std::string reportType;
+        std::string reportData;
+        std::string createdAt;
+    };
+
+    // Get latest N status reports for an agent
+    std::vector<StatusReportRecord> getLatestStatusReports(const std::string& agentId, int limit = 5);
+
+    // Get unified audit log (both policy + module commands, newest first)
+    nlohmann::json getAuditLog(const std::string& agentId = "", int limit = 100, int offset = 0);
+
+    // ── Operator authentication ─────────────────────────────────────────────
+
+    // Authenticate an operator (falls back to hardcoded admin if no operators table)
+    bool authenticateOperator(const std::string& username, const std::string& password);
+
+    // Record a module command with operator identity
+    bool recordModuleCommandWithOperator(const std::string& agentId,
+                                          const std::string& commandId,
+                                          const std::string& verb,
+                                          const std::string& paramsJson,
+                                          const std::string& initiatedBy,
+                                          bool pending = false);
+
     // Get last error message
     const std::string& getLastError() const { return lastError_; }
 
@@ -212,9 +261,10 @@ private:
     // Attempt to reconnect using the stored connection string
     bool reconnect();
 
-    PGconn*     conn_       = nullptr;
-    std::string lastError_;
-    std::string connString_; // stored for auto-reconnect
+    PGconn*           conn_       = nullptr;
+    std::string       lastError_;
+    std::string       connString_; // stored for auto-reconnect
+    mutable std::recursive_mutex dbMutex_;    // Protects conn_ for multi-threaded access
 };
 
 } // namespace ResolutePulse

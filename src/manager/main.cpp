@@ -3,6 +3,7 @@
 #include "manager/server/ManagerServer.h"
 #include "manager/registry/AgentRegistry.h"
 #include "manager/registry/LicenseManager.h"
+#include "manager/api/RestApi.h"
 #include "utils/Logger.h"
 
 #include <iostream>
@@ -13,9 +14,13 @@
 using namespace ResolutePulse;
 
 static ManagerServer* g_server = nullptr;
+static RestApi* g_restApi = nullptr;
 
 void signalHandler(int signum) {
     std::cout << "\nShutdown signal received..." << std::endl;
+    if (g_restApi) {
+        g_restApi->stop();
+    }
     if (g_server) {
         g_server->stop();
     }
@@ -41,6 +46,7 @@ int main(int argc, char* argv[]) {
     
     std::string caDir = "ca";
     int port = 1514;
+    int apiPort = 8080;
 
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
@@ -56,6 +62,8 @@ int main(int argc, char* argv[]) {
             caDir = argv[++i];
         } else if ((arg == "--port" || arg == "-p") && i + 1 < argc) {
             port = std::stoi(argv[++i]);
+        } else if ((arg == "--api-port") && i + 1 < argc) {
+            apiPort = std::stoi(argv[++i]);
         } else if (arg == "--help" || arg == "-h") {
             std::cout << "ResolutePulse Manager Server" << std::endl;
             std::cout << "Usage: " << argv[0] << " [options]" << std::endl;
@@ -63,7 +71,8 @@ int main(int argc, char* argv[]) {
             std::cout << "  --db, -d CONN      PostgreSQL connection string" << std::endl;
             std::cout << "                     (DB_PASSWORD env var appended if password= absent)" << std::endl;
             std::cout << "  --ca-dir DIR       CA directory (default: ca)" << std::endl;
-            std::cout << "  --port, -p PORT    Listen port (default: 1514)" << std::endl;
+            std::cout << "  --port, -p PORT    mTLS listen port (default: 1514)" << std::endl;
+            std::cout << "  --api-port PORT    REST API port (default: 8080)" << std::endl;
             std::cout << "  --help, -h         Show this help" << std::endl;
             return 0;
         }
@@ -75,6 +84,9 @@ int main(int argc, char* argv[]) {
 
     const char* envPort = std::getenv("RPLS_PORT");
     if (envPort) port = std::stoi(envPort);
+
+    const char* envApiPort = std::getenv("RPLS_API_PORT");
+    if (envApiPort) apiPort = std::stoi(envApiPort);
 
     // Set up signal handlers
     signal(SIGINT, signalHandler);
@@ -115,7 +127,21 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    LOG_INFO("Manager Server running. Press Ctrl+C to stop.");
+    // ─── Start REST API ───
+    LOG_INFO("Starting REST API on port {}...", apiPort);
+    RestApi restApi(db, server);
+    g_restApi = &restApi;
+
+    if (!restApi.start(apiPort)) {
+        LOG_CRITICAL("Failed to start REST API");
+        return 1;
+    }
+
+    LOG_INFO("Manager Server running.");
+    LOG_INFO("  mTLS Agent port: {}", port);
+    LOG_INFO("  REST API port:   {}", apiPort);
+    LOG_INFO("  Command ingest:  127.0.0.1:1515");
+    LOG_INFO("Press Ctrl+C to stop.");
 
     // Wait for server to stop (signal handler will call stop())
     while (server.isRunning()) {
@@ -123,9 +149,12 @@ int main(int argc, char* argv[]) {
     }
 
     // Cleanup
+    g_restApi = nullptr;
     g_server = nullptr;
+    restApi.stop();
     db.disconnect();
 
     LOG_INFO("Manager Server shut down cleanly");
     return 0;
 }
+

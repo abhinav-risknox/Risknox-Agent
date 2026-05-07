@@ -61,6 +61,22 @@ public:
     // Unregister when connection closes
     void unregisterSession(const std::string& agentId);
 
+    // ── REST API integration ──
+    // Check if an agent is currently connected
+    bool isAgentOnline(const std::string& agentId);
+
+    // Dispatch a MODULE_COMMAND from the REST API (generates commandId internally)
+    void dispatchModuleCommandFromApi(const std::string& agentId,
+                                       const std::string& commandId,
+                                       const std::string& verb,
+                                       const nlohmann::json& params);
+
+    // Dispatch a POLICY_UPDATE from the REST API with operator identity
+    void dispatchPolicyFromApi(const std::string& agentId,
+                                const std::string& policyType,
+                                const nlohmann::json& policyData,
+                                const std::string& initiatedBy);
+
 private:
     // Create SSL context for TLS server
     bool createSSLContext();
