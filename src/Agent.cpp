@@ -87,6 +87,39 @@ bool Agent::initialize(const std::string& configPath) {
     // Initialize components
     queue_ = std::make_unique<EventQueue>(config.getBufferConfig().max_events);
     
+    // Initialize log tailer (reads new lines from ClamAV logs into the event queue)
+    logTailer_ = std::make_unique<LogTailer>(*queue_);
+    {
+        // Set base directory to the agent's executable directory
+        wchar_t exePath[MAX_PATH] = {};
+        GetModuleFileNameW(nullptr, exePath, MAX_PATH);
+        std::string exeDir = std::filesystem::path(exePath).parent_path().string();
+        logTailer_->setBaseDir(exeDir);
+
+        // Persist offsets to ProgramData so they survive restarts
+        const char* programData = std::getenv("ProgramData");
+        std::filesystem::path dataDir = std::filesystem::path(
+            programData ? programData : "C:\\ProgramData") / "Risknox Pulse";
+        std::filesystem::create_directories(dataDir);
+        logTailer_->setOffsetPath((dataDir / "logtailer_offsets.json").string());
+    }
+
+    // If config already has log_forwarding.logs, activate them on startup
+    {
+        std::ifstream lfCfgFile(configPath);
+        if (lfCfgFile) {
+            try {
+                nlohmann::json lfCfgJson;
+                lfCfgFile >> lfCfgJson;
+                if (lfCfgJson.contains("log_forwarding") &&
+                    lfCfgJson["log_forwarding"].contains("logs")) {
+                    logTailer_->reconfigureFromJson(lfCfgJson["log_forwarding"]["logs"]);
+                    LOG_INFO("LogTailer: loaded config from config.json");
+                }
+            } catch (...) {}
+        }
+    }
+    
     // Resolve db_path to ProgramData directory (Program Files is write-protected by Windows ACLs,
     // SQLite needs to create WAL/SHM journal files alongside the database)
     std::string dbPath = config.getBufferConfig().db_path;
@@ -292,6 +325,7 @@ bool Agent::initialize(const std::string& configPath) {
     moduleController_->setBatchSender(batchSender_.get());
     moduleController_->setFimMonitor(fimMonitor_.get());
     moduleController_->setWorkerManager(workerManager_.get());
+    moduleController_->setLogTailer(logTailer_.get());
     moduleController_->setConfigPath(configPath_);
     moduleController_->setAgentId(config.getAgentId());
 
@@ -497,6 +531,12 @@ int Agent::run() {
     
     // Workers are already running as subprocesses (spawned during initialize())
     LOG_INFO("Security worker subprocesses active");
+
+    // Start log tailer if sources were configured
+    if (logTailer_) {
+        logTailer_->start();
+        LOG_INFO("Log tailer started");
+    }
     
 
     
@@ -605,6 +645,9 @@ int Agent::run() {
     }
     
     // Stop components in order
+    if (logTailer_) {
+        logTailer_->stop();
+    }
     if (fimMonitor_) {
         fimMonitor_->stop();
     }

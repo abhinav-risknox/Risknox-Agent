@@ -27,12 +27,15 @@
 
 #include <nlohmann/json.hpp>
 #include <string>
+#include <vector>
 #include <functional>
 #include <atomic>
 #include <fstream>
 #include <filesystem>
 #include <chrono>
 #include <windows.h>
+
+#include "logtailer/LogTailer.h"
 
 namespace ResolutePulse {
 
@@ -49,6 +52,7 @@ public:
     void setBatchSender(BatchSender* bs)    { batchSender_ = bs; }
     void setFimMonitor(FimMonitor* fim)     { fimMonitor_  = fim; }
     void setWorkerManager(WorkerManager* wm){ workerManager_ = wm; }
+    void setLogTailer(LogTailer* lt)        { logTailer_   = lt; }
 
     // Callbacks
     void setStatusFlushCallback(StatusFlushFn fn)   { statusFlushCb_  = std::move(fn); }
@@ -243,8 +247,13 @@ private:
             }
             std::filesystem::rename(tmp, configPath_);
 
+            // Post-write hook: reconfigure LogTailer when log sources change
+            if (section == "log_forwarding" && logTailer_ && newConfig.contains("logs")) {
+                logTailer_->reconfigureFromJson(newConfig["logs"]);
+            }
+
             r.status = "success";
-            r.output = "Section '" + section + "' updated. Agent will use new config on next reload.";
+            r.output = "Section '" + section + "' updated.";
             LOG_INFO("ModuleController: config section '{}' updated by Manager", section);
         } catch (const std::exception& e) {
             r.status = "failed";
@@ -347,6 +356,7 @@ private:
     BatchSender*     batchSender_  = nullptr;
     FimMonitor*      fimMonitor_   = nullptr;
     WorkerManager*   workerManager_= nullptr;
+    LogTailer*       logTailer_    = nullptr;
 
     StatusFlushFn  statusFlushCb_;
     StatusReportFn statusReportCb_;

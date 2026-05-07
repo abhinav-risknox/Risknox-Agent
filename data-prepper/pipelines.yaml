@@ -8,8 +8,10 @@ windows-events-pipeline:
 
   # Routes are a top-level pipeline key
   route:
-    - json_route: '/channel == "FIM" or /channel == "SystemInfo"'
-    - xml_route: '/channel != "FIM" and /channel != "SystemInfo"'
+    - json_route:    '/channel == "FIM" or /channel == "SystemInfo"'
+    - clamav_route:   '/channel == "ClamAV"'
+    - testlog_route:  '/channel == "TestLog"'
+    - xml_route:     '/channel != "FIM" and /channel != "SystemInfo" and /channel != "ClamAV" and /channel != "TestLog"'
 
   processor:
     # 1a. Parse JSON for FIM / SystemInfo events
@@ -22,11 +24,12 @@ windows-events-pipeline:
     - parse_xml:
         source: "data"
         destination: "winlog"
-        parse_when: '/channel != "FIM" and /channel != "SystemInfo"'
+        parse_when: '/channel != "FIM" and /channel != "SystemInfo" and /channel != "ClamAV" and /channel != "TestLog"'
 
-    # 2. Remove the raw data field to save storage
+    # 2. Remove the raw data field to save storage (only for events where it was parsed)
     - delete_entries:
         with_keys: ["data"]
+        delete_when: '/channel != "ClamAV" and /channel != "TestLog"'
 
     # 3. Standardize field names to ECS
     - rename_keys:
@@ -41,6 +44,7 @@ windows-events-pipeline:
             to_key: "winlog/provider_name"
 
   sink:
+    # Windows events (FIM, SystemInfo, and standard XML events)
     - opensearch:
         hosts: [ "http://opensearch:9200" ]
         insecure: true
@@ -50,3 +54,21 @@ windows-events-pipeline:
         routes:
           - json_route
           - xml_route
+    # ClamAV logs (freshclam, clamd, scan) → separate index
+    - opensearch:
+        hosts: [ "http://opensearch:9200" ]
+        insecure: true
+        username: "${OPENSEARCH_USERNAME}"
+        password: "${OPENSEARCH_PASSWORD}"
+        index: "clamav-logs"
+        routes:
+          - clamav_route
+    # Test logs → separate index for verification
+    - opensearch:
+        hosts: [ "http://opensearch:9200" ]
+        insecure: true
+        username: "${OPENSEARCH_USERNAME}"
+        password: "${OPENSEARCH_PASSWORD}"
+        index: "test-logs"
+        routes:
+          - testlog_route

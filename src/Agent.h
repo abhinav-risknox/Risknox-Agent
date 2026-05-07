@@ -15,6 +15,7 @@
 #include "policy/PolicyManager.h"
 #include "policy/ModuleController.h"
 #include "workers/WorkerManager.h"
+#include "logtailer/LogTailer.h"
 
 #include <memory>
 #include <atomic>
@@ -62,6 +63,7 @@ private:
     std::unique_ptr<WorkerManager>  workerManager_;
     std::unique_ptr<PolicyManager>  policyManager_;
     std::unique_ptr<ModuleController> moduleController_;
+    std::unique_ptr<LogTailer>      logTailer_;
     
     // Registration components
     std::unique_ptr<CertificateStore> certStore_;
