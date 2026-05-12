@@ -302,7 +302,7 @@ void RestApi::handleGetAgent(const httplib::Request& req, httplib::Response& res
 void RestApi::handleGetAgentStatus(const httplib::Request& req, httplib::Response& res) {
     std::string agentId = req.matches[1];
 
-    auto reports = db_.getLatestStatusReports(agentId, 5);
+    auto reports = db_.getLatestStatusReports(agentId, 20);
 
     nlohmann::json arr = nlohmann::json::array();
     for (const auto& r : reports) {
@@ -393,6 +393,8 @@ void RestApi::handleGetModuleCommands(const httplib::Request& req, httplib::Resp
         j["verb"]           = c.verb;
         j["params"]         = nlohmann::json::parse(c.params, nullptr, false);
         j["status"]         = c.status;
+        j["ack_status"]     = c.ackStatus;
+        j["result_payload"] = c.resultPayload;
         j["created_at"]     = c.createdAt;
         arr.push_back(std::move(j));
     }

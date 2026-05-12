@@ -1,5 +1,6 @@
 #include "ServiceMain.h"
 #include "utils/Logger.h"
+#include "utils/PathUtils.h"
 
 #include <Windows.h>
 #include <atomic>
@@ -187,11 +188,11 @@ void WINAPI ServiceMain::serviceMain(DWORD argc, LPWSTR* argv) {
     
     reportServiceStatus(SERVICE_START_PENDING, NO_ERROR, 3000);
     
-    // Initialize logger for service mode securely in the executable's directory
-    char buffer[MAX_PATH];
-    GetModuleFileNameA(nullptr, buffer, MAX_PATH);
-    std::string exePath(buffer);
-    std::string logPath = exePath.substr(0, exePath.find_last_of("\\/")) + "\\agent.log";
+    // Initialize logger for service mode securely in ProgramData
+    std::filesystem::path dataDir = PathUtils::getAgentDataDir();
+    std::filesystem::create_directories(dataDir);
+    
+    std::string logPath = (dataDir / "agent.log").string();
     Logger::initialize("info", logPath);
     
     reportServiceStatus(SERVICE_RUNNING, NO_ERROR, 0);

@@ -6,6 +6,7 @@
 #include "appblock/SoftwareBlocker.h"
 #include "ipc/PipeChannel.h"
 #include "utils/Logger.h"
+#include "utils/PathUtils.h"
 #include "config/ConfigManager.h"
 
 #include <nlohmann/json.hpp>
@@ -28,7 +29,7 @@ int main() {
     // Build the AppBlockConfig from the loaded config
     AppBlockConfig abConfig;
     abConfig.enabled           = config.getAppBlockConfig().enabled;
-    abConfig.configPath        = (agentDir / "blocked_apps.json").string();
+    abConfig.configPath        = (PathUtils::getAgentDataDir() / "blocked_apps.json").string();
     abConfig.monitorIntervalMs = config.getAppBlockConfig().monitor_interval_ms;
 
     SoftwareBlocker blocker;

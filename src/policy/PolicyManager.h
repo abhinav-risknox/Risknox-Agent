@@ -98,26 +98,42 @@ public:
     /**
      * Request status from each subprocess worker and send via callback.
      */
-    void sendStatusReport() {
-        nlohmann::json report;
+    void sendStatusReport(nlohmann::json baseData = nlohmann::json::object()) {
+        LOG_INFO("PolicyManager: Generating full module status report...");
+        nlohmann::json report = baseData;
         report["timestamp"] = getCurrentTimestamp();
 
         if (workerManager_) {
+            // Web Blocking
             auto webResp = workerManager_->sendCommand("rp-webblock",
                 {{"action", "get_status"}}, 3000);
             if (webResp.value("ok", false)) {
                 report["web_blocking"] = webResp.value("status", nlohmann::json{});
+                LOG_DEBUG("PolicyManager: Web blocking status retrieved");
+            } else {
+                LOG_WARN("PolicyManager: Failed to get web blocking status: {}", 
+                         webResp.value("error", "unknown"));
             }
 
+            // Software Blocking
             auto sbResp = workerManager_->sendCommand("rp-softblock",
                 {{"action", "get_status"}}, 3000);
             if (sbResp.value("ok", false)) {
                 report["software_blocking"] = sbResp.value("status", nlohmann::json{});
+                LOG_DEBUG("PolicyManager: Software blocking status retrieved");
+            } else {
+                LOG_WARN("PolicyManager: Failed to get software blocking status: {}", 
+                         sbResp.value("error", "unknown"));
             }
+        } else {
+            LOG_ERROR("PolicyManager: WorkerManager is null during status report");
         }
 
         if (statusCallback_) {
+            LOG_INFO("PolicyManager: Dispatching module_status report via callback");
             statusCallback_("module_status", report);
+        } else {
+            LOG_WARN("PolicyManager: No status report callback registered");
         }
     }
 

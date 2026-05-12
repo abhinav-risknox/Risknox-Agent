@@ -1,6 +1,7 @@
 #include "AntivirusWorker.h"
 #include "ipc/PipeChannel.h"
 #include "utils/Logger.h"
+#include "utils/PathUtils.h"
 
 #include <windows.h>
 #include <filesystem>
@@ -12,8 +13,8 @@
 
 namespace ResolutePulse {
 
-AntivirusWorker::AntivirusWorker(const std::string& clamDir)
-    : clamDir_(clamDir) {}
+AntivirusWorker::AntivirusWorker(const std::string& binDir, const std::string& dbDir)
+    : binDir_(binDir), dbDir_(dbDir) {}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // runScan - spawn clamscan.exe, read stdout line-by-line, send events to pipe
@@ -22,9 +23,9 @@ AntivirusWorker::AntivirusWorker(const std::string& clamDir)
 void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe) {
     namespace fs = std::filesystem;
 
-    fs::path clamDir  = fs::path(clamDir_);
-    fs::path clamscan = clamDir / "clamscan.exe";
-    fs::path database = clamDir / "database";
+    fs::path binDir  = fs::path(binDir_);
+    fs::path clamscan = binDir / "clamscan.exe";
+    fs::path database = fs::path(dbDir_);
 
     if (!fs::exists(clamscan)) {
         pipe.sendJson({ {"type","error"}, {"message","clamscan.exe not found"} });
@@ -161,8 +162,8 @@ void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe) {
 
 bool AntivirusWorker::updateDefinitions() {
     namespace fs = std::filesystem;
-    fs::path freshclam = fs::path(clamDir_) / "freshclam.exe";
-    fs::path database  = fs::path(clamDir_) / "database";
+    fs::path freshclam = fs::path(binDir_) / "freshclam.exe";
+    fs::path database  = fs::path(dbDir_);
 
     if (!fs::exists(freshclam)) {
         LOG_WARN("freshclam.exe not found at {}", freshclam.string());
@@ -225,7 +226,7 @@ nlohmann::json AntivirusWorker::getDatabaseInfo() const {
         return static_cast<std::int64_t>(std::chrono::system_clock::to_time_t(sysTp));
     };
 
-    fs::path dbDir = fs::path(clamDir_) / "database";
+    fs::path dbDir = fs::path(dbDir_);
 
     nlohmann::json out;
     out["databaseDir"] = dbDir.string();
@@ -301,21 +302,36 @@ int main() {
     // Resolve clamav dir relative to this executable
     char selfPath[MAX_PATH] = {};
     GetModuleFileNameA(nullptr, selfPath, MAX_PATH);
-    std::filesystem::path agentDir = std::filesystem::path(selfPath).parent_path();
-    // Resolve clamav dir: prefer bundled copy next to this exe,
-    // fall back to a system-wide ClamAV installation.
+    // Resolve binDir: prefer bundled copy next to this exe
+    std::filesystem::path agentDir = PathUtils::getExecutableDir();
     std::filesystem::path bundledClamDir = agentDir / "clamav";
-    std::string clamDir;
+    std::string binDir;
 
     if (std::filesystem::exists(bundledClamDir / "clamscan.exe")) {
-        clamDir = bundledClamDir.string();
-        LOG_INFO("rp-antivirus: using bundled ClamAV at {}", clamDir);
+        binDir = bundledClamDir.string();
+        LOG_INFO("rp-antivirus: using bundled ClamAV at {}", binDir);
     } else {
-        clamDir = "C:\\Program Files\\ClamAV";
-        LOG_WARN("rp-antivirus: bundled ClamAV not found, falling back to system path: {}", clamDir);
+        // Fallback to standard system paths
+        std::filesystem::path pfClam = PathUtils::getProgramFilesPath() / "ClamAV";
+        std::filesystem::path pf86Clam = std::filesystem::path(std::getenv("ProgramFiles(x86)") ? std::getenv("ProgramFiles(x86)") : "C:\\Program Files (x86)") / "ClamAV";
+
+        if (std::filesystem::exists(pfClam / "clamscan.exe")) {
+            binDir = pfClam.string();
+        } else if (std::filesystem::exists(pf86Clam / "clamscan.exe")) {
+            binDir = pf86Clam.string();
+        } else {
+            binDir = pfClam.string(); // Last resort fallback
+        }
+        LOG_WARN("rp-antivirus: bundled ClamAV not found, using system path: {}", binDir);
     }
 
-    AntivirusWorker worker(clamDir);
+    // Resolve dbDir: Always prefer ProgramData for writability (required for freshclam)
+    std::filesystem::path dataDir = PathUtils::getAgentDataDir() / "antivirus" / "database";
+    std::filesystem::create_directories(dataDir);
+    std::string dbDir = dataDir.string();
+    LOG_INFO("rp-antivirus: using database directory at {}", dbDir);
+
+    AntivirusWorker worker(binDir, dbDir);
 
     // One-shot: open pipe, receive command, run scan, exit
     PipeServer pipe;

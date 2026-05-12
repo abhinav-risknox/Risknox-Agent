@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { LayoutGrid, Plus, Trash2, Cpu, RefreshCw } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { endpoints } from '../../api/endpoints';
-import { cn } from '../../lib/utils';
 
 interface SoftwarePolicyCardProps {
   agentId: string;

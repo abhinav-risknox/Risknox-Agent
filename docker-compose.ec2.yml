@@ -86,6 +86,7 @@ services:
       - RPLS_PORT=1514
     ports:
       - 1514:1514
+      - 8080:8080
       - 1515:1515
     volumes:
       - manager-ca-data:/app/ca
@@ -93,6 +94,18 @@ services:
       - risknox-net
     depends_on:
       - postgres
+    restart: unless-stopped
+
+  dashboard:
+    image: abhinavrisknox/risknox-dashboard:latest
+    pull_policy: always
+    container_name: resolutepulse-dashboard
+    ports:
+      - 80:80
+    networks:
+      - risknox-net
+    depends_on:
+      - manager
     restart: unless-stopped
 
   # ── Watchtower: polls Docker Hub every 5 min, auto-restarts manager on new image
@@ -107,8 +120,8 @@ services:
       - WATCHTOWER_POLL_INTERVAL=300
       - WATCHTOWER_CLEANUP=true
       - WATCHTOWER_LABEL_ENABLE=false
-    # Only watch the manager container, leave others alone
-    command: resolutepulse-manager
+    # Watch both manager and dashboard
+    command: resolutepulse-manager resolutepulse-dashboard
     networks:
       - risknox-net
     restart: unless-stopped

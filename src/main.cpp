@@ -47,6 +47,16 @@ std::string getExePath() {
 }
 
 std::string getConfigPath(const std::string& exePath) {
+    // 1. Check for override config in ProgramData
+    const char* programData = std::getenv("ProgramData");
+    if (programData) {
+        std::filesystem::path p = std::filesystem::path(programData) / "Risknox Pulse" / "config.json";
+        if (std::filesystem::exists(p)) {
+            return p.string();
+        }
+    }
+
+    // 2. Fallback to bundled config in EXE directory
     std::filesystem::path p(exePath);
     return (p.parent_path() / "config.json").string();
 }

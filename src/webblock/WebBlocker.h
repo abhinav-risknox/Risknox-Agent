@@ -4,6 +4,7 @@
 #include <vector>
 #include <mutex>
 #include <nlohmann/json.hpp>
+#include "utils/PathUtils.h"
 
 namespace ResolutePulse {
 
@@ -26,7 +27,7 @@ struct BlockedUrl {
 struct WebBlockConfig {
     bool enabled = false;
     std::string configPath;     // Path to blocked_urls.json
-    std::string hostsFilePath = "C:\\Windows\\System32\\drivers\\etc\\hosts";
+    std::string hostsFilePath = PathUtils::getHostsFilePath().string();
 };
 
 class WebBlocker {

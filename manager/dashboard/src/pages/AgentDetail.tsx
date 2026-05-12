@@ -46,14 +46,22 @@ export const AgentDetail: React.FC = () => {
     refetchInterval: 5000,
   });
 
+  const [lastCommand, setLastCommand] = useState<{ verb: string, time: string } | null>(null);
+
   // Mutation for sending commands
   const commandMutation = useMutation({
     mutationFn: ({ verb, params = {} }: { verb: string, params?: any }) => 
       endpoints.agents.sendModuleCommand(id!, verb, params),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['agent-history', id] });
+      setLastCommand({ verb: variables.verb, time: new Date().toLocaleTimeString() });
+      setTimeout(() => setLastCommand(null), 3000);
     }
   });
+
+  const moduleStatusReport = statusReports?.reports?.find((r: any) => r.report_type === 'module_status');
+  const moduleStatusData = moduleStatusReport?.report_data || {};
+  const lastStatusUpdate = moduleStatusReport?.created_at;
 
   if (agentLoading) {
     return (
@@ -114,8 +122,29 @@ export const AgentDetail: React.FC = () => {
             <p className="text-[10px] text-rn-white/40 uppercase font-bold tracking-widest">Agent Version</p>
             <p className="text-xs font-bold text-rn-white/80">{agent.agent_version}</p>
           </div>
+          <button 
+            onClick={() => commandMutation.mutate({ verb: 'status_request' })}
+            className="flex items-center gap-2 px-6 py-2 bg-rn-orange hover:bg-rn-orange-dim text-white rounded-xl font-bold transition-all disabled:opacity-50"
+            disabled={!agent.online || commandMutation.isPending}
+          >
+            {commandMutation.isPending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            <span className="text-xs">Refresh Status</span>
+          </button>
         </div>
       </div>
+      
+      {lastCommand && (
+        <div className="flex items-center gap-2 px-4 py-3 bg-rn-orange/10 border border-rn-orange/20 rounded-2xl text-rn-orange animate-in fade-in slide-in-from-top-2 duration-500 shadow-[0_8px_24px_rgba(249,115,22,0.1)]">
+          <div className="w-6 h-6 rounded-lg bg-rn-orange/20 flex items-center justify-center">
+            <CheckCircle2 className="w-4 h-4" />
+          </div>
+          <div className="flex-1">
+            <span className="text-xs font-bold uppercase tracking-widest">Command Dispatched</span>
+            <span className="mx-2 text-rn-white/20">•</span>
+            <span className="text-xs text-rn-white/60 font-mono">verb={lastCommand.verb} @ {lastCommand.time}</span>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex border-b border-rn-white/5">
@@ -176,7 +205,12 @@ export const AgentDetail: React.FC = () => {
         {activeTab === 'policies' && (
           <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
             <div className="flex items-center justify-between mb-2">
-              <h2 className="text-sm font-bold text-rn-white/40 uppercase tracking-[0.2em]">Active Policy State</h2>
+              <div>
+                <h2 className="text-sm font-bold text-rn-white/40 uppercase tracking-[0.2em]">Active Policy State</h2>
+                {lastStatusUpdate && (
+                  <p className="text-[10px] text-rn-white/20 font-mono mt-1">Snapshot from: {lastStatusUpdate}</p>
+                )}
+              </div>
               <button 
                 onClick={() => commandMutation.mutate({ verb: 'status_request' })}
                 disabled={!agent.online || commandMutation.isPending}
@@ -189,17 +223,37 @@ export const AgentDetail: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <WebPolicyCard 
                 agentId={id!} 
-                blockedUrls={statusReports?.reports.find((r: any) => r.report_type === 'module_status')?.report_data?.web_blocking?.blockedUrls || []} 
+                blockedUrls={moduleStatusData.web_blocking?.blockedUrls || []} 
                 online={agent.online} 
               />
               <SoftwarePolicyCard 
                 agentId={id!} 
-                blockedApps={statusReports?.reports.find((r: any) => r.report_type === 'module_status')?.report_data?.software_blocking?.blockedApps || []} 
+                blockedApps={moduleStatusData.software_blocking?.blockedApps || []} 
                 online={agent.online} 
               />
             </div>
+
+            {/* Debug View */}
+            <div className="mt-12 p-6 rounded-3xl bg-rn-black border border-rn-white/5">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-rn-orange" />
+                  <h3 className="text-sm font-bold text-rn-white/60 uppercase tracking-wider">Debug: Raw Module Status</h3>
+                </div>
+                <button 
+                  onClick={() => console.log('Raw Reports:', statusReports)}
+                  className="text-[10px] text-rn-white/20 hover:text-rn-white/40 underline font-mono"
+                >
+                  Log all reports to console
+                </button>
+              </div>
+              <pre className="text-[10px] text-rn-white/40 font-mono bg-rn-white/[0.02] p-4 rounded-2xl overflow-auto max-h-[300px] border border-rn-white/5">
+                {moduleStatusReport ? JSON.stringify(moduleStatusReport, null, 2) : 'No module_status report found in recent history'}
+              </pre>
+            </div>
           </div>
         )}
+
 
         {activeTab === 'history' && (
           <div className="bg-rn-black-card border border-rn-white/5 rounded-3xl overflow-hidden animate-in fade-in duration-300">
@@ -210,6 +264,7 @@ export const AgentDetail: React.FC = () => {
                   <th className="px-6 py-4">Command Verb</th>
                   <th className="px-6 py-4">Parameters</th>
                   <th className="px-6 py-4">Status</th>
+                  <th className="px-6 py-4">Result</th>
                   <th className="px-6 py-4">Timestamp</th>
                 </tr>
               </thead>
@@ -235,7 +290,7 @@ export const AgentDetail: React.FC = () => {
                         {cmd.status === 'acked' ? (
                           <>
                             <CheckCircle2 className="w-4 h-4 text-green-500" />
-                            <span className="text-xs text-green-500 font-bold uppercase">Acknowledged</span>
+                            <span className="text-xs text-green-500 font-bold uppercase">{cmd.ack_status || 'Acknowledged'}</span>
                           </>
                         ) : cmd.status === 'failed' ? (
                           <>
@@ -249,6 +304,32 @@ export const AgentDetail: React.FC = () => {
                           </>
                         )}
                       </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      {cmd.result_payload ? (
+                        <div className="group relative">
+                          <pre className="text-[10px] text-rn-white/60 bg-rn-white/5 p-2 rounded-lg max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap font-mono border border-rn-white/5 cursor-help hover:border-rn-white/20 transition-all">
+                            {cmd.result_payload}
+                          </pre>
+                          <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-50 bg-rn-black-card border border-rn-white/10 p-4 rounded-2xl shadow-2xl min-w-[300px] max-w-[500px] animate-in fade-in zoom-in-95 duration-200">
+                            <div className="flex items-center justify-between mb-2 pb-2 border-b border-rn-white/5">
+                              <span className="text-[10px] font-bold text-rn-orange uppercase tracking-wider">Command Output</span>
+                              <span className="text-[10px] text-rn-white/20 font-mono">{cmd.command_id}</span>
+                            </div>
+                            <pre className="text-[11px] text-rn-white/80 font-mono whitespace-pre-wrap break-all max-h-[300px] overflow-y-auto">
+                              {(() => {
+                                try {
+                                  return JSON.stringify(JSON.parse(cmd.result_payload), null, 2);
+                                } catch (e) {
+                                  return cmd.result_payload;
+                                }
+                              })()}
+                            </pre>
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-rn-white/10 italic">No output</span>
+                      )}
                     </td>
                     <td className="px-6 py-4">
                       <span className="text-xs text-rn-white/40">{cmd.created_at}</span>
@@ -278,7 +359,7 @@ export const AgentDetail: React.FC = () => {
                     <ExternalLink className="w-4 h-4" />
                   </button>
                 </div>
-                <pre className="bg-rn-black p-4 rounded-2xl text-[11px] text-rn-white/60 font-mono overflow-x-auto border border-rn-white/5">
+                <pre className="bg-rn-black p-4 rounded-2xl text-[11px] text-rn-white/60 font-mono overflow-auto max-h-[400px] border border-rn-white/5 custom-scrollbar">
                   {JSON.stringify(report.report_data, null, 2)}
                 </pre>
               </div>

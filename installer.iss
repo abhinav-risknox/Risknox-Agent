@@ -63,8 +63,18 @@ Source: "build\rp-softblock.exe";    DestDir: "{app}"; Flags: ignoreversion; Com
 Source: "build\rp-patch.exe";        DestDir: "{app}"; Flags: ignoreversion; Components: core
 Source: "build\rp-antivirus.exe";    DestDir: "{app}"; Flags: ignoreversion; Components: core
 
-; Monitor UI Executables & Dependencies
-Source: "src\gui\RiskNoXMonitor\bin\Release\net10.0-windows\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: ui
+; OpenSSL Dependencies for Agent and Workers
+Source: "vendor\clamav\libcrypto-3-x64.dll"; DestDir: "{app}"; Flags: ignoreversion; Components: core
+Source: "vendor\clamav\libssl-3-x64.dll";    DestDir: "{app}"; Flags: ignoreversion; Components: core
+
+; MSVC Runtimes required by OpenSSL DLLs
+Source: "vendor\clamav\vcruntime140.dll";    DestDir: "{app}"; Flags: ignoreversion; Components: core
+Source: "vendor\clamav\vcruntime140_1.dll";  DestDir: "{app}"; Flags: ignoreversion; Components: core
+Source: "vendor\clamav\msvcp140.dll";        DestDir: "{app}"; Flags: ignoreversion; Components: core
+Source: "vendor\clamav\msvcp140_1.dll";      DestDir: "{app}"; Flags: ignoreversion; Components: core
+
+; Monitor UI Executables & Dependencies (Self-Contained)
+Source: "src\gui\RiskNoXMonitor\bin\Release\net10.0-windows\win-x64\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: ui
 
 ; Configuration File
 Source: "config.json"; DestDir: "{app}"; Flags: ignoreversion; Components: core
@@ -103,9 +113,9 @@ Source: "installer_assets\update_definitions.bat"; DestDir: "{app}\clamav"; Flag
 Source: "installer_assets\freshclam.conf"; DestDir: "{app}\clamav"; Flags: ignoreversion; Components: antivirus
 
 ; Virus Databases (~107 MB total)
-Source: "vendor\clamav\database\main.cvd";     DestDir: "{app}\clamav\database"; Flags: ignoreversion; Components: antivirus
-Source: "vendor\clamav\database\daily.cvd";    DestDir: "{app}\clamav\database"; Flags: ignoreversion; Components: antivirus
-Source: "vendor\clamav\database\bytecode.cvd"; DestDir: "{app}\clamav\database"; Flags: ignoreversion; Components: antivirus
+Source: "vendor\clamav\database\main.cvd";     DestDir: "{commonappdata}\Risknox Pulse\antivirus\database"; Flags: ignoreversion; Components: antivirus
+Source: "vendor\clamav\database\daily.cvd";    DestDir: "{commonappdata}\Risknox Pulse\antivirus\database"; Flags: ignoreversion; Components: antivirus
+Source: "vendor\clamav\database\bytecode.cvd"; DestDir: "{commonappdata}\Risknox Pulse\antivirus\database"; Flags: ignoreversion; Components: antivirus
 
 [Icons]
 Name: "{group}\Pulse Monitor"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\risknox.ico"
@@ -122,12 +132,18 @@ Filename: "{app}\ResolutePulse.exe"; Parameters: "--install"; StatusMsg: "Instal
 Filename: "schtasks.exe"; Parameters: "/Create /F /SC DAILY /TN RisknoxClamAVUpdate /TR ""{app}\clamav\update_definitions.bat"" /ST 03:00 /RL HIGHEST"; Flags: runhidden; StatusMsg: "Scheduling virus definition updates..."; Components: antivirus
 
 ; Launch the Desktop Monitor UI after installation finishes
-Filename: "{app}\{#MyAppExeName}"; Description: "Launch Pulse Monitor Dashboard"; Flags: postinstall nowait skipifsilent shellexec
+Filename: "{app}\{#MyAppExeName}"; Description: "Launch Pulse Monitor Dashboard"; Flags: postinstall nowait skipifsilent shellexec; Components: ui
 
 [UninstallRun]
 ; Stop and remove the Windows Service during uninstallation
 Filename: "net.exe"; Parameters: "stop {#MyAppServiceName}"; Flags: runhidden; RunOnceId: "StopService"
 Filename: "{app}\ResolutePulse.exe"; Parameters: "--uninstall"; Flags: runhidden; RunOnceId: "RemoveService"
+; Force kill any remaining worker processes to ensure clean uninstallation
+Filename: "taskkill.exe"; Parameters: "/F /IM rp-webblock.exe /T"; Flags: runhidden; RunOnceId: "KillWebBlock"
+Filename: "taskkill.exe"; Parameters: "/F /IM rp-softblock.exe /T"; Flags: runhidden; RunOnceId: "KillSoftBlock"
+Filename: "taskkill.exe"; Parameters: "/F /IM rp-antivirus.exe /T"; Flags: runhidden; RunOnceId: "KillAV"
+Filename: "taskkill.exe"; Parameters: "/F /IM rp-patch.exe /T"; Flags: runhidden; RunOnceId: "KillPatch"
+Filename: "taskkill.exe"; Parameters: "/F /IM {#MyAppExeName} /T"; Flags: runhidden; RunOnceId: "KillMonitor"
 ; Remove the scheduled ClamAV update task
 Filename: "schtasks.exe"; Parameters: "/Delete /F /TN ""RisknoxClamAVUpdate"""; Flags: runhidden; RunOnceId: "RemoveClamTask"; Components: antivirus
 

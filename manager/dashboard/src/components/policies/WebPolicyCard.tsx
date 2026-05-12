@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Globe, Plus, Trash2, ShieldAlert, RefreshCw } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { endpoints } from '../../api/endpoints';
-import { cn } from '../../lib/utils';
 
 interface WebPolicyCardProps {
   agentId: string;

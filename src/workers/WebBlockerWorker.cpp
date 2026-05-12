@@ -5,6 +5,7 @@
 #include "webblock/WebBlocker.h"
 #include "ipc/PipeChannel.h"
 #include "utils/Logger.h"
+#include "utils/PathUtils.h"
 #include "config/ConfigManager.h"
 
 #include <nlohmann/json.hpp>
@@ -26,7 +27,7 @@ int main() {
     // Build WebBlockConfig from loaded config
     WebBlockConfig wbConfig;
     wbConfig.enabled    = config.getWebBlockConfig().enabled;
-    wbConfig.configPath = (agentDir / "blocked_urls.json").string();
+    wbConfig.configPath = (PathUtils::getAgentDataDir() / "blocked_urls.json").string();
     // hostsFilePath keeps its default (Windows hosts file)
 
     WebBlocker blocker;

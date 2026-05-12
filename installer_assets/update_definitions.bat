@@ -1,5 +1,6 @@
 @echo off
 REM Runs freshclam with the bundled config to update virus definitions.
-REM Called by the Windows Task Scheduler daily at 03:00.
+REM Writable database is stored in %ProgramData% for service compatibility.
 set APP_DIR=%~dp0
-"%APP_DIR%freshclam.exe" --config-file="%APP_DIR%freshclam.conf"
+if not exist "%ProgramData%\Risknox Pulse\antivirus\database" mkdir "%ProgramData%\Risknox Pulse\antivirus\database"
+"%APP_DIR%freshclam.exe" --config-file="%APP_DIR%freshclam.conf" --datadir="%ProgramData%\Risknox Pulse\antivirus\database"

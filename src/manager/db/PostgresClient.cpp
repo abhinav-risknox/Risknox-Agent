@@ -3,6 +3,8 @@
 
 #include <libpq-fe.h>
 #include <sstream>
+#include <set>
+#include <map>
 
 namespace ResolutePulse {
 
@@ -817,7 +819,8 @@ std::vector<ModuleCommandRecord> PostgresClient::listModuleCommands(
         std::string off = std::to_string(offset);
         const char* paramValues[2] = { lim.c_str(), off.c_str() };
         res = PQexecParams(conn_,
-            "SELECT id, agent_id, command_id, verb, params::text, status, created_at::text "
+            "SELECT id, agent_id, command_id, verb, params::text, status, "
+            "       COALESCE(ack_status, ''), COALESCE(result_payload, ''), created_at::text "
             "FROM module_commands ORDER BY created_at DESC LIMIT $1 OFFSET $2",
             2, nullptr, paramValues, nullptr, nullptr, 0);
     } else {
@@ -825,7 +828,8 @@ std::vector<ModuleCommandRecord> PostgresClient::listModuleCommands(
         std::string off = std::to_string(offset);
         const char* paramValues[3] = { agentId.c_str(), lim.c_str(), off.c_str() };
         res = PQexecParams(conn_,
-            "SELECT id, agent_id, command_id, verb, params::text, status, created_at::text "
+            "SELECT id, agent_id, command_id, verb, params::text, status, "
+            "       COALESCE(ack_status, ''), COALESCE(result_payload, ''), created_at::text "
             "FROM module_commands WHERE agent_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3",
             3, nullptr, paramValues, nullptr, nullptr, 0);
     }
@@ -847,7 +851,9 @@ std::vector<ModuleCommandRecord> PostgresClient::listModuleCommands(
         c.verb      = PQgetvalue(res, i, 3);
         c.params    = PQgetvalue(res, i, 4);
         c.status    = PQgetvalue(res, i, 5);
-        c.createdAt = PQgetisnull(res, i, 6) ? "" : PQgetvalue(res, i, 6);
+        c.ackStatus = PQgetvalue(res, i, 6);
+        c.resultPayload = PQgetvalue(res, i, 7);
+        c.createdAt = PQgetisnull(res, i, 8) ? "" : PQgetvalue(res, i, 8);
         commands.push_back(std::move(c));
     }
 
@@ -973,10 +979,11 @@ std::vector<PostgresClient::StatusReportRecord> PostgresClient::getLatestStatusR
     const char* paramValues[2] = { agentId.c_str(), lim.c_str() };
 
     PGresult* res = PQexecParams(conn_,
-        "SELECT agent_id, report_type, report_data::text, created_at::text "
-        "FROM agent_status_reports WHERE agent_id = $1 "
-        "ORDER BY created_at DESC LIMIT $2",
-        2, nullptr, paramValues, nullptr, nullptr, 0);
+        "SELECT DISTINCT ON (report_type) agent_id, report_type, report_data::text, created_at::text "
+        "FROM agent_status_reports "
+        "WHERE agent_id = $1 "
+        "ORDER BY report_type, created_at DESC",
+        1, nullptr, paramValues, nullptr, nullptr, 0);
 
     if (PQresultStatus(res) != PGRES_TUPLES_OK) {
         PQclear(res);
@@ -1148,7 +1155,11 @@ bool PostgresClient::recordModuleCommandWithOperator(const std::string& agentId,
     return true;
 }
 
-} // namespace ResolutePulse
+struct GlobalAppBlockInfo {
+    std::string name;
+    std::set<std::string> blockedAgentIds;
+    int totalKills = 0;
+};
 
 nlohmann::json PostgresClient::getGlobalPolicySummary() {
     std::lock_guard<std::recursive_mutex> lock(dbMutex_);
@@ -1177,12 +1188,7 @@ nlohmann::json PostgresClient::getGlobalPolicySummary() {
     }
 
     std::map<std::string, std::set<std::string>> webBlocks; // url -> set of agentIds
-    struct AppInfo {
-        std::string name;
-        std::set<std::string> agents;
-        int totalKills = 0;
-    };
-    std::map<std::string, AppInfo> appBlocks; // exe -> AppInfo
+    std::map<std::string, GlobalAppBlockInfo> appBlocks; // exe -> GlobalAppBlockInfo
 
     int rows = PQntuples(res);
     for (int i = 0; i < rows; i++) {
@@ -1205,7 +1211,7 @@ nlohmann::json PostgresClient::getGlobalPolicySummary() {
                     if (!exe.empty()) {
                         auto& info = appBlocks[exe];
                         info.name = a.value("name", exe);
-                        info.agents.insert(agentId);
+                        info.blockedAgentIds.insert(agentId);
                         info.totalKills += a.value("kills", 0);
                     }
                 }
@@ -1215,23 +1221,27 @@ nlohmann::json PostgresClient::getGlobalPolicySummary() {
     PQclear(res);
 
     // Format output
-    for (auto const& [url, agents] : webBlocks) {
+    for (auto const& it : webBlocks) {
         nlohmann::json item;
-        item["url"] = url;
-        item["agents"] = agents;
-        item["agent_count"] = agents.size();
+        item["url"] = it.first;
+        item["agents"] = it.second;
+        item["agent_count"] = it.second.size();
         summary["web"].push_back(item);
     }
 
-    for (auto const& [exe, info] : appBlocks) {
+    for (auto const& it : appBlocks) {
+        const std::string& exe = it.first;
+        const GlobalAppBlockInfo& info = it.second;
         nlohmann::json item;
         item["executable"] = exe;
         item["name"] = info.name;
-        item["agents"] = info.agents;
-        item["agent_count"] = info.agents.size();
+        item["agents"] = info.blockedAgentIds;
+        item["agent_count"] = info.blockedAgentIds.size();
         item["total_kills"] = info.totalKills;
         summary["apps"].push_back(item);
     }
 
     return summary;
 }
+
+} // namespace ResolutePulse

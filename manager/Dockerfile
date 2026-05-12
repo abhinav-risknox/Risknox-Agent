@@ -1,4 +1,4 @@
-﻿# =============================================================================
+# =============================================================================
 # ResolutePulse Manager - Multi-Stage Docker Build
 # =============================================================================
 
@@ -24,6 +24,7 @@ COPY src/utils/            ./src/utils/
 COPY src/common/           ./src/common/
 COPY thirdparty/spdlog/    ./thirdparty/spdlog/
 COPY thirdparty/nlohmann/  ./thirdparty/nlohmann/
+COPY thirdparty/httplib/   ./thirdparty/httplib/
 
 # Build
 RUN cmake -B build -DCMAKE_BUILD_TYPE=Release \
@@ -49,6 +50,6 @@ COPY --from=builder /app/build/ResolutePulseManager .
 RUN mkdir -p /app/ca
 
 EXPOSE 1514
+EXPOSE 8080
 
 ENTRYPOINT ["./ResolutePulseManager", "--ca-dir", "/app/ca"]
-

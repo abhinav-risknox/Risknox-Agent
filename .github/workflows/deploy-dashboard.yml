@@ -1,0 +1,61 @@
+name: Build & Deploy Dashboard
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'manager/dashboard/**'
+      - '.github/workflows/deploy-dashboard.yml'
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: abhinavrisknox/risknox-dashboard
+
+jobs:
+  build-and-deploy:
+    name: Build image & deploy to EC2
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Dashboard image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./manager/dashboard
+          file: manager/dashboard/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:cache
+          cache-to:   type=registry,ref=${{ env.IMAGE_NAME }}:cache,mode=max
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1
+        with:
+          host:     ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key:      ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            cd ~/manager
+            docker compose pull dashboard
+            docker compose up -d dashboard
+            docker image prune -f
+            echo "Dashboard deploy complete: ${{ github.sha }}"
+
+      - name: Report deployment SHA
+        if: success()
+        run: |
+          echo "Dashboard deployed: ${{ env.IMAGE_NAME }}:${{ github.sha }}"

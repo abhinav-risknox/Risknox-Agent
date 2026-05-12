@@ -73,6 +73,7 @@ set(AGENT_SOURCES
     src/service/ServiceMain.cpp
     src/utils/Logger.cpp
     src/utils/Base64.cpp
+    src/utils/PathUtils.cpp
     # FIM module
     src/fim/FimDatabase.cpp
     src/fim/FileHasher.cpp
@@ -494,6 +495,7 @@ add_executable(rp-softblock
     src/ipc/PipeChannel.cpp
     src/config/ConfigManager.cpp
     src/utils/Logger.cpp
+    src/utils/PathUtils.cpp
 )
 target_include_directories(rp-softblock PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -511,6 +513,7 @@ add_executable(rp-webblock
     src/ipc/PipeChannel.cpp
     src/config/ConfigManager.cpp
     src/utils/Logger.cpp
+    src/utils/PathUtils.cpp
 )
 target_include_directories(rp-webblock PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -528,6 +531,7 @@ add_executable(rp-patch
     src/ipc/PipeChannel.cpp
     src/config/ConfigManager.cpp
     src/utils/Logger.cpp
+    src/utils/PathUtils.cpp
 )
 target_include_directories(rp-patch PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -543,6 +547,7 @@ add_executable(rp-antivirus
     src/antivirus/AntivirusWorker.cpp
     src/ipc/PipeChannel.cpp
     src/utils/Logger.cpp
+    src/utils/PathUtils.cpp
 )
 target_include_directories(rp-antivirus PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src

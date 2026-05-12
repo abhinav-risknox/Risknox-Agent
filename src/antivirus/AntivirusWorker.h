@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 // AntivirusWorker.h - Entry point for rp-antivirus.exe
 // Wraps clamscan.exe and freshclam.exe as child subprocesses,
@@ -18,8 +18,9 @@ namespace ResolutePulse {
 // Call from the rp-antivirus.exe main() loop.
 class AntivirusWorker {
 public:
-    // clamDir: directory containing clamscan.exe and the database/ folder
-    explicit AntivirusWorker(const std::string& clamDir);
+    // binDir: directory containing clamscan.exe and freshclam.exe
+    // dbDir:  directory containing the virus definitions (database/)
+    AntivirusWorker(const std::string& binDir, const std::string& dbDir);
 
     // Run a scan on `path`. Emits JSON events to `pipe`.
     void runScan(const std::string& path,
@@ -33,7 +34,8 @@ public:
     nlohmann::json getDatabaseInfo() const;
 
 private:
-    std::string clamDir_;  // e.g. "vendor/clamav"
+    std::string binDir_;
+    std::string dbDir_;
 };
 
 } // namespace ResolutePulse

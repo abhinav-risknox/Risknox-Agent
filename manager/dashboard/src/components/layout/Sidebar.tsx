@@ -7,7 +7,8 @@ import {
   History, 
   Settings, 
   Activity,
-  ChevronRight
+  ChevronRight,
+  LogOut
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -55,7 +56,18 @@ export const Sidebar: React.FC = () => {
         ))}
       </nav>
 
-      <div className="p-4 mt-auto">
+      <div className="px-4 pb-6 space-y-4">
+        <button 
+          onClick={() => {
+            localStorage.removeItem('rn_token');
+            window.location.href = '/login';
+          }}
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-rn-white/50 hover:text-red-400 hover:bg-red-400/5 transition-all group"
+        >
+          <LogOut className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
+          <span className="font-medium">Logout</span>
+        </button>
+
         <div className="bg-rn-black-card rounded-2xl p-4 border border-rn-white/5">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />

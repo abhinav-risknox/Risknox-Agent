@@ -23,6 +23,8 @@
 #include "fim/FimMonitor.h"
 #include "workers/WorkerManager.h"
 #include "utils/Logger.h"
+#include "utils/PathUtils.h"
+#include "patch/PatchManager.h"
 #include "common/Protocol.h"
 
 #include <nlohmann/json.hpp>
@@ -239,13 +241,20 @@ private:
                 fullConfig[section][k] = v;
             }
 
+            // Determine target path: Always persist to ProgramData for service compatibility
+            std::filesystem::path targetPath = PathUtils::getAgentDataDir() / "config.json";
+            std::filesystem::create_directories(targetPath.parent_path());
+            
             // Write atomically
-            std::string tmp = configPath_ + ".tmp";
+            std::string tmp = targetPath.string() + ".tmp";
             {
                 std::ofstream out(tmp);
                 out << fullConfig.dump(4);
             }
-            std::filesystem::rename(tmp, configPath_);
+            std::filesystem::rename(tmp, targetPath);
+
+            // Update our own reference so subsequent pushes merge against the latest
+            configPath_ = targetPath.string();
 
             // Post-write hook: reconfigure LogTailer when log sources change
             if (section == "log_forwarding" && logTailer_ && newConfig.contains("logs")) {

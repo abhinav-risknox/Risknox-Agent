@@ -1,5 +1,6 @@
 #include "Agent.h"
 #include "utils/Logger.h"
+#include "utils/PathUtils.h"
 #include "service/ServiceMain.h"
 #include "fim/FimEvent.h"
 
@@ -91,15 +92,10 @@ bool Agent::initialize(const std::string& configPath) {
     logTailer_ = std::make_unique<LogTailer>(*queue_);
     {
         // Set base directory to the agent's executable directory
-        wchar_t exePath[MAX_PATH] = {};
-        GetModuleFileNameW(nullptr, exePath, MAX_PATH);
-        std::string exeDir = std::filesystem::path(exePath).parent_path().string();
-        logTailer_->setBaseDir(exeDir);
+        logTailer_->setBaseDir(PathUtils::getExecutableDir().string());
 
         // Persist offsets to ProgramData so they survive restarts
-        const char* programData = std::getenv("ProgramData");
-        std::filesystem::path dataDir = std::filesystem::path(
-            programData ? programData : "C:\\ProgramData") / "Risknox Pulse";
+        std::filesystem::path dataDir = PathUtils::getAgentDataDir();
         std::filesystem::create_directories(dataDir);
         logTailer_->setOffsetPath((dataDir / "logtailer_offsets.json").string());
     }
@@ -126,9 +122,7 @@ bool Agent::initialize(const std::string& configPath) {
     {
         std::filesystem::path p(dbPath);
         if (p.is_relative()) {
-            const char* programData = std::getenv("ProgramData");
-            std::filesystem::path dataDir = std::filesystem::path(
-                programData ? programData : "C:\\ProgramData") / "Risknox Pulse";
+            std::filesystem::path dataDir = PathUtils::getAgentDataDir();
             std::filesystem::create_directories(dataDir);
             p = dataDir / p;
             dbPath = p.string();
@@ -219,9 +213,7 @@ bool Agent::initialize(const std::string& configPath) {
         {
             std::filesystem::path p(fimDbPath);
             if (p.is_relative()) {
-                const char* programData = std::getenv("ProgramData");
-                std::filesystem::path dataDir = std::filesystem::path(
-                    programData ? programData : "C:\\ProgramData") / "Risknox Pulse";
+                std::filesystem::path dataDir = PathUtils::getAgentDataDir();
                 std::filesystem::create_directories(dataDir);
                 p = dataDir / p;
                 fimDbPath = p.string();
@@ -346,15 +338,15 @@ bool Agent::initialize(const std::string& configPath) {
     if (managementSender_) {
         std::string agentId = config.getAgentId();
         moduleController_->setStatusReportCallback([this, agentId]() {
-            auto* tls = dynamic_cast<TlsSender*>(managementSender_.get());
-            if (tls && tls->isConnected()) {
-                // Build a lightweight status payload
+            LOG_INFO("Agent: status_request received, triggering full policy status refresh");
+            if (policyManager_) {
                 nlohmann::json statusData;
                 statusData["phase"]           = agentPhase_;
                 statusData["licenseSuspended"] = licenseSuspended_;
                 statusData["eventsCollected"]  = collector_ ? collector_->getEventsCollected() : 0;
                 statusData["eventsSent"]       = batchSender_ ? batchSender_->getEventsSent() : 0;
-                tls->sendStatusReport(agentId, "module_status", statusData);
+                
+                policyManager_->sendStatusReport(statusData);
             }
         });
     }
@@ -392,16 +384,13 @@ bool Agent::performRegistration() {
     
     auto& config = ConfigManager::instance();
     
-    // Resolve certsDir relative to executable path (fix: avoid System32 when running as service)
+    // Resolve certsDir to ProgramData directory (fix: avoid System32/Program Files when running as service)
     std::string certsDir = config.getManagerConfig().certs_dir;
     {
-        // If certsDir is relative, resolve it relative to the executable's directory
+        // Always resolve relative certsDir relative to ProgramData
         std::filesystem::path certsPath(certsDir);
         if (certsPath.is_relative()) {
-            wchar_t exePath[MAX_PATH] = {};
-            GetModuleFileNameW(nullptr, exePath, MAX_PATH);
-            std::filesystem::path exeDir = std::filesystem::path(exePath).parent_path();
-            certsPath = exeDir / certsPath;
+            certsPath = PathUtils::getAgentDataDir() / certsPath;
             certsDir = certsPath.string();
         }
         // Ensure the directory exists
@@ -971,10 +960,9 @@ void Agent::managementLoop() {
 
 void Agent::writeStatusFile() {
     try {
-        // Resolve path next to executable
-        wchar_t exePath[MAX_PATH] = {};
-        GetModuleFileNameW(nullptr, exePath, MAX_PATH);
-        std::filesystem::path statusPath = std::filesystem::path(exePath).parent_path() / "status.json";
+        // Resolve path in ProgramData
+        std::filesystem::path statusPath = PathUtils::getAgentDataDir() / "status.json";
+        std::filesystem::create_directories(statusPath.parent_path());
 
         nlohmann::json status;
         status["status"] = licenseSuspended_ ? "suspended" : (running_.load() ? "running" : "stopped");
@@ -1125,9 +1113,7 @@ void Agent::writeStatusFile() {
 
 
 std::string Agent::resolveConfigDir() const {
-    const char* programData = std::getenv("ProgramData");
-    std::filesystem::path configDir = std::filesystem::path(
-        programData ? programData : "C:\\ProgramData") / "Risknox Pulse" / "config";
+    std::filesystem::path configDir = PathUtils::getAgentDataDir() / "config";
     std::filesystem::create_directories(configDir);
     return configDir.string();
 }

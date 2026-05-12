@@ -80,6 +80,8 @@ struct ModuleCommandRecord {
     std::string verb;         // 'av_version' | 'av_update' | 'diagnostics' | 'agent_restart' | etc.
     std::string params;       // raw JSON string from JSONB column
     std::string status;       // pending | sent | acked | failed
+    std::string ackStatus;
+    std::string resultPayload;
     std::string createdAt;
 };
 
@@ -240,6 +242,9 @@ public:
 
     // Get unified audit log (both policy + module commands, newest first)
     nlohmann::json getAuditLog(const std::string& agentId = "", int limit = 100, int offset = 0);
+
+    // Get global policy summary for all agents
+    nlohmann::json getGlobalPolicySummary();
 
     // ── Operator authentication ─────────────────────────────────────────────
 

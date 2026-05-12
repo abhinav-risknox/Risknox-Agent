@@ -16,39 +16,61 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Border" Background="{TemplateBinding Background}" CornerRadius="6">
+                        <Border x:Name="Border" Background="{TemplateBinding Background}" CornerRadius="8">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Border" Property="Opacity" Value="0.85"/>
+                                <Setter TargetName="Border" Property="Opacity" Value="0.9"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Border" Property="Opacity" Value="0.7"/>
+                                <Setter TargetName="Border" Property="Opacity" Value="0.75"/>
+                                <Setter TargetName="Border" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <ScaleTransform ScaleX="0.98" ScaleY="0.98"/>
+                                    </Setter.Value>
+                                </Setter>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Border" Property="Opacity" Value="0.2"/>
-                                <Setter Property="Foreground" Value="#66FFFFFF"/>
+                                <Setter TargetName="Border" Property="Background" Value="#252527"/>
+                                <Setter Property="Foreground" Value="#484850"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- Secondary Button Style -->
+        <Style x:Key="SecondaryButtonStyle" TargetType="Button" BasedOn="{StaticResource ModernButtonStyle}">
+            <Setter Property="Background" Value="#252527"/>
+            <Setter Property="Foreground" Value="#A0A0A4"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#2A2A2C"/>
+                    <Setter Property="Foreground" Value="#FFFFFF"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
     </Window.Resources>
 
-    <Border Background="#1E1E1F" CornerRadius="12" BorderBrush="#2A2A2C" BorderThickness="1" ClipToBounds="True">
+    <Border x:Name="MainBorder" CornerRadius="12" BorderBrush="#2A2A2C" BorderThickness="1" ClipToBounds="True">
+        <Border.Background>
+            <RadialGradientBrush Center="0.5,0.2" GradientOrigin="0.5,0.2" RadiusX="1" RadiusY="1">
+                <GradientStop Color="#252527" Offset="0"/>
+                <GradientStop Color="#1E1E1F" Offset="1"/>
+            </RadialGradientBrush>
+        </Border.Background>
         <Border.Effect>
-            <DropShadowEffect BlurRadius="25" ShadowDepth="4" Opacity="0.5" Direction="270" Color="Black"/>
+            <DropShadowEffect BlurRadius="30" ShadowDepth="0" Opacity="0.4" Color="Black"/>
         </Border.Effect>
 
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="46"/>   <!-- Title Bar -->
                 <RowDefinition Height="Auto"/> <!-- Hero Status -->
-                <RowDefinition Height="38"/>   <!-- Tab Strip -->
-                <RowDefinition Height="*"/>    <!-- Tab Content -->
-                <RowDefinition Height="Auto"/> <!-- Actions -->
+                <RowDefinition Height="*"/>    <!-- Main Dashboard -->
+                <RowDefinition Height="Auto"/> <!-- Main Actions -->
             </Grid.RowDefinitions>
 
             <!-- ══ Title Bar ══════════════════════════════════════════════ -->
@@ -78,7 +100,7 @@
                                 <Setter Property="Template">
                                     <Setter.Value>
                                         <ControlTemplate TargetType="Button">
-                                            <Border CornerRadius="0,0,0,6" Background="{TemplateBinding Background}">
+                                            <Border Background="{TemplateBinding Background}">
                                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Border>
                                         </ControlTemplate>
@@ -86,8 +108,8 @@
                                 </Setter>
                                 <Style.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter Property="Background" Value="#E81123"/>
-                                        <Setter Property="Foreground" Value="#FFFFFF"/>
+                                        <Setter Property="Background" Value="#C42B1C"/>
+                                        <Setter Property="Foreground" Value="White"/>
                                     </Trigger>
                                 </Style.Triggers>
                             </Style>
@@ -98,103 +120,83 @@
                 <Border VerticalAlignment="Bottom" Height="1" Background="#252527" Grid.ColumnSpan="3"/>
             </Grid>
 
-            <!-- ══ Hero Status ═════════════════════════════════════════════ -->
-            <StackPanel Grid.Row="1" Margin="20,14,20,10" HorizontalAlignment="Center">
-                <Border Background="#252527" CornerRadius="20" Padding="16,9" BorderBrush="#2E2E30" BorderThickness="1">
-                    <StackPanel Orientation="Horizontal">
-                        <Ellipse x:Name="StatusIndicator" Fill="#FFFD98" Width="11" Height="11" VerticalAlignment="Center" Margin="0,0,10,0">
-                            <Ellipse.Effect>
-                                <DropShadowEffect BlurRadius="8" ShadowDepth="0" Color="#FFFD98" Opacity="0.5"/>
-                            </Ellipse.Effect>
-                        </Ellipse>
-                        <TextBlock x:Name="StatusText" Text="NOT INSTALLED" FontSize="13" FontWeight="Bold" Foreground="#FFFFFF" VerticalAlignment="Center"/>
-                        <TextBlock x:Name="TxtPhase" Text="" FontSize="11" Foreground="#606066" VerticalAlignment="Center" Margin="8,0,0,0"/>
+            <!-- ══ Shield Strength Dashboard (Hero Area) ═══════════════════ -->
+            <StackPanel Grid.Row="1" Margin="20,10,20,10" HorizontalAlignment="Center">
+                <Grid Width="100" Height="100">
+                    <!-- Outer Glow Ring -->
+                    <Ellipse x:Name="ShieldOuterGlow" Margin="-5" Opacity="0.15">
+                        <Ellipse.Fill>
+                            <RadialGradientBrush>
+                                <GradientStop x:Name="GlowColorStop" Color="#22C55E" Offset="0"/>
+                                <GradientStop Color="Transparent" Offset="1"/>
+                            </RadialGradientBrush>
+                        </Ellipse.Fill>
+                    </Ellipse>
+
+                    <!-- The Shield Icon -->
+                    <Path x:Name="ShieldIcon" Data="M20,10 L80,10 L80,50 C80,80 50,100 50,100 C50,100 20,80 20,50 Z" 
+                          Stretch="Uniform" Fill="#252527" Stroke="#2E2E30" StrokeThickness="2" Width="45" Height="45"
+                          Cursor="Hand" MouseLeftButtonDown="ShieldIcon_MouseLeftButtonDown">
+                        <Path.Effect>
+                            <DropShadowEffect x:Name="ShieldGlow" BlurRadius="15" ShadowDepth="0" Color="#22C55E" Opacity="0.4"/>
+                        </Path.Effect>
+                    </Path>
+
+                    <!-- Center Status Label -->
+                    <StackPanel VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,-15">
+                        <TextBlock x:Name="StatusText" Text="PROTECTED" FontSize="14" FontWeight="Black" 
+                                   Foreground="#FFFFFF" HorizontalAlignment="Center"/>
+                        <TextBlock x:Name="TxtShieldDetail" Text="All systems operational" FontSize="9" 
+                                   Foreground="#606066" HorizontalAlignment="Center"/>
                     </StackPanel>
-                </Border>
+                </Grid>
             </StackPanel>
 
-            <!-- ══ Tab Strip ═══════════════════════════════════════════════ -->
-            <Border Grid.Row="2" Background="#181819" BorderBrush="#252527" BorderThickness="0,1,0,1">
-                <StackPanel Orientation="Horizontal" Margin="14,0,0,0">
-
-                    <!-- Overview Tab -->
-                    <Grid x:Name="TabGrdOverview" Width="88" Height="38" Cursor="Hand"
-                          MouseLeftButtonDown="TabOverview_Click">
-                        <TextBlock x:Name="TabLblOverview" Text="Overview"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"
-                                   FontSize="12" FontWeight="Medium" Foreground="#FFFFFF"/>
-                        <Border x:Name="TabBarOverview" VerticalAlignment="Bottom" Height="2"
-                                Background="#FF5B00" CornerRadius="1,1,0,0"/>
-                    </Grid>
-
-                    <!-- Components Tab -->
-                    <Grid x:Name="TabGrdComponents" Width="102" Height="38" Cursor="Hand"
-                          MouseLeftButtonDown="TabComponents_Click">
-                        <TextBlock x:Name="TabLblComponents" Text="Components"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"
-                                   FontSize="12" FontWeight="Medium" Foreground="#484850"/>
-                        <Border x:Name="TabBarComponents" VerticalAlignment="Bottom" Height="2"
-                                Background="#FF5B00" CornerRadius="1,1,0,0" Visibility="Collapsed"/>
-                    </Grid>
-
-                    <!-- Logs Tab -->
-                    <Grid x:Name="TabGrdLogs" Width="68" Height="38" Cursor="Hand"
-                          MouseLeftButtonDown="TabLogs_Click">
-                        <TextBlock x:Name="TabLblLogs" Text="Logs"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"
-                                   FontSize="12" FontWeight="Medium" Foreground="#484850"/>
-                        <Border x:Name="TabBarLogs" VerticalAlignment="Bottom" Height="2"
-                                Background="#FF5B00" CornerRadius="1,1,0,0" Visibility="Collapsed"/>
-                    </Grid>
-
-                </StackPanel>
-            </Border>
-
-            <!-- ══ Tab Content Area ════════════════════════════════════════ -->
-            <Grid Grid.Row="3">
-
-                <!-- ── Overview Tab ──────────────────────────────────────── -->
-                <ScrollViewer x:Name="TabOverviewPanel" VerticalScrollBarVisibility="Hidden"
-                              Margin="20,12,20,0">
+            <!-- ══ Main Dashboard Area ══════════════════════════════════════ -->
+            <Grid Grid.Row="2">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="20,8,20,0">
                     <StackPanel>
                         <!-- System Info Card -->
-                        <Border Background="#252527" CornerRadius="8" Padding="18" Margin="0,0,0,12"
+                        <Border Background="#252527" CornerRadius="10" Padding="20" Margin="0,0,0,10"
                                 BorderBrush="#2E2E30" BorderThickness="1">
                             <StackPanel>
-                                <TextBlock Text="SYSTEM INFORMATION" FontSize="9" FontWeight="Bold"
-                                           Foreground="#505056" Margin="0,0,0,14"/>
+                                <TextBlock Text="SYSTEM INFORMATION" FontSize="9" FontWeight="Black"
+                                           Foreground="#505056" Margin="0,0,0,16"/>
                                 <Grid Margin="0,0,0,12">
-                                    <TextBlock Text="Service" Foreground="#909094" FontSize="13" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Service Name" Foreground="#909094" FontSize="13" VerticalAlignment="Center"/>
                                     <TextBlock Text="ResolutePulse" Foreground="#FFFFFF" FontSize="13"
-                                               FontWeight="Medium" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                               FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                                 </Grid>
                                 <Rectangle Height="1" Fill="#2E2E30" Margin="0,0,0,12"/>
                                 <Grid Margin="0,0,0,12">
-                                    <TextBlock Text="Network" Foreground="#909094" FontSize="13" VerticalAlignment="Center"/>
-                                    <TextBlock Text="TCP / mTLS" Foreground="#FFFFFF" FontSize="13"
-                                               FontWeight="Medium" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Protocol" Foreground="#909094" FontSize="13" VerticalAlignment="Center"/>
+                                    <TextBlock Text="mTLS Secured" Foreground="#FFFFFF" FontSize="13"
+                                               FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                                 </Grid>
                                 <Rectangle Height="1" Fill="#2E2E30" Margin="0,0,0,12"/>
                                 <Grid>
-                                    <TextBlock Text="Configuration" Foreground="#909094" FontSize="13" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Maintenance" Foreground="#909094" FontSize="13" VerticalAlignment="Center"/>
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                                        <TextBlock Text="config.json" Foreground="#FFFFFF" FontSize="13"
-                                                   FontWeight="Medium" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                        <Button x:Name="BtnOpenConfig" Content="↗" Width="26" Height="26" Padding="0"
-                                                Background="#2E2E30" Foreground="#FF5B00" BorderThickness="0"
-                                                FontSize="13" FontWeight="Bold" Cursor="Hand" Click="BtnOpenConfig_Click"
-                                                ToolTip="Open Config Directory">
-                                            <Button.Resources>
-                                                <Style TargetType="Border"><Setter Property="CornerRadius" Value="4"/></Style>
-                                            </Button.Resources>
+                                        <Button x:Name="BtnOpenLogs" Content="📝" ToolTip="View Agent Logs (Dev Mode)" 
+                                                Width="28" Height="28" Padding="0" Margin="0,0,8,0"
+                                                Background="#2E2E30" Foreground="#A0A0A4" BorderThickness="0"
+                                                FontSize="12" Cursor="Hand" Click="BtnOpenLogs_Click"
+                                                Visibility="Collapsed"
+                                                Style="{StaticResource SecondaryButtonStyle}">
+                                        </Button>
+                                        <Button x:Name="BtnOpenConfig" Content="📁" ToolTip="Open Config Directory" 
+                                                Width="28" Height="28" Padding="0"
+                                                Background="#2E2E30" Foreground="#A0A0A4" BorderThickness="0"
+                                                FontSize="12" Cursor="Hand" Click="BtnOpenConfig_Click"
+                                                Style="{StaticResource SecondaryButtonStyle}">
                                         </Button>
                                     </StackPanel>
                                 </Grid>
                             </StackPanel>
                         </Border>
 
-                        <!-- License Card -->
-                        <Border Background="#252527" CornerRadius="8" Padding="18"
+                        <!-- Subscription Card -->
+                        <Border Background="#252527" CornerRadius="10" Padding="20"
                                 BorderBrush="#2E2E30" BorderThickness="1">
                             <Grid>
                                 <Grid.ColumnDefinitions>
@@ -202,74 +204,43 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                    <TextBlock Text="LICENSE STATUS" FontSize="9" FontWeight="Bold"
+                                    <TextBlock Text="SUBSCRIPTION" FontSize="9" FontWeight="Black"
                                                Foreground="#505056" Margin="0,0,0,4"/>
                                     <TextBlock x:Name="TxtLicenseType" Text="Checking..."
-                                               Foreground="#FFFFFF" FontWeight="Medium" FontSize="13"/>
+                                               Foreground="#FFFFFF" FontWeight="SemiBold" FontSize="14"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
-                                    <TextBlock x:Name="TxtExpiry" Text="..." FontSize="14"
-                                               Foreground="#FFFFFF" FontWeight="SemiBold" HorizontalAlignment="Right"/>
-                                    <TextBlock x:Name="TxtLicenseDetail" Text="" FontSize="10"
+                                    <TextBlock x:Name="TxtExpiry" Text="..." FontSize="15"
+                                               Foreground="#FFFFFF" FontWeight="Bold" HorizontalAlignment="Right"/>
+                                    <TextBlock x:Name="TxtLicenseDetail" Text="" FontSize="11"
                                                Foreground="#606066" HorizontalAlignment="Right" Margin="0,2,0,0"/>
                                 </StackPanel>
                             </Grid>
                         </Border>
 
                         <!-- Error Banner -->
-                        <Border x:Name="ErrorBanner" Background="#3D1A00" CornerRadius="8" Padding="14"
+                        <Border x:Name="ErrorBanner" Background="#3D1A00" CornerRadius="10" Padding="16"
                                 Margin="0,10,0,0" BorderBrush="#FF5B00" BorderThickness="1" Visibility="Collapsed">
                             <StackPanel>
-                                <TextBlock Text="⚠  ISSUE DETECTED" FontSize="9" FontWeight="Bold"
-                                           Foreground="#FF8C42" Margin="0,0,0,6"/>
+                                <TextBlock Text="⚠  SYSTEM ISSUE" FontSize="9" FontWeight="Black"
+                                           Foreground="#FF8C42" Margin="0,0,0,8"/>
                                 <TextBlock x:Name="TxtError" Text="" Foreground="#FFAA66"
-                                           FontSize="11" TextWrapping="Wrap"/>
+                                           FontSize="12" TextWrapping="Wrap" LineHeight="18"/>
                             </StackPanel>
                         </Border>
                     </StackPanel>
                 </ScrollViewer>
-
-                <!-- ── Components Tab ─────────────────────────────────────── -->
-                <ScrollViewer x:Name="TabComponentsPanel" Visibility="Collapsed"
-                              VerticalScrollBarVisibility="Hidden" Margin="20,8,20,0">
-                    <Border x:Name="ComponentsCard" Background="#1A1A1B" CornerRadius="10"
-                            Padding="14,4,14,4" BorderBrush="#2A2A2C" BorderThickness="1">
-                        <StackPanel x:Name="ComponentsSections"/>
-                    </Border>
-                </ScrollViewer>
-
-                <!-- ── Logs Tab ───────────────────────────────────────────── -->
-                <Grid x:Name="TabLogsPanel" Visibility="Collapsed" Margin="20,12,20,0">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
-                    <TextBlock Grid.Row="0" Text="LIVE LOGS" FontSize="9" FontWeight="Bold"
-                               Foreground="#505056" Margin="0,0,0,8"/>
-                    <Border Grid.Row="1" Background="#131315" CornerRadius="8"
-                            BorderBrush="#2A2A2C" BorderThickness="1">
-                        <TextBox x:Name="TxtLogViewer" Background="Transparent" Foreground="#808086"
-                                 BorderThickness="0" FontFamily="Consolas" FontSize="11"
-                                 IsReadOnly="True" TextWrapping="Wrap"
-                                 VerticalScrollBarVisibility="Auto" Padding="12"/>
-                    </Border>
-                </Grid>
-
             </Grid>
 
-            <!-- ══ Actions ═════════════════════════════════════════════════ -->
-            <Grid Grid.Row="4" Margin="20,14,20,18">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="12"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-                <Button x:Name="BtnStart" Grid.Column="0" Content="Start Agent" Height="42"
+            <!-- ══ Main Action Button ══════════════════════════════════════ -->
+            <Grid Grid.Row="3" Margin="20,14,20,20">
+                <Button x:Name="BtnAction" Content="Start Agent" Height="50"
                         Style="{StaticResource ModernButtonStyle}"
-                        Background="#FF5B00" Click="BtnStart_Click"/>
-                <Button x:Name="BtnStop" Grid.Column="2" Content="Stop Agent" Height="42"
-                        Style="{StaticResource ModernButtonStyle}"
-                        Background="#2E2E30" Click="BtnStop_Click"/>
+                        Background="#FF5B00" Click="BtnAction_Click">
+                    <Button.Effect>
+                        <DropShadowEffect BlurRadius="15" ShadowDepth="2" Opacity="0.3" Color="#FF5B00"/>
+                    </Button.Effect>
+                </Button>
             </Grid>
 
         </Grid>

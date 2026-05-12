@@ -39,6 +39,36 @@ bool ConfigManager::load(const std::string& configPath) {
             return false;
         }
         agentId_ = config["agent_id"].get<std::string>();
+
+        if (agentId_ == "AUTO") {
+            const char* programData = std::getenv("ProgramData");
+            std::filesystem::path idFile = std::filesystem::path(programData ? programData : "C:\\ProgramData") / "Risknox Pulse" / "agent_id.txt";
+            
+            if (std::filesystem::exists(idFile)) {
+                std::ifstream f(idFile);
+                std::getline(f, agentId_);
+            } else {
+                char buffer[MAX_COMPUTERNAME_LENGTH + 1];
+                DWORD size = sizeof(buffer);
+                std::string compName = "Unknown";
+                if (GetComputerNameA(buffer, &size)) {
+                    compName = buffer;
+                }
+                
+                // Generate a random suffix
+                srand(static_cast<unsigned int>(time(nullptr)));
+                int randomSuffix = rand() % 1000000;
+                
+                agentId_ = compName + "-" + std::to_string(randomSuffix);
+                
+                // Ensure directory exists
+                std::filesystem::create_directories(idFile.parent_path());
+                
+                // Save it
+                std::ofstream f(idFile);
+                f << agentId_;
+            }
+        }
         
         // Manager config (optional)
         if (config.contains("manager")) {
