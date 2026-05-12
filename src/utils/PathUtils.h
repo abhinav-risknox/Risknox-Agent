@@ -23,6 +23,11 @@ public:
     static std::filesystem::path getProgramFilesPath();
 
     /**
+     * @return Path to the Windows system directory (e.g. C:\Windows\System32)
+     */
+    static std::filesystem::path getSystemDirectory();
+
+    /**
      * @return Path to the directory where the current executable is located
      */
     static std::filesystem::path getExecutableDir();

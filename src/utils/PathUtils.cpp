@@ -40,6 +40,16 @@ std::filesystem::path PathUtils::getProgramFilesPath() {
     return std::filesystem::path(pf ? pf : "C:\\Program Files");
 }
 
+std::filesystem::path PathUtils::getSystemDirectory() {
+    wchar_t path[MAX_PATH];
+    if (GetSystemDirectoryW(path, MAX_PATH)) {
+        return std::filesystem::path(path);
+    }
+    // Fallback via environment
+    const char* winDir = std::getenv("SystemRoot");
+    return std::filesystem::path(winDir ? winDir : "C:\\Windows") / "System32";
+}
+
 std::filesystem::path PathUtils::getExecutableDir() {
     wchar_t buffer[MAX_PATH];
     GetModuleFileNameW(nullptr, buffer, MAX_PATH);

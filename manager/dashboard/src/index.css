@@ -12,6 +12,14 @@
   --color-rn-black-soft: #2A2A2B;
   --color-rn-black-card: #242425;
 
+  --color-rn-primary: #FF5B00;
+  --color-rn-secondary: #FFFD98;
+  --color-rn-success: #40bb82;
+  --color-rn-info: #3fa7d6;
+  --color-rn-warning: #FFFD98;
+  --color-rn-danger: #ee6352;
+  --color-rn-dark: #303031;
+
   --font-sans: "Poppins", sans-serif;
   --font-display: "DM Sans", sans-serif;
 

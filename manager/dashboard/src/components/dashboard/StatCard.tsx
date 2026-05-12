@@ -20,37 +20,42 @@ export const StatCard: React.FC<StatCardProps> = ({
   color = 'orange' 
 }) => {
   const colorMap = {
-    orange: 'from-rn-orange to-orange-600 shadow-rn-orange/20 text-rn-orange',
-    blue: 'from-blue-500 to-blue-700 shadow-blue-500/20 text-blue-500',
-    green: 'from-green-500 to-green-700 shadow-green-500/20 text-green-500',
-    purple: 'from-purple-500 to-purple-700 shadow-purple-500/20 text-purple-500',
+    orange: 'text-rn-orange border-rn-orange/20 hover:shadow-[0_8px_16px_rgba(255,91,0,0.15)]',
+    blue: 'text-blue-500 border-blue-500/20 hover:shadow-[0_8px_16px_rgba(59,130,246,0.15)]',
+    green: 'text-green-500 border-green-500/20 hover:shadow-[0_8px_16px_rgba(34,197,94,0.15)]',
+    purple: 'text-purple-500 border-purple-500/20 hover:shadow-[0_8px_16px_rgba(168,85,247,0.15)]',
   };
 
   return (
-    <div className="bg-rn-black-card border border-rn-white/5 rounded-3xl p-6 hover:border-rn-white/10 transition-all group overflow-hidden relative">
-      <div className="absolute -right-4 -top-4 w-24 h-24 bg-rn-orange/5 rounded-full blur-3xl group-hover:bg-rn-orange/10 transition-colors" />
-      
-      <div className="flex items-start justify-between relative z-10">
-        <div>
-          <p className="text-rn-white/40 text-sm font-bold uppercase tracking-wider mb-1">{title}</p>
-          <h3 className="text-4xl font-display font-bold text-rn-white tracking-tight">{value}</h3>
-          
-          {trend && (
-            <div className={cn(
-              "flex items-center gap-1 mt-2 text-xs font-bold",
-              trendUp ? "text-green-500" : "text-rn-orange"
-            )}>
-              {trendUp ? '↑' : '↓'} {trend}
-              <span className="text-rn-white/20 font-medium">vs last 24h</span>
-            </div>
-          )}
+    <div className={cn(
+      "bg-transparent border rounded-xl p-6 transition-all duration-300 cursor-pointer min-h-[140px] flex flex-col h-full group hover:-translate-y-1",
+      colorMap[color]
+    )}>
+      <div className="flex items-center justify-between mb-auto">
+        <p className="text-[11px] font-medium text-rn-white/40 uppercase tracking-[0.5px]">
+          {title}
+        </p>
+        <div className={cn("text-2xl opacity-80 group-hover:opacity-100 transition-opacity")}>
+          <Icon className="w-8 h-8" />
         </div>
-
-        <div className={cn(
-          "w-12 h-12 rounded-2xl flex items-center justify-center bg-rn-white/5 border border-rn-white/5 group-hover:border-rn-orange/20 transition-all",
-          colorMap[color].split(' ').pop() // Use the color text class
-        )}>
-          <Icon className="w-6 h-6" />
+      </div>
+      
+      <div className="flex items-end justify-between mt-4">
+        <div>
+          <h4 className="text-2xl font-display font-semibold text-rn-white mb-1">
+            {value}
+          </h4>
+          <p className="text-[12px] text-rn-white/30">
+            {trend && (
+              <span className={cn(
+                "font-bold mr-1",
+                trendUp ? "text-green-500" : "text-rn-orange"
+              )}>
+                {trendUp ? '↑' : '↓'} {trend}
+              </span>
+            )}
+            {trend ? 'vs last 24h' : 'Stable status'}
+          </p>
         </div>
       </div>
     </div>

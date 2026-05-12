@@ -26,16 +26,30 @@ void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe) {
     fs::path binDir  = fs::path(binDir_);
     fs::path clamscan = binDir / "clamscan.exe";
     fs::path database = fs::path(dbDir_);
+    fs::path bundledDatabase = binDir / "database";
 
     if (!fs::exists(clamscan)) {
         pipe.sendJson({ {"type","error"}, {"message","clamscan.exe not found"} });
         return;
     }
 
+    if (!fs::exists(database) && fs::exists(bundledDatabase)) {
+        LOG_WARN("AV database not found at {}, falling back to bundled database at {}",
+                 database.string(), bundledDatabase.string());
+        database = bundledDatabase;
+    }
+
+    if (!fs::exists(database)) {
+        pipe.sendJson({
+            {"type", "error"},
+            {"message", "ClamAV database directory not found"},
+            {"databaseDir", database.string()}
+        });
+        return;
+    }
+
     // Build command line
-    // --infected:   only print infected files
     // --recursive:  scan directories recursively
-    // --no-summary: suppress summary (we emit our own complete event)
     std::string cmdLine =
         "\"" + clamscan.string() + "\""
         " --database=\"" + database.string() + "\""
@@ -93,6 +107,7 @@ void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe) {
     char readBuf[4096];
     int  filesScanned = 0;
     int  threats      = 0;
+    std::vector<std::string> diagnosticLines;
 
     // Progress report frequency
     int progressInterval = 50;
@@ -137,20 +152,48 @@ void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe) {
                     {"threat", threat}
                 });
                 LOG_WARN("THREAT DETECTED: {} - {}", filePath, threat);
+            } else if (!line.empty()
+                       && line.rfind("Scanning ", 0) != 0
+                       && line.rfind("Loading: ", 0) != 0) {
+                diagnosticLines.push_back(line);
+                LOG_WARN("clamscan: {}", line);
             }
         }
     }
 
     CloseHandle(hReadStdOut);
     WaitForSingleObject(pi.hProcess, 5000);
+    DWORD exitCode = 0;
+    GetExitCodeProcess(pi.hProcess, &exitCode);
     CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
+
+    if (exitCode != 0 && exitCode != 1) {
+        nlohmann::json error = {
+            {"type", "error"},
+            {"message", "clamscan failed"},
+            {"exitCode", exitCode},
+            {"filesScanned", filesScanned},
+            {"threats", threats},
+            {"databaseDir", database.string()},
+            {"scanPath", path}
+        };
+        if (!diagnosticLines.empty()) {
+            error["details"] = diagnosticLines;
+        }
+        pipe.sendJson(error);
+        LOG_ERROR("AV scan failed: exitCode={} path={} database={}",
+                  exitCode, path, database.string());
+        return;
+    }
 
     // Emit final summary
     pipe.sendJson({
         {"type",         "complete"},
         {"filesScanned", filesScanned},
-        {"threats",      threats}
+        {"threats",      threats},
+        {"databaseDir",  database.string()},
+        {"scanPath",     path}
     });
 
     LOG_INFO("AV scan complete: {} files scanned, {} threats", filesScanned, threats);
@@ -164,6 +207,7 @@ bool AntivirusWorker::updateDefinitions() {
     namespace fs = std::filesystem;
     fs::path freshclam = fs::path(binDir_) / "freshclam.exe";
     fs::path database  = fs::path(dbDir_);
+    fs::create_directories(database);
 
     if (!fs::exists(freshclam)) {
         LOG_WARN("freshclam.exe not found at {}", freshclam.string());
@@ -227,6 +271,11 @@ nlohmann::json AntivirusWorker::getDatabaseInfo() const {
     };
 
     fs::path dbDir = fs::path(dbDir_);
+    fs::path bundledDbDir = fs::path(binDir_) / "database";
+
+    if (!fs::exists(dbDir) && fs::exists(bundledDbDir)) {
+        dbDir = bundledDbDir;
+    }
 
     nlohmann::json out;
     out["databaseDir"] = dbDir.string();

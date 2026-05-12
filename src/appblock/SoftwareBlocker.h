@@ -17,8 +17,7 @@ struct BlockedApp {
     std::string blockedAt;
     std::string status;           // "active"
     int kills = 0;
-    bool registryApplied = false;
-    bool explorerRestarted = false;
+    bool ifeoApplied = false;     // IFEO Debugger key set
 
     nlohmann::json toJson() const {
         return {
@@ -27,8 +26,7 @@ struct BlockedApp {
             {"blockedAt", blockedAt},
             {"status", status},
             {"kills", kills},
-            {"registryApplied", registryApplied},
-            {"explorerRestarted", explorerRestarted}
+            {"ifeoApplied", ifeoApplied}
         };
     }
 };
@@ -69,13 +67,10 @@ private:
     // Process management
     int terminateProcess(const std::string& executable);
 
-    // Registry blocking (3 locations)
-    bool blockWithRegistry(const std::string& executable);
-    bool removeRegistryBlock(const std::string& executable);
-
-    // System operations
-    void updateGroupPolicy();
-    bool restartExplorer();
+    // IFEO-based blocking
+    bool setIFEOBlock(const std::string& executable);
+    bool removeIFEOBlock(const std::string& executable);
+    std::wstring getIFEODebuggerValue() const;
 
     // Background monitor
     void monitorLoop(const std::string& executable);

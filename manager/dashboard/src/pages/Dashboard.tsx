@@ -10,6 +10,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { StatCard } from '../components/dashboard/StatCard';
+import { Breadcrumb } from '../components/common/Breadcrumb';
 import { useAgents } from '../hooks/useAgents';
 import { cn } from '../lib/utils';
 import { Link } from 'react-router-dom';
@@ -25,20 +26,23 @@ export const Dashboard: React.FC = () => {
   const commandsSent = 2401;
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-700">
-      <div className="flex items-center justify-between">
+    <div className="animate-in fade-in duration-700">
+      <Breadcrumb title="Dashboard" pageTitle="Overview" />
+
+      <div className="flex items-center justify-between mb-8 bg-rn-black-card/40 p-6 rounded-2xl border border-rn-white/5">
         <div>
-          <h1 className="text-3xl font-display font-bold text-rn-white">Security Overview</h1>
-          <p className="text-rn-white/40 mt-1">Live monitoring and control of your distributed agent network.</p>
+          <h1 className="text-2xl font-display font-bold text-rn-white">Security Posture</h1>
+          <p className="text-rn-white/40 text-sm mt-1">Live monitoring and control of your distributed agent network.</p>
         </div>
         
         <div className="flex items-center gap-4">
           <button 
             onClick={() => refetch()}
             disabled={isFetching}
-            className="p-2.5 rounded-xl bg-rn-white/5 border border-rn-white/5 hover:bg-rn-white/10 transition-all text-rn-white/60 hover:text-rn-white"
+            className="flex items-center gap-2 py-2 px-4 rounded-lg bg-rn-white/5 border border-rn-white/5 hover:bg-rn-white/10 transition-all text-rn-white/60 hover:text-rn-white text-xs font-bold uppercase tracking-wider"
           >
-            <RefreshCw className={cn("w-5 h-5", isFetching && "animate-spin")} />
+            <RefreshCw className={cn("w-4 h-4", isFetching && "animate-spin")} />
+            Refresh
           </button>
           <button className="bg-rn-orange hover:bg-rn-orange-dim text-white font-bold py-2.5 px-6 rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-rn-orange/20 hover:scale-[1.02] active:scale-[0.98]">
             <Plus className="w-5 h-5" />
@@ -48,7 +52,7 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
         <StatCard 
           title="Total Agents" 
           value={isLoading ? "..." : totalAgents} 
@@ -85,15 +89,15 @@ export const Dashboard: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Agent Table Preview */}
-        <div className="lg:col-span-2 bg-rn-black-card border border-rn-white/5 rounded-3xl overflow-hidden">
-          <div className="p-6 border-b border-rn-white/5 flex items-center justify-between">
-            <h2 className="text-xl font-display font-bold text-rn-white">Connected Agents</h2>
-            <Link to="/agents" className="text-rn-orange text-sm font-bold flex items-center gap-1 hover:underline">
-              View All <ArrowUpRight className="w-4 h-4" />
+        <div className="lg:col-span-2 bg-rn-black-card/40 border border-rn-white/5 rounded-2xl overflow-hidden flex flex-col">
+          <div className="p-6 border-b border-rn-white/5 flex items-center justify-between bg-rn-white/[0.02]">
+            <h2 className="text-sm font-bold text-rn-white uppercase tracking-wider">Connected Agents</h2>
+            <Link to="/agents" className="text-rn-orange text-xs font-bold flex items-center gap-1 hover:underline px-3 py-1 bg-rn-orange/10 rounded-lg transition-all">
+              View All <ArrowUpRight className="w-3 h-3" />
             </Link>
           </div>
           
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto flex-1">
             {isLoading ? (
               <div className="p-12 flex flex-col items-center justify-center text-rn-white/20">
                 <RefreshCw className="w-8 h-8 animate-spin mb-4" />
@@ -169,7 +173,7 @@ export const Dashboard: React.FC = () => {
         </div>
 
         {/* Recent Activity Sidebar - Static for now */}
-        <div className="bg-rn-black-card border border-rn-white/5 rounded-3xl p-6">
+        <div className="bg-rn-black-card border border-rn-white/5 rounded-3xl p-8">
           <h2 className="text-xl font-display font-bold text-rn-white mb-6">Recent Activity</h2>
           
           <div className="space-y-6">

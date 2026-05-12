@@ -1,5 +1,6 @@
-﻿#include "SoftwareBlocker.h"
+#include "SoftwareBlocker.h"
 #include "utils/Logger.h"
+#include "utils/PathUtils.h"
 
 #include <Windows.h>
 #include <TlHelp32.h>
@@ -48,9 +49,11 @@ bool SoftwareBlocker::start() {
     if (running_.load()) return true;
     running_ = true;
 
-    // Restart monitors for all active blocks
+    // Restart monitors and re-apply IFEO blocks for all active blocks
     for (const auto& app : blockedApps_) {
         if (app.status == "active") {
+            // Re-apply IFEO block in case it was tampered with
+            setIFEOBlock(app.executable);
             startProcessMonitor(app.executable);
         }
     }
@@ -127,252 +130,80 @@ int SoftwareBlocker::terminateProcess(const std::string& executable) {
     return killed;
 }
 
-bool SoftwareBlocker::blockWithRegistry(const std::string& executable) {
-    LOG_DEBUG("SoftwareBlocker: Applying registry block: {}", executable);
-    int successCount = 0;
+std::wstring SoftwareBlocker::getIFEODebuggerValue() const {
+    // Resolve System32 dynamically via PathUtils (uses GetSystemDirectoryW)
+    std::filesystem::path sysDir = PathUtils::getSystemDirectory();
+    std::filesystem::path debuggerPath = sysDir / "rundll32.exe";
 
-    // Three registry locations (same as Python reference)
-    struct RegLocation {
-        HKEY hive;
-        const wchar_t* basePath;
-        const wchar_t* disallowPath;
-        const char* name;
-    };
+    // rundll32.exe with no valid args does nothing — app fails to launch
+    return debuggerPath.wstring();
+}
 
-    RegLocation locations[] = {
-        { HKEY_LOCAL_MACHINE,
-          L"SOFTWARE\\Policies\\Microsoft\\Windows\\Explorer",
-          L"SOFTWARE\\Policies\\Microsoft\\Windows\\Explorer\\DisallowRun",
-          "Group Policy" },
-        { HKEY_LOCAL_MACHINE,
-          L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer",
-          L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\DisallowRun",
-          "HKLM Standard" },
-        { HKEY_CURRENT_USER,
-          L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer",
-          L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\DisallowRun",
-          "HKCU" },
-    };
+bool SoftwareBlocker::setIFEOBlock(const std::string& executable) {
+    LOG_DEBUG("SoftwareBlocker: Applying IFEO block: {}", executable);
 
-    // Convert executable to wide string
+    // Registry path: HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\{exe}
+    std::wstring subKey = L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\";
     std::wstring wExe(executable.begin(), executable.end());
+    subKey += wExe;
 
-    for (const auto& loc : locations) {
-        HKEY key = nullptr;
-        LONG result;
-
-        // Enable DisallowRun
-        result = RegCreateKeyExW(loc.hive, loc.basePath, 0, nullptr,
-                                  0, KEY_ALL_ACCESS, nullptr, &key, nullptr);
-        if (result == ERROR_SUCCESS) {
-            DWORD val = 1;
-            RegSetValueExW(key, L"DisallowRun", 0, REG_DWORD,
-                           reinterpret_cast<const BYTE*>(&val), sizeof(val));
-            RegCloseKey(key);
-        } else {
-            LOG_WARN("SoftwareBlocker: Failed to open {} base key: {}",
-                     loc.name, result);
-            continue;
-        }
-
-        // Add executable to DisallowRun list
-        result = RegCreateKeyExW(loc.hive, loc.disallowPath, 0, nullptr,
-                                  0, KEY_ALL_ACCESS, nullptr, &key, nullptr);
-        if (result != ERROR_SUCCESS) {
-            LOG_WARN("SoftwareBlocker: Failed to open {} disallow key: {}",
-                     loc.name, result);
-            continue;
-        }
-
-        // Check if already present
-        bool alreadyPresent = false;
-        DWORD idx = 0;
-        wchar_t valueName[256];
-        DWORD valueNameLen;
-        BYTE valueData[512];
-        DWORD valueDataLen;
-        DWORD valueType;
-
-        int nextIndex = 1;
-        while (true) {
-            valueNameLen = 256;
-            valueDataLen = 512;
-            result = RegEnumValueW(key, idx, valueName, &valueNameLen,
-                                    nullptr, &valueType, valueData, &valueDataLen);
-            if (result != ERROR_SUCCESS) break;
-
-            if (valueType == REG_SZ) {
-                std::wstring existing(reinterpret_cast<wchar_t*>(valueData));
-                std::string existingNarrow;
-                existingNarrow.resize(existing.size());
-                WideCharToMultiByte(CP_ACP, 0, existing.c_str(), -1,
-                                     &existingNarrow[0], (int)existingNarrow.size() + 1,
-                                     nullptr, nullptr);
-                existingNarrow.resize(strlen(existingNarrow.c_str()));
-
-                if (toLower(existingNarrow) == toLower(executable)) {
-                    alreadyPresent = true;
-                    break;
-                }
-            }
-
-            // Track the next available index
-            try {
-                int n = std::stoi(std::wstring(valueName, valueNameLen));
-                if (n >= nextIndex) nextIndex = n + 1;
-            } catch (...) {}
-
-            idx++;
-        }
-
-        if (!alreadyPresent) {
-            std::wstring indexStr = std::to_wstring(nextIndex);
-            result = RegSetValueExW(key, indexStr.c_str(), 0, REG_SZ,
-                                     reinterpret_cast<const BYTE*>(wExe.c_str()),
-                                     static_cast<DWORD>((wExe.size() + 1) * sizeof(wchar_t)));
-            if (result == ERROR_SUCCESS) {
-                LOG_DEBUG("SoftwareBlocker: {} - added at index {}", loc.name, nextIndex);
-                successCount++;
-            }
-        } else {
-            successCount++; // Already there counts as success
-        }
-
-        RegCloseKey(key);
+    HKEY key = nullptr;
+    LONG result = RegCreateKeyExW(HKEY_LOCAL_MACHINE, subKey.c_str(), 0, nullptr,
+                                   0, KEY_ALL_ACCESS, nullptr, &key, nullptr);
+    if (result != ERROR_SUCCESS) {
+        LOG_WARN("SoftwareBlocker: Failed to create IFEO key for {}: error {}", executable, result);
+        return false;
     }
 
-    LOG_DEBUG("SoftwareBlocker: Registry block: {}/3 locations succeeded", successCount);
-    return successCount > 0;
-}
+    // Build debugger value dynamically (no hardcoded paths)
+    std::wstring debuggerValue = getIFEODebuggerValue();
+    result = RegSetValueExW(key, L"Debugger", 0, REG_SZ,
+                             reinterpret_cast<const BYTE*>(debuggerValue.c_str()),
+                             static_cast<DWORD>((debuggerValue.size() + 1) * sizeof(wchar_t)));
+    RegCloseKey(key);
 
-bool SoftwareBlocker::removeRegistryBlock(const std::string& executable) {
-    LOG_DEBUG("SoftwareBlocker: Removing registry block: {}", executable);
-    int removed = 0;
-
-    struct RegLocation {
-        HKEY hive;
-        const wchar_t* disallowPath;
-        const char* name;
-    };
-
-    RegLocation locations[] = {
-        { HKEY_LOCAL_MACHINE,
-          L"SOFTWARE\\Policies\\Microsoft\\Windows\\Explorer\\DisallowRun",
-          "Group Policy" },
-        { HKEY_LOCAL_MACHINE,
-          L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\DisallowRun",
-          "HKLM" },
-        { HKEY_CURRENT_USER,
-          L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\DisallowRun",
-          "HKCU" },
-    };
-
-    for (const auto& loc : locations) {
-        HKEY key = nullptr;
-        LONG result = RegOpenKeyExW(loc.hive, loc.disallowPath, 0, KEY_ALL_ACCESS, &key);
-        if (result != ERROR_SUCCESS) continue;
-
-        // Find and remove matching values
-        std::vector<std::wstring> toDelete;
-        DWORD idx = 0;
-        wchar_t valueName[256];
-        DWORD valueNameLen;
-        BYTE valueData[512];
-        DWORD valueDataLen;
-        DWORD valueType;
-
-        while (true) {
-            valueNameLen = 256;
-            valueDataLen = 512;
-            result = RegEnumValueW(key, idx, valueName, &valueNameLen,
-                                    nullptr, &valueType, valueData, &valueDataLen);
-            if (result != ERROR_SUCCESS) break;
-
-            if (valueType == REG_SZ) {
-                std::wstring existing(reinterpret_cast<wchar_t*>(valueData));
-                std::string existingNarrow;
-                existingNarrow.resize(existing.size());
-                WideCharToMultiByte(CP_ACP, 0, existing.c_str(), -1,
-                                     &existingNarrow[0], (int)existingNarrow.size() + 1,
-                                     nullptr, nullptr);
-                existingNarrow.resize(strlen(existingNarrow.c_str()));
-
-                if (toLower(existingNarrow) == toLower(executable)) {
-                    toDelete.push_back(std::wstring(valueName, valueNameLen));
-                }
-            }
-            idx++;
-        }
-
-        for (const auto& vn : toDelete) {
-            if (RegDeleteValueW(key, vn.c_str()) == ERROR_SUCCESS) {
-                removed++;
-                LOG_DEBUG("SoftwareBlocker: Removed from {} [{}]", loc.name,
-                          std::string(vn.begin(), vn.end()));
-            }
-        }
-
-        RegCloseKey(key);
-    }
-
-    LOG_DEBUG("SoftwareBlocker: Removed {} registry entries", removed);
-    return removed > 0;
-}
-
-void SoftwareBlocker::updateGroupPolicy() {
-    STARTUPINFOW si = {};
-    si.cb = sizeof(si);
-    si.dwFlags = STARTF_USESHOWWINDOW;
-    si.wShowWindow = SW_HIDE;
-    PROCESS_INFORMATION pi = {};
-
-    wchar_t cmd[] = L"gpupdate /force";
-    if (CreateProcessW(nullptr, cmd, nullptr, nullptr, FALSE,
-                       CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
-        WaitForSingleObject(pi.hProcess, 30000);
-        CloseHandle(pi.hProcess);
-        CloseHandle(pi.hThread);
-        LOG_DEBUG("SoftwareBlocker: Group Policy updated");
-    }
-}
-
-bool SoftwareBlocker::restartExplorer() {
-    LOG_DEBUG("SoftwareBlocker: Restarting Explorer...");
-
-    // Kill explorer
-    STARTUPINFOW si = {};
-    si.cb = sizeof(si);
-    si.dwFlags = STARTF_USESHOWWINDOW;
-    si.wShowWindow = SW_HIDE;
-    PROCESS_INFORMATION pi = {};
-
-    wchar_t killCmd[] = L"taskkill /f /im explorer.exe";
-    if (CreateProcessW(nullptr, killCmd, nullptr, nullptr, FALSE,
-                       CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
-        WaitForSingleObject(pi.hProcess, 5000);
-        CloseHandle(pi.hProcess);
-        CloseHandle(pi.hThread);
-    }
-
-    Sleep(2000);
-
-    // Restart explorer
-    STARTUPINFOW si2 = {};
-    si2.cb = sizeof(si2);
-    PROCESS_INFORMATION pi2 = {};
-
-    wchar_t explorerPath[] = L"explorer.exe";
-    if (CreateProcessW(nullptr, explorerPath, nullptr, nullptr, FALSE,
-                       0, nullptr, nullptr, &si2, &pi2)) {
-        CloseHandle(pi2.hProcess);
-        CloseHandle(pi2.hThread);
-        Sleep(1000);
-        LOG_DEBUG("SoftwareBlocker: Explorer restarted");
+    if (result == ERROR_SUCCESS) {
+        LOG_DEBUG("SoftwareBlocker: IFEO Debugger set for {}", executable);
         return true;
     }
 
-    LOG_WARN("SoftwareBlocker: Failed to restart Explorer");
+    LOG_WARN("SoftwareBlocker: Failed to set IFEO Debugger for {}: error {}", executable, result);
     return false;
+}
+
+bool SoftwareBlocker::removeIFEOBlock(const std::string& executable) {
+    LOG_DEBUG("SoftwareBlocker: Removing IFEO block: {}", executable);
+
+    std::wstring subKey = L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\";
+    std::wstring wExe(executable.begin(), executable.end());
+    subKey += wExe;
+
+    HKEY key = nullptr;
+    LONG result = RegOpenKeyExW(HKEY_LOCAL_MACHINE, subKey.c_str(), 0, KEY_ALL_ACCESS, &key);
+    if (result != ERROR_SUCCESS) {
+        LOG_DEBUG("SoftwareBlocker: No IFEO key for {} (already unblocked?)", executable);
+        return false;
+    }
+
+    // Remove the Debugger value
+    result = RegDeleteValueW(key, L"Debugger");
+    bool removed = (result == ERROR_SUCCESS);
+    if (removed) {
+        LOG_DEBUG("SoftwareBlocker: IFEO Debugger removed for {}", executable);
+    }
+
+    // Check if key is now empty; if so, clean it up
+    DWORD valueCount = 0;
+    RegQueryInfoKeyW(key, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+                      &valueCount, nullptr, nullptr, nullptr, nullptr);
+    RegCloseKey(key);
+
+    if (valueCount == 0) {
+        RegDeleteKeyW(HKEY_LOCAL_MACHINE, subKey.c_str());
+        LOG_DEBUG("SoftwareBlocker: IFEO key cleaned up for {}", executable);
+    }
+
+    return removed;
 }
 
 void SoftwareBlocker::monitorLoop(const std::string& executable) {
@@ -485,26 +316,16 @@ nlohmann::json SoftwareBlocker::blockApplication(const std::string& name, const 
         }
     }
 
-    // Step 1: Kill running processes
+    // Step 1: Apply IFEO registry block (prevents future launches immediately)
+    bool ifeoOk = setIFEOBlock(executable);
+
+    // Step 2: Kill running processes
     int killed = terminateProcess(executable);
 
-    // Step 2: Apply registry blocking
-    bool registryOk = blockWithRegistry(executable);
-
-    // Step 3: Update Group Policy
-    updateGroupPolicy();
-
-    // Step 4: Restart Explorer
-    bool explorerRestarted = restartExplorer();
-
-    // Step 5: Start process monitor
+    // Step 3: Start process monitor
     if (running_.load()) {
         startProcessMonitor(executable);
     }
-
-    // Step 6: Kill again (catch anything that restarted)
-    Sleep(500);
-    int killed2 = terminateProcess(executable);
 
     // Save to config
     BlockedApp app;
@@ -512,9 +333,8 @@ nlohmann::json SoftwareBlocker::blockApplication(const std::string& name, const 
     app.executable = executable;
     app.blockedAt = getCurrentTimestamp();
     app.status = "active";
-    app.kills = killed + killed2;
-    app.registryApplied = registryOk;
-    app.explorerRestarted = explorerRestarted;
+    app.kills = killed;
+    app.ifeoApplied = ifeoOk;
 
     blockedApps_.push_back(app);
     saveBlockedApps();
@@ -525,22 +345,21 @@ nlohmann::json SoftwareBlocker::blockApplication(const std::string& name, const 
         event["type"] = "application_blocked";
         event["name"] = name;
         event["executable"] = executable;
-        event["kills"] = killed + killed2;
-        event["registryApplied"] = registryOk;
+        event["kills"] = killed;
+        event["ifeoApplied"] = ifeoOk;
         event["timestamp"] = getCurrentTimestamp();
         eventCallback_(event);
     }
 
-    LOG_INFO("SoftwareBlocker: BLOCKED {} - kills={}, registry={}, explorer={}",
-             executable, killed + killed2, registryOk, explorerRestarted);
+    LOG_INFO("SoftwareBlocker: BLOCKED {} - kills={}, ifeo={}",
+             executable, killed, ifeoOk);
 
     return {
         {"success", true},
         {"message", name + " blocked successfully"},
         {"details", {
-            {"totalKills", killed + killed2},
-            {"registryApplied", registryOk},
-            {"explorerRestarted", explorerRestarted},
+            {"totalKills", killed},
+            {"ifeoApplied", ifeoOk},
             {"monitorActive", running_.load()}
         }}
     };
@@ -562,8 +381,8 @@ nlohmann::json SoftwareBlocker::unblockApplication(const std::string& executable
         return {{"success", true}, {"message", "Not blocked"}};
     }
 
-    // Step 1: Remove registry block
-    bool registryRemoved = removeRegistryBlock(executable);
+    // Step 1: Remove IFEO block
+    bool ifeoRemoved = removeIFEOBlock(executable);
 
     // Step 2: Stop monitor
     stopProcessMonitor(executable);
@@ -577,12 +396,6 @@ nlohmann::json SoftwareBlocker::unblockApplication(const std::string& executable
         blockedApps_.end());
     saveBlockedApps();
 
-    // Step 4: Update Group Policy
-    updateGroupPolicy();
-
-    // Step 5: Restart Explorer
-    bool explorerRestarted = restartExplorer();
-
     // Fire event
     if (eventCallback_) {
         nlohmann::json event;
@@ -592,15 +405,13 @@ nlohmann::json SoftwareBlocker::unblockApplication(const std::string& executable
         eventCallback_(event);
     }
 
-    LOG_INFO("SoftwareBlocker: UNBLOCKED {} - registry={}, explorer={}",
-             executable, registryRemoved, explorerRestarted);
+    LOG_INFO("SoftwareBlocker: UNBLOCKED {} - ifeo={}", executable, ifeoRemoved);
 
     return {
         {"success", true},
         {"message", executable + " unblocked successfully"},
         {"details", {
-            {"registryRemoved", registryRemoved},
-            {"explorerRestarted", explorerRestarted}
+            {"ifeoRemoved", ifeoRemoved}
         }}
     };
 }
@@ -624,7 +435,7 @@ bool SoftwareBlocker::applyPolicy(const nlohmann::json& policy) {
             {
                 std::lock_guard<std::mutex> lock(mutex_);
                 for (const auto& app : blockedApps_) {
-                    removeRegistryBlock(app.executable);
+                    removeIFEOBlock(app.executable);
                     stopProcessMonitor(app.executable);
                 }
                 blockedApps_.clear();
@@ -684,8 +495,7 @@ bool SoftwareBlocker::loadBlockedApps() {
             app.blockedAt = item.value("blockedAt", "");
             app.status = item.value("status", "active");
             app.kills = item.value("kills", 0);
-            app.registryApplied = item.value("registryApplied", false);
-            app.explorerRestarted = item.value("explorerRestarted", false);
+            app.ifeoApplied = item.value("ifeoApplied", false);
             if (!app.executable.empty()) {
                 blockedApps_.push_back(app);
             }

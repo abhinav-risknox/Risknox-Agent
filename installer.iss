@@ -61,7 +61,7 @@ Source: "build\ResolutePulse.exe";   DestDir: "{app}"; Flags: ignoreversion; Com
 Source: "build\rp-webblock.exe";     DestDir: "{app}"; Flags: ignoreversion; Components: core
 Source: "build\rp-softblock.exe";    DestDir: "{app}"; Flags: ignoreversion; Components: core
 Source: "build\rp-patch.exe";        DestDir: "{app}"; Flags: ignoreversion; Components: core
-Source: "build\rp-antivirus.exe";    DestDir: "{app}"; Flags: ignoreversion; Components: core
+Source: "build\rp-antivirus.exe";    DestDir: "{app}"; Flags: ignoreversion; Components: antivirus
 
 ; OpenSSL Dependencies for Agent and Workers
 Source: "vendor\clamav\libcrypto-3-x64.dll"; DestDir: "{app}"; Flags: ignoreversion; Components: core
@@ -83,30 +83,9 @@ Source: "config.json"; DestDir: "{app}"; Flags: ignoreversion; Components: core
 Source: "installer_assets\risknox.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 ; ── Bundled ClamAV Antivirus Engine ─────────────────────────────────────────
-; Executables
-Source: "vendor\clamav\clamscan.exe";  DestDir: "{app}\clamav"; Flags: ignoreversion; Components: antivirus
-Source: "vendor\clamav\freshclam.exe"; DestDir: "{app}\clamav"; Flags: ignoreversion; Components: antivirus
-
-; Core DLLs (scan engine + dependencies)
-Source: "vendor\clamav\libclamav.dll";          DestDir: "{app}\clamav"; Flags: ignoreversion; Components: antivirus
-Source: "vendor\clamav\libfreshclam.dll";        DestDir: "{app}\clamav"; Flags: ignoreversion; Components: antivirus
-Source: "vendor\clamav\libclammspack.dll";       DestDir: "{app}\clamav"; Flags: ignoreversion; Components: antivirus
-Source: "vendor\clamav\libclamunrar.dll";        DestDir: "{app}\clamav"; Flags: ignoreversion; Components: antivirus
-Source: "vendor\clamav\libclamunrar_iface.dll";  DestDir: "{app}\clamav"; Flags: ignoreversion; Components: antivirus
-Source: "vendor\clamav\json-c.dll";              DestDir: "{app}\clamav"; Flags: ignoreversion; Components: antivirus
-Source: "vendor\clamav\libbz2.dll";              DestDir: "{app}\clamav"; Flags: ignoreversion; Components: antivirus
-Source: "vendor\clamav\libcrypto-3-x64.dll";     DestDir: "{app}\clamav"; Flags: ignoreversion; Components: antivirus
-Source: "vendor\clamav\libssl-3-x64.dll";        DestDir: "{app}\clamav"; Flags: ignoreversion; Components: antivirus
-Source: "vendor\clamav\libcurl.dll";             DestDir: "{app}\clamav"; Flags: ignoreversion; Components: antivirus
-Source: "vendor\clamav\libssh2.dll";             DestDir: "{app}\clamav"; Flags: ignoreversion; Components: antivirus
-Source: "vendor\clamav\libxml2.dll";             DestDir: "{app}\clamav"; Flags: ignoreversion; Components: antivirus
-Source: "vendor\clamav\pcre2-8.dll";             DestDir: "{app}\clamav"; Flags: ignoreversion; Components: antivirus
-Source: "vendor\clamav\nghttp2.dll";             DestDir: "{app}\clamav"; Flags: ignoreversion; Components: antivirus
-Source: "vendor\clamav\pthreadVC3.dll";          DestDir: "{app}\clamav"; Flags: ignoreversion; Components: antivirus
-Source: "vendor\clamav\msvcp140.dll";            DestDir: "{app}\clamav"; Flags: ignoreversion; Components: antivirus
-Source: "vendor\clamav\msvcp140_1.dll";          DestDir: "{app}\clamav"; Flags: ignoreversion; Components: antivirus
-Source: "vendor\clamav\vcruntime140.dll";        DestDir: "{app}\clamav"; Flags: ignoreversion; Components: antivirus
-Source: "vendor\clamav\vcruntime140_1.dll";      DestDir: "{app}\clamav"; Flags: ignoreversion; Components: antivirus
+; Bundle the whole vetted ClamAV runtime so vendor updates cannot miss a DLL.
+; This also provides the read-only fallback database under {app}\clamav\database.
+Source: "vendor\clamav\*"; DestDir: "{app}\clamav"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: antivirus
 
 ; Update definitions wrapper script
 Source: "installer_assets\update_definitions.bat"; DestDir: "{app}\clamav"; Flags: ignoreversion; Components: antivirus
