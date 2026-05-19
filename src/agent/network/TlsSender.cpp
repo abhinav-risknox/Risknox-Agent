@@ -744,7 +744,20 @@ bool TlsSender::tryReadInbound(nlohmann::json& out) {
 
     // 2) Check for new data on the wire (non-blocking)
     if (!ssl_ || !connected_.load()) return false;
-    if (SSL_pending(ssl_) <= 0) return false;
+
+    // Check SSL buffer first; if empty, check the underlying TCP socket
+    // with a zero-timeout select().  SSL_pending() only reports data already
+    // decoded into the SSL record buffer — it misses data sitting in the
+    // kernel TCP receive buffer.  select() catches both.
+    if (SSL_pending(ssl_) <= 0) {
+        if (socket_ == INVALID_SOCKET) return false;
+        fd_set readfds;
+        FD_ZERO(&readfds);
+        FD_SET(socket_, &readfds);
+        struct timeval tv = {0, 0};  // immediate, non-blocking check
+        int ready = select(static_cast<int>(socket_) + 1, &readfds, nullptr, nullptr, &tv);
+        if (ready <= 0) return false;
+    }
 
     // Data available — read one full message
     MessageType type;
@@ -767,6 +780,31 @@ bool TlsSender::tryReadInbound(nlohmann::json& out) {
 
     LOG_DEBUG("tryReadInbound: discarding unexpected type 0x{:02X}", static_cast<uint8_t>(type));
     return false;
+}
+
+bool TlsSender::waitForDataOrTimeout(int timeoutMs) {
+    // Fast path: SSL already has buffered data from a previous read
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!pendingInbound_.empty()) return true;
+        if (ssl_ && SSL_pending(ssl_) > 0) return true;
+    }
+
+    if (socket_ == INVALID_SOCKET || !connected_.load()) return false;
+
+    // Slow path: sleep in the kernel via select().
+    // - Zero CPU usage while waiting.
+    // - Wakes INSTANTLY when the Manager pushes data to the socket.
+    // - Wakes on timeout so the caller can check heartbeat/license timers.
+    // - Wakes on socket error/close.
+    // This replaces the old sleep_for(1s) in the management loop.
+    fd_set readfds;
+    FD_ZERO(&readfds);
+    FD_SET(socket_, &readfds);
+    struct timeval tv;
+    tv.tv_sec  = timeoutMs / 1000;
+    tv.tv_usec = (timeoutMs % 1000) * 1000;
+    return select(static_cast<int>(socket_) + 1, &readfds, nullptr, nullptr, &tv) > 0;
 }
 
 } // namespace ResolutePulse

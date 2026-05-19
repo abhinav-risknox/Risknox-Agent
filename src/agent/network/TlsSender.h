@@ -85,7 +85,14 @@ public:
     // (non-blocking). Returns true and populates `out` if a message was available.
     // The caller must check out["_msgType"] to distinguish the two.
     // Returns false immediately if no data is pending.
+    // Uses select() to check both SSL buffer AND underlying TCP socket.
     bool tryReadInbound(nlohmann::json& out);
+
+    // Block until data is available on the mTLS socket OR timeout expires.
+    // Uses select() — zero CPU while waiting, instant wake when Manager pushes.
+    // Intended to replace sleep_for() in the management loop.
+    // Returns true if data is ready, false on timeout/error.
+    bool waitForDataOrTimeout(int timeoutMs);
 
     // Statistics
     uint64_t getEventsSent() const { return eventsSent_.load(); }

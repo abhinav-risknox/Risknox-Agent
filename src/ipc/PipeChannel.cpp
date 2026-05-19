@@ -79,18 +79,15 @@ bool PipeServer::readAll(void* data, DWORD len, DWORD timeoutMs) {
     auto* ptr = static_cast<char*>(data);
     DWORD total = 0;
     while (total < len) {
-        // Check if data is ready (peek with optional timeout)
-        DWORD avail = 0;
+        // Wait for data to arrive — zero CPU, instant wake
         if (timeoutMs != INFINITE) {
-            DWORD waited = 0;
-            while (waited < timeoutMs) {
-                PeekNamedPipe(pipe_, nullptr, 0, nullptr, &avail, nullptr);
-                if (avail > 0) break;
-                Sleep(10);
-                waited += 10;
-            }
-            if (avail == 0) {
+            DWORD waitResult = WaitForSingleObject(pipe_, timeoutMs);
+            if (waitResult == WAIT_TIMEOUT) {
                 lastError_ = "readAll timed out";
+                return false;
+            }
+            if (waitResult == WAIT_FAILED) {
+                lastError_ = "WaitForSingleObject failed: " + std::to_string(GetLastError());
                 return false;
             }
         }
@@ -229,17 +226,15 @@ bool PipeClient::readAll(void* data, DWORD len, DWORD timeoutMs) {
     auto* ptr = static_cast<char*>(data);
     DWORD total = 0;
     while (total < len) {
-        DWORD avail = 0;
+        // Wait for data to arrive — zero CPU, instant wake
         if (timeoutMs != INFINITE) {
-            DWORD waited = 0;
-            while (waited < timeoutMs) {
-                PeekNamedPipe(pipe_, nullptr, 0, nullptr, &avail, nullptr);
-                if (avail > 0) break;
-                Sleep(10);
-                waited += 10;
-            }
-            if (avail == 0) {
+            DWORD waitResult = WaitForSingleObject(pipe_, timeoutMs);
+            if (waitResult == WAIT_TIMEOUT) {
                 lastError_ = "readAll timed out after " + std::to_string(timeoutMs) + "ms";
+                return false;
+            }
+            if (waitResult == WAIT_FAILED) {
+                lastError_ = "WaitForSingleObject failed: " + std::to_string(GetLastError());
                 return false;
             }
         }

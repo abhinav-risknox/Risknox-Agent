@@ -911,7 +911,8 @@ void Agent::managementLoop() {
         }
         
         // ── Check for inbound POLICY_UPDATE or MODULE_COMMAND from Manager ──
-        // tryReadInbound uses SSL_pending() - zero CPU when nothing is queued.
+        // tryReadInbound now uses select() to check both SSL buffer and TCP socket,
+        // so commands pushed by the Manager are discovered instantly.
         if (managementSender_) {
             auto* tlsSender = dynamic_cast<TlsSender*>(managementSender_.get());
             if (tlsSender && tlsSender->isConnected()) {
@@ -955,8 +956,17 @@ void Agent::managementLoop() {
             }
         }
         
-        // Wait a bit before checking times again
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+        // Sleep on the mTLS socket via select(): zero CPU while idle,
+        // instant wake when the Manager pushes a command.
+        // Falls back to a plain 1s sleep when not connected (no socket to wait on).
+        {
+            auto* tls = dynamic_cast<TlsSender*>(managementSender_.get());
+            if (tls && tls->isConnected()) {
+                tls->waitForDataOrTimeout(1000);
+            } else {
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+            }
+        }
     }
     
     LOG_DEBUG("Management loop background thread stopped");

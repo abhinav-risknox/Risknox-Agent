@@ -431,9 +431,10 @@ void RestApi::handlePostPolicyCommand(const httplib::Request& req, httplib::Resp
 
         // Dispatch via ManagerServer's existing dispatchCommand path
         // (which generates a commandId and records to DB)
-        server_.dispatchPolicyFromApi(agentId, policyType, policyData, operatorName);
+        std::string commandId = server_.dispatchPolicyFromApi(agentId, policyType, policyData, operatorName);
 
         nlohmann::json resp;
+        resp["command_id"]   = commandId;
         resp["agent_id"]     = agentId;
         resp["policy_type"]  = policyType;
         resp["status"]       = "queued";

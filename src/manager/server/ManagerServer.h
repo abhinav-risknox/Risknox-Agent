@@ -11,6 +11,7 @@
 #include <functional>
 #include <mutex>
 #include <unordered_map>
+#include <queue>
 
 // Forward declare OpenSSL types
 typedef struct ssl_ctx_st SSL_CTX;
@@ -61,6 +62,11 @@ public:
     // Unregister when connection closes
     void unregisterSession(const std::string& agentId);
 
+    // Drain the outbound command queue for an agent's session.
+    // Called by handleClient() thread which owns the SSL*.
+    // Returns number of messages sent.
+    int drainOutboundQueue(const std::string& agentId, SSL* ssl);
+
     // ── REST API integration ──
     // Check if an agent is currently connected
     bool isAgentOnline(const std::string& agentId);
@@ -71,8 +77,9 @@ public:
                                        const std::string& verb,
                                        const nlohmann::json& params);
 
-    // Dispatch a POLICY_UPDATE from the REST API with operator identity
-    void dispatchPolicyFromApi(const std::string& agentId,
+    // Dispatch a POLICY_UPDATE from the REST API with operator identity.
+    // Returns the generated commandId for tracking.
+    std::string dispatchPolicyFromApi(const std::string& agentId,
                                 const std::string& policyType,
                                 const nlohmann::json& policyData,
                                 const std::string& initiatedBy);
@@ -96,8 +103,9 @@ private:
     // Command ingest loop: listens on 127.0.0.1:1515, routes to live sessions
     void commandIngestLoop();
 
-    // Dispatch a command to an agent's live SSL socket
-    void dispatchCommand(const std::string& agentId,
+    // Dispatch a command to an agent's outbound queue (thread-safe).
+    // Returns the generated commandId.
+    std::string dispatchCommand(const std::string& agentId,
                          const std::string& policyType,
                          const nlohmann::json& policyData);
 
@@ -127,8 +135,15 @@ private:
     std::vector<std::thread> clientThreads_;
     std::mutex        threadsMutex_;
 
-    // Live authenticated sessions: agentId → SSL*
-    std::unordered_map<std::string, SSL*> activeSessions_;
+    // Per-session info: SSL pointer + thread-safe outbound command queue.
+    // Dispatch threads (REST API, command ingest) only enqueue messages.
+    // The handleClient() thread (which owns the SSL*) drains the queue.
+    struct SessionInfo {
+        SSL* ssl = nullptr;
+        std::queue<std::string> outboundQueue;  // serialized wire messages
+        std::mutex              queueMutex;
+    };
+    std::unordered_map<std::string, std::shared_ptr<SessionInfo>> activeSessions_;
     std::mutex                             sessionsMutex_;
 
     // Server certificate paths (issued by the CA for the manager itself)

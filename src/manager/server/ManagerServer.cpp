@@ -1,5 +1,6 @@
-#include "ManagerServer.h"
-#include "AgentHandler.h"
+#include "ManagerServer.h"\r
+#include "AgentHandler.h"\r
+#include "common/Protocol.h"\r
 #include "utils/Logger.h"
 
 #include <openssl/ssl.h>
@@ -357,6 +358,12 @@ void ManagerServer::handleClient(SOCKET clientSocket, const std::string& clientA
     std::string agentId;
 
     while (running_.load()) {
+        // Drain any outbound commands queued by dispatch threads.
+        // We own the SSL*, so SSL_write is safe here.
+        if (!agentId.empty()) {
+            drainOutboundQueue(agentId, ssl);
+        }
+
         if (!handler.handleConnection(ssl, clientAddr, hasClientCert)) {
             break; 
         }
@@ -387,7 +394,9 @@ void ManagerServer::handleClient(SOCKET clientSocket, const std::string& clientA
 
 void ManagerServer::registerSession(const std::string& agentId, SSL* ssl) {
     std::lock_guard<std::mutex> lk(sessionsMutex_);
-    activeSessions_[agentId] = ssl;
+    auto info = std::make_shared<SessionInfo>();
+    info->ssl = ssl;
+    activeSessions_[agentId] = std::move(info);
     LOG_INFO("Session registered: agent={}", agentId);
 }
 
@@ -395,6 +404,33 @@ void ManagerServer::unregisterSession(const std::string& agentId) {
     std::lock_guard<std::mutex> lk(sessionsMutex_);
     activeSessions_.erase(agentId);
     LOG_INFO("Session unregistered: agent={}", agentId);
+}
+
+int ManagerServer::drainOutboundQueue(const std::string& agentId, SSL* ssl) {
+    std::shared_ptr<SessionInfo> session;
+    {
+        std::lock_guard<std::mutex> lk(sessionsMutex_);
+        auto it = activeSessions_.find(agentId);
+        if (it == activeSessions_.end()) return 0;
+        session = it->second;
+    }
+
+    int sent = 0;
+    std::lock_guard<std::mutex> lk(session->queueMutex);
+    while (!session->outboundQueue.empty()) {
+        const auto& msg = session->outboundQueue.front();
+        int n = SSL_write(ssl, msg.data(), static_cast<int>(msg.size()));
+        if (n <= 0) {
+            LOG_ERROR("drainOutboundQueue: SSL_write failed for agent {}", agentId);
+            break;
+        }
+        session->outboundQueue.pop();
+        ++sent;
+    }
+    if (sent > 0) {
+        LOG_DEBUG("drainOutboundQueue: sent {} queued message(s) to agent {}", sent, agentId);
+    }
+    return sent;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -476,7 +512,7 @@ void ManagerServer::commandIngestLoop() {
     LOG_INFO("Command ingest loop stopped");
 }
 
-void ManagerServer::dispatchCommand(const std::string& agentId,
+std::string ManagerServer::dispatchCommand(const std::string& agentId,
                                      const std::string& policyType,
                                      const nlohmann::json& policyData) {
     // Collision-safe commandId: timestamp + monotonic counter
@@ -489,29 +525,49 @@ void ManagerServer::dispatchCommand(const std::string& agentId,
     // regardless of whether the agent is currently connected.
     db_->recordPolicyCommand(agentId, commandId, policyType, policyData.dump(), /*pending=*/true);
 
-    // Step 2: attempt immediate online delivery
-    SSL* ssl = nullptr;
+    // Step 2: enqueue for delivery via the handleClient thread (thread-safe)
+    std::shared_ptr<SessionInfo> session;
     {
         std::lock_guard<std::mutex> lk(sessionsMutex_);
         auto it = activeSessions_.find(agentId);
-        if (it != activeSessions_.end()) ssl = it->second;
+        if (it != activeSessions_.end()) session = it->second;
     }
 
-    if (!ssl) {
+    if (!session) {
         LOG_INFO("dispatchCommand: agent {} offline — command queued for heartbeat drain", agentId);
-        return;  // row stays 'pending'; heartbeat drain retries on reconnect
+        return commandId;  // row stays 'pending'; heartbeat drain retries on reconnect
     }
 
-    AgentHandler handler(*ca_, *db_, this);
-    bool ok = handler.pushPolicyUpdate(ssl, agentId, commandId, policyType, policyData);
-    if (ok) {
-        LOG_INFO("Policy '{}' dispatched to agent {}", policyType, agentId);
-        db_->markPolicyCommandDispatched(commandId);  // pending → sent
-    } else {
-        LOG_ERROR("Policy '{}' push failed for agent {} — will retry on next heartbeat",
-                  policyType, agentId);
-        // row stays 'pending'; heartbeat drain retries automatically
+    // Build the wire message: serialize header + payload into a buffer
+    PolicyUpdate update;
+    update.commandId     = commandId;
+    update.agentId       = agentId;
+    update.policyType    = policyType;
+    update.policyData    = policyData.dump();
+    update.policyVersion = "1";
+    time_t now = time(nullptr);
+    char buf[64];
+    strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+    update.timestamp = buf;
+
+    std::string jsonPayload = nlohmann::json(update).dump();
+    MessageHeader header;
+    header.type = static_cast<uint8_t>(MessageType::POLICY_UPDATE);
+    header.payloadLength = static_cast<uint32_t>(jsonPayload.size());
+    uint8_t headerBuf[MESSAGE_HEADER_SIZE];
+    serializeHeader(header, headerBuf);
+
+    std::string wireMsg(reinterpret_cast<char*>(headerBuf), MESSAGE_HEADER_SIZE);
+    wireMsg += jsonPayload;
+
+    {
+        std::lock_guard<std::mutex> lk(session->queueMutex);
+        session->outboundQueue.push(std::move(wireMsg));
     }
+
+    LOG_INFO("Policy '{}' enqueued for agent {} (commandId={})", policyType, agentId, commandId);
+    db_->markPolicyCommandDispatched(commandId);
+    return commandId;
 }
 
 void ManagerServer::dispatchModuleCommand(const std::string& agentId,
@@ -521,29 +577,48 @@ void ManagerServer::dispatchModuleCommand(const std::string& agentId,
     // Always insert the command into the DB first (online and offline paths both need an audit row)
     db_->recordModuleCommand(agentId, commandId, verb, params.dump(), /*pending=*/true);
 
-    SSL* ssl = nullptr;
+    std::shared_ptr<SessionInfo> session;
     {
         std::lock_guard<std::mutex> lk(sessionsMutex_);
         auto it = activeSessions_.find(agentId);
-        if (it != activeSessions_.end()) ssl = it->second;
+        if (it != activeSessions_.end()) session = it->second;
     }
 
-    if (!ssl) {
+    if (!session) {
         LOG_INFO("dispatchModuleCommand: agent {} not connected - leaving queued (verb={})",
                  agentId, verb);
         return;
     }
 
-    AgentHandler handler(*ca_, *db_, this);
-    bool ok = handler.pushModuleCommand(ssl, agentId, commandId, verb, params);
-    if (ok) {
-        LOG_INFO("MODULE_COMMAND '{}' dispatched to agent {} (commandId={})",
-                 verb, agentId, commandId);
-        // Update status to 'sent' and set dispatched_at
-        db_->markModuleCommandDispatched(commandId);
-    } else {
-        LOG_ERROR("Failed to dispatch MODULE_COMMAND '{}' to agent {} - left as pending for offline delivery", verb, agentId);
+    // Build wire message and enqueue for handleClient thread
+    ModuleCommand cmd;
+    cmd.commandId = commandId;
+    cmd.agentId   = agentId;
+    cmd.verb      = verb;
+    cmd.params    = params;
+    time_t now = time(nullptr);
+    char buf[64];
+    strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+    cmd.timestamp = buf;
+
+    std::string jsonPayload = nlohmann::json(cmd).dump();
+    MessageHeader header;
+    header.type = static_cast<uint8_t>(MessageType::MODULE_COMMAND);
+    header.payloadLength = static_cast<uint32_t>(jsonPayload.size());
+    uint8_t headerBuf[MESSAGE_HEADER_SIZE];
+    serializeHeader(header, headerBuf);
+
+    std::string wireMsg(reinterpret_cast<char*>(headerBuf), MESSAGE_HEADER_SIZE);
+    wireMsg += jsonPayload;
+
+    {
+        std::lock_guard<std::mutex> lk(session->queueMutex);
+        session->outboundQueue.push(std::move(wireMsg));
     }
+
+    LOG_INFO("MODULE_COMMAND '{}' enqueued for agent {} (commandId={})",
+             verb, agentId, commandId);
+    db_->markModuleCommandDispatched(commandId);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -560,39 +635,58 @@ void ManagerServer::dispatchModuleCommandFromApi(const std::string& agentId,
                                                    const std::string& verb,
                                                    const nlohmann::json& params) {
     // The RestApi has already inserted the DB row via recordModuleCommandWithOperator.
-    // Here we attempt immediate online dispatch.
-    SSL* ssl = nullptr;
+    // Here we attempt immediate online dispatch by enqueuing to the session.
+    std::shared_ptr<SessionInfo> session;
     {
         std::lock_guard<std::mutex> lk(sessionsMutex_);
         auto it = activeSessions_.find(agentId);
-        if (it != activeSessions_.end()) ssl = it->second;
+        if (it != activeSessions_.end()) session = it->second;
     }
 
-    if (!ssl) {
+    if (!session) {
         LOG_INFO("dispatchModuleCommandFromApi: agent {} not connected - command stays queued", agentId);
         return;
     }
 
-    AgentHandler handler(*ca_, *db_, this);
-    bool ok = handler.pushModuleCommand(ssl, agentId, commandId, verb, params);
-    if (ok) {
-        LOG_INFO("REST API: MODULE_COMMAND '{}' dispatched to agent {} (commandId={})",
-                 verb, agentId, commandId);
-        db_->markModuleCommandDispatched(commandId);
-    } else {
-        LOG_ERROR("REST API: Failed to dispatch MODULE_COMMAND '{}' to agent {} - left as pending",
-                  verb, agentId);
+    // Build wire message and enqueue
+    ModuleCommand cmd;
+    cmd.commandId = commandId;
+    cmd.agentId   = agentId;
+    cmd.verb      = verb;
+    cmd.params    = params;
+    time_t now = time(nullptr);
+    char buf[64];
+    strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+    cmd.timestamp = buf;
+
+    std::string jsonPayload = nlohmann::json(cmd).dump();
+    MessageHeader header;
+    header.type = static_cast<uint8_t>(MessageType::MODULE_COMMAND);
+    header.payloadLength = static_cast<uint32_t>(jsonPayload.size());
+    uint8_t headerBuf[MESSAGE_HEADER_SIZE];
+    serializeHeader(header, headerBuf);
+
+    std::string wireMsg(reinterpret_cast<char*>(headerBuf), MESSAGE_HEADER_SIZE);
+    wireMsg += jsonPayload;
+
+    {
+        std::lock_guard<std::mutex> lk(session->queueMutex);
+        session->outboundQueue.push(std::move(wireMsg));
     }
+
+    LOG_INFO("REST API: MODULE_COMMAND '{}' enqueued for agent {} (commandId={})",
+             verb, agentId, commandId);
+    db_->markModuleCommandDispatched(commandId);
 }
 
-void ManagerServer::dispatchPolicyFromApi(const std::string& agentId,
+std::string ManagerServer::dispatchPolicyFromApi(const std::string& agentId,
                                             const std::string& policyType,
                                             const nlohmann::json& policyData,
                                             const std::string& initiatedBy) {
     // Re-use the existing dispatchCommand which handles commandId generation,
     // DB recording, and online/offline dispatch.
     (void)initiatedBy; // TODO: pass to DB when initiated_by column exists on policy_commands
-    dispatchCommand(agentId, policyType, policyData);
+    return dispatchCommand(agentId, policyType, policyData);
 }
 
 } // namespace ResolutePulse

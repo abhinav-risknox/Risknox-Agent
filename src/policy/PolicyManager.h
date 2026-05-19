@@ -61,8 +61,7 @@ public:
         } else if (policyType == "patch") {
             // On-demand worker: spawn, stream events, worker exits when done
             workerManager_->spawnWorker("rp-patch.exe", "rp-patch", /*persistent=*/false);
-            // Give the process a moment to create its pipe
-            Sleep(300);
+            // PipeClient::connect() in streamEvents retries every 100ms with 5s timeout
             workerManager_->streamEvents("rp-patch", policyData,
                 [this](const nlohmann::json& event) {
                     std::string type = event.value("type", "");
@@ -75,7 +74,7 @@ public:
         } else if (policyType == "antivirus") {
             // On-demand worker: spawn, stream events, worker exits when done
             workerManager_->spawnWorker("rp-antivirus.exe", "rp-antivirus", /*persistent=*/false);
-            Sleep(300);
+            // PipeClient::connect() in streamEvents retries every 100ms with 5s timeout
             workerManager_->streamEvents("rp-antivirus", policyData,
                 [this](const nlohmann::json& event) {
                     std::string type = event.value("type", "");
