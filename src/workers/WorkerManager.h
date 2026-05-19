@@ -14,6 +14,7 @@
 #include <thread>
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <nlohmann/json.hpp>
 
 #ifdef _WIN32
@@ -70,6 +71,7 @@ private:
 
     std::map<std::string, WorkerEntry> workers_;
     mutable std::mutex                 mutex_;
+    std::condition_variable            watchdogCv_;
     std::atomic<bool>                  running_{true};
     std::thread                        watchdogThread_;
 

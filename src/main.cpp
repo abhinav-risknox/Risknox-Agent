@@ -46,8 +46,9 @@ std::string getExePath() {
     return std::string(buffer);
 }
 
-std::string getConfigPath(const std::string& exePath) {
-    // 1. Check for override config in ProgramData
+std::string getConfigPath() {
+    // Config must live in ProgramData - the only writable, service-safe location.
+    // No fallback to EXE directory (Program Files is read-only and would ignore config_push updates).
     const char* programData = std::getenv("ProgramData");
     if (programData) {
         std::filesystem::path p = std::filesystem::path(programData) / "Risknox Pulse" / "config.json";
@@ -56,9 +57,8 @@ std::string getConfigPath(const std::string& exePath) {
         }
     }
 
-    // 2. Fallback to bundled config in EXE directory
-    std::filesystem::path p(exePath);
-    return (p.parent_path() / "config.json").string();
+    std::cerr << "FATAL: config.json not found in %ProgramData%\\Risknox Pulse\\" << std::endl;
+    return "";
 }
 
 int runConsoleMode(const std::string& configPath) {
@@ -91,7 +91,8 @@ int runConsoleMode(const std::string& configPath) {
 
 int main(int argc, char* argv[]) {
     std::string exePath = getExePath();
-    std::string configPath = getConfigPath(exePath);
+    std::string configPath = getConfigPath();
+    if (configPath.empty()) return 1;
     bool consoleMode = false;
     bool installMode = false;
     bool uninstallMode = false;

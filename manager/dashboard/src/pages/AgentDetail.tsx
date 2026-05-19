@@ -21,6 +21,8 @@ import { endpoints } from '../api/endpoints';
 import { cn } from '../lib/utils';
 import { WebPolicyCard } from '../components/policies/WebPolicyCard';
 import { SoftwarePolicyCard } from '../components/policies/SoftwarePolicyCard';
+import { AntivirusScanCard } from '../components/policies/AntivirusScanCard';
+import { ConfigPushCard } from '../components/policies/ConfigPushCard';
 
 export const AgentDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -229,6 +231,14 @@ export const AgentDetail: React.FC = () => {
               <SoftwarePolicyCard 
                 agentId={id!} 
                 blockedApps={moduleStatusData.software_blocking?.blockedApps || []} 
+                online={agent.online} 
+              />
+              <AntivirusScanCard 
+                agentId={id!} 
+                online={agent.online} 
+              />
+              <ConfigPushCard 
+                agentId={id!} 
                 online={agent.online} 
               />
             </div>

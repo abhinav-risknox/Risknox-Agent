@@ -205,6 +205,7 @@ void EventCollector::processEvent(EVT_HANDLE hEvent) {
     event.eventId = eventId;
     event.timestamp = getCurrentTimestamp();
     event.data = std::move(xmlUtf8);
+    event.sourceType = "winevent";
     
     eventsCollected_++;
     

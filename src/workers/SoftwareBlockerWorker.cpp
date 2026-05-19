@@ -16,11 +16,8 @@
 int main() {
     using namespace ResolutePulse;
 
-    // Resolve config.json relative to this executable
-    char selfPath[MAX_PATH] = {};
-    GetModuleFileNameA(nullptr, selfPath, MAX_PATH);
-    std::filesystem::path agentDir  = std::filesystem::path(selfPath).parent_path();
-    std::string           configPath = (agentDir / "config.json").string();
+    // Config must live in ProgramData (writable, service-safe, sees config_push updates)
+    std::string configPath = (PathUtils::getAgentDataDir() / "config.json").string();
 
     // ConfigManager is a singleton
     auto& config = ConfigManager::instance();

@@ -154,6 +154,7 @@ private:
             event.eventId   = 0;
             event.timestamp = currentTimestamp();
             event.data      = line;
+            event.sourceType = "logtail";
 
             queue_.push(std::move(event));
             ++linesRead;

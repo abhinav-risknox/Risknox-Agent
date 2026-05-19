@@ -10,6 +10,7 @@
 #include <vector>
 #include <algorithm>
 #include <chrono>
+#include <fstream>
 
 namespace ResolutePulse {
 
@@ -27,6 +28,9 @@ void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe) {
     fs::path clamscan = binDir / "clamscan.exe";
     fs::path database = fs::path(dbDir_);
     fs::path bundledDatabase = binDir / "database";
+    fs::path cvdCertsDir = binDir / "certs";
+    fs::path logDir = PathUtils::getAgentDataDir() / "antivirus";
+    fs::path scanLog = logDir / "clamscan.log";
 
     if (!fs::exists(clamscan)) {
         pipe.sendJson({ {"type","error"}, {"message","clamscan.exe not found"} });
@@ -48,11 +52,33 @@ void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe) {
         return;
     }
 
+    if (!fs::exists(cvdCertsDir)) {
+        pipe.sendJson({
+            {"type", "error"},
+            {"message", "ClamAV CVD certs directory not found"},
+            {"cvdCertsDir", cvdCertsDir.string()}
+        });
+        return;
+    }
+
+    std::error_code logEc;
+    fs::create_directories(logDir, logEc);
+    if (logEc) {
+        pipe.sendJson({
+            {"type", "error"},
+            {"message", "Failed to create ClamAV log directory"},
+            {"logDir", logDir.string()},
+            {"error", logEc.message()}
+        });
+        return;
+    }
+
     // Build command line
     // --recursive:  scan directories recursively
     std::string cmdLine =
         "\"" + clamscan.string() + "\""
         " --database=\"" + database.string() + "\""
+        " --cvdcertsdir=\"" + cvdCertsDir.string() + "\""
         " --recursive"
         " \"" + path + "\"";
 
@@ -108,6 +134,21 @@ void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe) {
     int  filesScanned = 0;
     int  threats      = 0;
     std::vector<std::string> diagnosticLines;
+    std::ofstream scanLogStream(scanLog.string(), std::ios::app);
+    if (scanLogStream.is_open()) {
+        auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+        char ts[32] = {};
+        std::tm tmUtc{};
+        gmtime_s(&tmUtc, &now);
+        std::strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%SZ", &tmUtc);
+        scanLogStream << "=== Risknox ClamAV scan started "
+                      << ts
+                      << " path=\"" << path
+                      << "\" database=\"" << database.string()
+                      << "\" ===\n";
+    } else {
+        LOG_WARN("Unable to open ClamAV scan log at {}", scanLog.string());
+    }
 
     // Progress report frequency
     int progressInterval = 50;
@@ -126,6 +167,9 @@ void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe) {
             std::string line = lineBuf.substr(0, pos);
             lineBuf.erase(0, pos + 1);
             if (!line.empty() && line.back() == '\r') line.pop_back();
+            if (scanLogStream.is_open()) {
+                scanLogStream << line << "\n";
+            }
 
             if (line.find(": OK") != std::string::npos || line.find(": Empty file") != std::string::npos) {
                 filesScanned++;
@@ -169,6 +213,13 @@ void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe) {
     CloseHandle(pi.hThread);
 
     if (exitCode != 0 && exitCode != 1) {
+        if (scanLogStream.is_open()) {
+            scanLogStream << "=== Risknox ClamAV scan failed exitCode="
+                          << exitCode
+                          << " filesScanned=" << filesScanned
+                          << " threats=" << threats
+                          << " ===\n";
+        }
         nlohmann::json error = {
             {"type", "error"},
             {"message", "clamscan failed"},
@@ -176,6 +227,8 @@ void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe) {
             {"filesScanned", filesScanned},
             {"threats", threats},
             {"databaseDir", database.string()},
+            {"cvdCertsDir", cvdCertsDir.string()},
+            {"logFile", scanLog.string()},
             {"scanPath", path}
         };
         if (!diagnosticLines.empty()) {
@@ -188,11 +241,20 @@ void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe) {
     }
 
     // Emit final summary
+    if (scanLogStream.is_open()) {
+        scanLogStream << "=== Risknox ClamAV scan complete filesScanned="
+                      << filesScanned
+                      << " threats=" << threats
+                      << " ===\n";
+    }
+
     pipe.sendJson({
         {"type",         "complete"},
         {"filesScanned", filesScanned},
         {"threats",      threats},
         {"databaseDir",  database.string()},
+        {"cvdCertsDir",  cvdCertsDir.string()},
+        {"logFile",      scanLog.string()},
         {"scanPath",     path}
     });
 
@@ -207,6 +269,7 @@ bool AntivirusWorker::updateDefinitions() {
     namespace fs = std::filesystem;
     fs::path freshclam = fs::path(binDir_) / "freshclam.exe";
     fs::path database  = fs::path(dbDir_);
+    fs::path cvdCertsDir = fs::path(binDir_) / "certs";
     fs::create_directories(database);
 
     if (!fs::exists(freshclam)) {
@@ -214,9 +277,15 @@ bool AntivirusWorker::updateDefinitions() {
         return false;
     }
 
+    if (!fs::exists(cvdCertsDir)) {
+        LOG_WARN("ClamAV CVD certs directory not found at {}", cvdCertsDir.string());
+        return false;
+    }
+
     std::string cmdLine =
         "\"" + freshclam.string() + "\""
         " --datadir=\"" + database.string() + "\""
+        " --cvdcertsdir=\"" + cvdCertsDir.string() + "\""
         " --quiet";
 
     STARTUPINFOA si = {};

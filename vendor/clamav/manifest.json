@@ -1,0 +1,10 @@
+﻿{
+    "version":  "1.5.2",
+    "tag":  "clamav-1.5.2",
+    "source":  "https://github.com/Cisco-Talos/clamav/releases/tag/clamav-1.5.2",
+    "assetName":  "clamav-1.5.2.win.x64.zip",
+    "assetUrl":  "https://github.com/Cisco-Talos/clamav/releases/download/clamav-1.5.2/clamav-1.5.2.win.x64.zip",
+    "assetSha256":  "6f868ed7a7e5a15aced82c53a4fa9f3f42fa9d7f7de14a606ba8db0756518eed",
+    "updatedAtUtc":  "2026-05-12T12:20:43Z",
+    "databasePolicy":  "preserved-existing-or-release"
+}

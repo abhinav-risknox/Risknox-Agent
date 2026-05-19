@@ -234,6 +234,7 @@ bool Agent::initialize(const std::string& configPath) {
                 event.eventId = 0;  // FIM events don't have Windows Event IDs
                 event.timestamp = fimEvent.timestamp;
                 event.data = fimEvent.toJson().dump();  // Store FIM data as JSON in data field
+                event.sourceType = "winevent";
                 
                 queue_->push(std::move(event));
                 LOG_DEBUG("FIM event queued: {} {}", 
@@ -541,6 +542,7 @@ int Agent::run() {
             event.eventId = 0;
             event.timestamp = sysInfoData.timestamp;
             event.data = sysInfoData.toJson().dump();
+            event.sourceType = "winevent";
             
             queue_->push(std::move(event));
             LOG_INFO("System information collected and queued");
@@ -609,6 +611,13 @@ int Agent::run() {
     agentPhase_ = "stopping";
     writeStatusFile();
     LOG_INFO("Stopping agent...");
+
+    // Kill worker subprocesses first so long-running on-demand jobs do not
+    // keep management or scheduled scan threads blocked during shutdown.
+    if (workerManager_) {
+        workerManager_->stopAll();
+        LOG_INFO("Worker subprocesses stopped");
+    }
     
     // Stop management thread if running
     if (managementThread_.joinable()) {
@@ -625,12 +634,6 @@ int Agent::run() {
     // Stop AV scan thread if running
     if (avScanThread_.joinable()) {
         avScanThread_.join();
-    }
-    
-    // Worker subprocesses are terminated via WorkerManager::stopAll()
-    if (workerManager_) {
-        workerManager_->stopAll();
-        LOG_INFO("Worker subprocesses stopped");
     }
     
     // Stop components in order
@@ -702,6 +705,7 @@ void Agent::sysInfoLoop() {
             event.eventId = 0;
             event.timestamp = sysInfoData.timestamp;
             event.data = sysInfoData.toJson().dump();
+            event.sourceType = "winevent";
             
             queue_->push(std::move(event));
             LOG_INFO("System information collected and queued");

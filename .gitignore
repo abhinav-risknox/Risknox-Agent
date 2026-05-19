@@ -94,6 +94,14 @@ fluent-bit.conf
 thirdparty/
 # ClamAV binaries & virus databases (~210 MB) - store in artifact storage, not Git
 vendor/clamav/
+!vendor/
+!vendor/clamav/
+vendor/clamav/*
+!vendor/clamav/certs/
+!vendor/clamav/certs/clamav.crt
+!vendor/clamav/freshclam.conf
+!vendor/clamav/manifest.json
+!vendor/clamav/update_definitions.bat
 
 # ==========================
 # OS Files

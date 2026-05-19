@@ -6,30 +6,29 @@ windows-events-pipeline:
       authentication:
         unauthenticated:
 
-  # Routes are a top-level pipeline key
+  # Route events based on source_type: structured (winevent) vs raw tailed logs (logtail)
   route:
-    - json_route:    '/channel == "FIM" or /channel == "SystemInfo"'
-    - clamav_route:   '/channel == "ClamAV"'
-    - testlog_route:  '/channel == "TestLog"'
-    - xml_route:     '/channel != "FIM" and /channel != "SystemInfo" and /channel != "ClamAV" and /channel != "TestLog"'
+    - json_route:    '/source_type == "winevent" and (/channel == "FIM" or /channel == "SystemInfo")'
+    - xml_route:     '/source_type == "winevent" and /channel != "FIM" and /channel != "SystemInfo"'
+    - logtail_route: '/source_type == "logtail"'
 
   processor:
     # 1a. Parse JSON for FIM / SystemInfo events
     - parse_json:
         source: "data"
         destination: "winlog"
-        parse_when: '/channel == "FIM" or /channel == "SystemInfo"'
+        parse_when: '/source_type == "winevent" and (/channel == "FIM" or /channel == "SystemInfo")'
 
     # 1b. Parse XML for Standard Windows Events
     - parse_xml:
         source: "data"
         destination: "winlog"
-        parse_when: '/channel != "FIM" and /channel != "SystemInfo" and /channel != "ClamAV" and /channel != "TestLog"'
+        parse_when: '/source_type == "winevent" and /channel != "FIM" and /channel != "SystemInfo"'
 
-    # 2. Remove the raw data field to save storage (only for events where it was parsed)
+    # 2. Remove the raw data field for parsed events (not for raw tailed logs)
     - delete_entries:
         with_keys: ["data"]
-        delete_when: '/channel != "ClamAV" and /channel != "TestLog"'
+        delete_when: '/source_type == "winevent"'
 
     # 3. Standardize field names to ECS
     - rename_keys:
@@ -43,8 +42,12 @@ windows-events-pipeline:
           - from_key: "winlog/Provider/Name"
             to_key: "winlog/provider_name"
 
+    # 4. Ensure channel is lowercase for index routing
+    - lowercase_string:
+        with_keys: ["channel"]
+
   sink:
-    # Windows events (FIM, SystemInfo, and standard XML events)
+    # Structured Windows events (FIM, SystemInfo, Security, System, etc.) → fixed index
     - opensearch:
         hosts: [ "http://opensearch:9200" ]
         insecure: true
@@ -54,21 +57,17 @@ windows-events-pipeline:
         routes:
           - json_route
           - xml_route
-    # ClamAV logs (freshclam, clamd, scan) → separate index
+
+    # All tailed logs → DYNAMIC index derived from the channel name
+    # e.g. channel "TestLog"  → index "logs-TestLog"
+    #      channel "ClamAV"   → index "logs-ClamAV"
+    #      channel "IISLogs"  → index "logs-IISLogs"
+    # No pipeline restart needed when new log sources are added!
     - opensearch:
         hosts: [ "http://opensearch:9200" ]
         insecure: true
         username: "${OPENSEARCH_USERNAME}"
         password: "${OPENSEARCH_PASSWORD}"
-        index: "clamav-logs"
+        index: "logs-${/channel}"
         routes:
-          - clamav_route
-    # Test logs → separate index for verification
-    - opensearch:
-        hosts: [ "http://opensearch:9200" ]
-        insecure: true
-        username: "${OPENSEARCH_USERNAME}"
-        password: "${OPENSEARCH_PASSWORD}"
-        index: "test-logs"
-        routes:
-          - testlog_route
+          - logtail_route

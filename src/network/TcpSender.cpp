@@ -1,4 +1,4 @@
-﻿#include "TcpSender.h"
+#include "TcpSender.h"
 #include "utils/Logger.h"
 
 #include <nlohmann/json.hpp>
@@ -341,6 +341,7 @@ SendResult TcpSender::sendBatch(const std::vector<Event>& events) {
         j["e"] = event.eventId;       // e = event_id
         j["t"] = event.timestamp;     // t = timestamp
         j["x"] = event.data;          // x = data (generic payload)
+        j["s"] = event.sourceType;    // s = source_type (winevent|logtail)
         
         batch << j.dump() << "\n";
     }

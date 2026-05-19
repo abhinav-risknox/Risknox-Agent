@@ -3,8 +3,98 @@
 
 #include <filesystem>
 #include <stdexcept>
+#include <array>
+#include <tlhelp32.h>
 
 namespace ResolutePulse {
+
+namespace {
+
+bool processPathMatches(DWORD pid, const std::filesystem::path& expectedPath) {
+    HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!hProcess) return false;
+
+    char pathBuf[MAX_PATH] = {};
+    DWORD size = static_cast<DWORD>(sizeof(pathBuf));
+    bool matches = false;
+    if (QueryFullProcessImageNameA(hProcess, 0, pathBuf, &size)) {
+        std::error_code ec;
+        auto actual = std::filesystem::weakly_canonical(pathBuf, ec);
+        if (ec) actual = std::filesystem::absolute(pathBuf, ec);
+
+        auto expected = std::filesystem::weakly_canonical(expectedPath, ec);
+        if (ec) expected = std::filesystem::absolute(expectedPath, ec);
+
+        matches = _stricmp(actual.string().c_str(), expected.string().c_str()) == 0;
+    }
+
+    CloseHandle(hProcess);
+    return matches;
+}
+
+void killKnownWorkerProcessesInDir(const std::filesystem::path& agentDir) {
+    static constexpr std::array<const wchar_t*, 4> kWorkerNames = {
+        L"rp-webblock.exe",
+        L"rp-softblock.exe",
+        L"rp-patch.exe",
+        L"rp-antivirus.exe"
+    };
+
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snapshot == INVALID_HANDLE_VALUE) {
+        LOG_WARN("WorkerManager: failed to snapshot processes for fallback cleanup err={}", GetLastError());
+        return;
+    }
+
+    PROCESSENTRY32W pe = {};
+    pe.dwSize = sizeof(pe);
+    if (!Process32FirstW(snapshot, &pe)) {
+        CloseHandle(snapshot);
+        return;
+    }
+
+    do {
+        bool knownWorker = false;
+        for (const auto* workerName : kWorkerNames) {
+            if (_wcsicmp(pe.szExeFile, workerName) == 0) {
+                knownWorker = true;
+                break;
+            }
+        }
+        if (!knownWorker) continue;
+
+        std::filesystem::path expectedPath = agentDir / std::filesystem::path(pe.szExeFile);
+        if (!processPathMatches(pe.th32ProcessID, expectedPath)) {
+            continue;
+        }
+
+        HANDLE hProcess = OpenProcess(PROCESS_TERMINATE | SYNCHRONIZE, FALSE, pe.th32ProcessID);
+        if (!hProcess) {
+            LOG_WARN("WorkerManager: cannot open leftover worker PID={} err={}",
+                     pe.th32ProcessID, GetLastError());
+            continue;
+        }
+
+        if (TerminateProcess(hProcess, 0)) {
+            WaitForSingleObject(hProcess, 3000);
+            LOG_WARN("WorkerManager: killed leftover worker PID={}", pe.th32ProcessID);
+        } else {
+            LOG_WARN("WorkerManager: failed to kill leftover worker PID={} err={}",
+                     pe.th32ProcessID, GetLastError());
+        }
+        CloseHandle(hProcess);
+    } while (Process32NextW(snapshot, &pe));
+
+    CloseHandle(snapshot);
+}
+
+std::filesystem::path getAgentDir() {
+    char selfPath[MAX_PATH] = {};
+    GetModuleFileNameA(nullptr, selfPath, MAX_PATH);
+    return std::filesystem::path(selfPath).parent_path();
+}
+
+} // namespace
 
 WorkerManager::WorkerManager() {
     watchdogThread_ = std::thread(&WorkerManager::watchdogLoop, this);
@@ -20,9 +110,7 @@ WorkerManager::~WorkerManager() {
 
 HANDLE WorkerManager::spawnProcess(const std::string& exe) {
     // Resolve path relative to the directory of the current executable
-    char selfPath[MAX_PATH] = {};
-    GetModuleFileNameA(nullptr, selfPath, MAX_PATH);
-    std::filesystem::path agentDir = std::filesystem::path(selfPath).parent_path();
+    std::filesystem::path agentDir = getAgentDir();
     std::filesystem::path exePath  = agentDir / exe;
 
     std::string cmdLine = "\"" + exePath.string() + "\"";
@@ -175,7 +263,12 @@ bool WorkerManager::isRunning(const std::string& pipeName) const {
 void WorkerManager::watchdogLoop() {
     while (running_.load()) {
         // Check every 5 seconds
-        std::this_thread::sleep_for(std::chrono::seconds(5));
+        std::unique_lock<std::mutex> waitLock(mutex_);
+        watchdogCv_.wait_for(waitLock, std::chrono::seconds(5), [this] {
+            return !running_.load();
+        });
+        if (!running_.load()) break;
+        waitLock.unlock();
 
         std::lock_guard<std::mutex> lk(mutex_);
         for (auto& [pipeName, entry] : workers_) {
@@ -216,6 +309,7 @@ void WorkerManager::watchdogLoop() {
 
 void WorkerManager::stopAll() {
     running_ = false;
+    watchdogCv_.notify_all();
     if (watchdogThread_.joinable()) watchdogThread_.join();
 
     std::lock_guard<std::mutex> lk(mutex_);
@@ -227,6 +321,8 @@ void WorkerManager::stopAll() {
         LOG_INFO("WorkerManager: stopped worker '{}'", entry.exe);
     }
     workers_.clear();
+
+    killKnownWorkerProcessesInDir(getAgentDir());
 }
 
 } // namespace ResolutePulse

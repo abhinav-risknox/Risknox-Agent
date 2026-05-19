@@ -53,6 +53,11 @@ Name: "antivirus"; Description: "Bundled ClamAV Antivirus Engine";        Types:
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut for Pulse Monitor"; GroupDescription: "{cm:AdditionalIcons}"; Flags: checkedonce
 
+[Dirs]
+Name: "{commonappdata}\Risknox Pulse"; Permissions: users-modify
+Name: "{commonappdata}\Risknox Pulse\antivirus"; Permissions: users-modify
+Name: "{commonappdata}\Risknox Pulse\antivirus\database"; Permissions: users-modify
+
 [Files]
 ; ── Core Agent ──────────────────────────────────────────────────────────────
 Source: "build\ResolutePulse.exe";   DestDir: "{app}"; Flags: ignoreversion; Components: core

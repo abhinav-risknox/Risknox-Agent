@@ -13,6 +13,7 @@
 //   worker_restart    - Stop + re-spawn all persistent worker subprocesses
 //   status_request    - Force an immediate status flush and STATUS_REPORT
 //   diagnostics       - Return live counters + last log lines
+//   config_get        - Return the active JSON config or one section
 //   config_push       - Accept a new JSON config section, persist, apply
 //   agent_restart     - Schedule a graceful restart (sets flag for run() loop)
 //   av_update         - Trigger on-demand freshclam update via rp-antivirus
@@ -90,6 +91,7 @@ public:
         else if (cmd.verb == "worker_restart")   handleWorkerRestart(result);
         else if (cmd.verb == "status_request")   handleStatusRequest(result);
         else if (cmd.verb == "diagnostics")      handleDiagnostics(result);
+        else if (cmd.verb == "config_get")       handleConfigGet(cmd.params, result);
         else if (cmd.verb == "config_push")      handleConfigPush(cmd.params, result);
         else if (cmd.verb == "agent_restart")    handleAgentRestart(result);
         else if (cmd.verb == "av_update")        handleAvUpdate(result);
@@ -207,6 +209,56 @@ private:
         r.output = diag.dump();
     }
 
+    bool readActiveConfig(nlohmann::json& fullConfig, std::string& activePath, std::string& error) {
+        std::filesystem::path programDataConfig = PathUtils::getAgentDataDir() / "config.json";
+
+        if (!std::filesystem::exists(programDataConfig)) {
+            error = "config.json not found in ProgramData";
+            return false;
+        }
+
+        try {
+            std::ifstream in(programDataConfig);
+            in >> fullConfig;
+            activePath = programDataConfig.string();
+            return true;
+        } catch (const std::exception& e) {
+            error = std::string("config read failed: ") + e.what();
+            return false;
+        }
+    }
+
+    void handleConfigGet(const nlohmann::json& params, ModuleCommandResult& r) {
+        std::string section = params.value("section", "all");
+
+        nlohmann::json fullConfig;
+        std::string activePath;
+        std::string error;
+        if (!readActiveConfig(fullConfig, activePath, error)) {
+            r.status = "failed";
+            r.output = nlohmann::json({
+                {"success", false},
+                {"error", error}
+            }).dump();
+            return;
+        }
+
+        nlohmann::json payload = {
+            {"success", true},
+            {"section", section},
+            {"configPath", activePath}
+        };
+
+        if (section == "all") {
+            payload["config"] = fullConfig;
+        } else {
+            payload["config"] = fullConfig.value(section, nlohmann::json::object());
+        }
+
+        r.status = "success";
+        r.output = payload.dump();
+    }
+
     void handleConfigPush(const nlohmann::json& params, ModuleCommandResult& r) {
         // params expected: { "section": "patch_management" | "web_blocking" | ...,
         //                    "config":  { ... section-specific fields ... } }
@@ -219,20 +271,19 @@ private:
         std::string section = params["section"].get<std::string>();
         auto newConfig      = params["config"];
 
-        if (configPath_.empty() || !std::filesystem::exists(configPath_)) {
+        nlohmann::json fullConfig;
+        std::string activePath;
+        std::string readError;
+        if (!readActiveConfig(fullConfig, activePath, readError)) {
             r.status = "failed";
-            r.output = "config.json path not accessible";
+            r.output = nlohmann::json({
+                {"success", false},
+                {"error", readError}
+            }).dump();
             return;
         }
 
         try {
-            // Read current config
-            nlohmann::json fullConfig;
-            {
-                std::ifstream in(configPath_);
-                in >> fullConfig;
-            }
-
             // Merge the pushed section (shallow merge: new keys override, extra keys kept)
             if (!fullConfig.contains(section)) {
                 fullConfig[section] = nlohmann::json::object();
@@ -262,11 +313,19 @@ private:
             }
 
             r.status = "success";
-            r.output = "Section '" + section + "' updated.";
+            r.output = nlohmann::json({
+                {"success", true},
+                {"section", section},
+                {"configPath", targetPath.string()},
+                {"effectiveConfig", fullConfig[section]}
+            }).dump();
             LOG_INFO("ModuleController: config section '{}' updated by Manager", section);
         } catch (const std::exception& e) {
             r.status = "failed";
-            r.output = std::string("config_push failed: ") + e.what();
+            r.output = nlohmann::json({
+                {"success", false},
+                {"error", std::string("config_push failed: ") + e.what()}
+            }).dump();
             LOG_ERROR("ModuleController: config_push failed: {}", e.what());
         }
     }

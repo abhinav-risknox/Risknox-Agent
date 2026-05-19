@@ -13,15 +13,18 @@ struct Event {
     uint32_t eventId = 0;       // Windows Event ID
     std::string timestamp;      // ISO 8601 timestamp
     std::string data;           // Event data (XML for Windows events, JSON for FIM/SysInfo)
+    std::string sourceType;     // "winevent" for structured Windows events, "logtail" for tailed logs
     
     // Convert to JSON for HTTP transmission
     nlohmann::json toJson() const {
-        return nlohmann::json{
+        nlohmann::json j = {
             {"channel", channel},
             {"event_id", eventId},
             {"timestamp", timestamp},
             {"data", data}
         };
+        if (!sourceType.empty()) j["source_type"] = sourceType;
+        return j;
     }
     
     // Create from JSON (for deserialization)
@@ -31,6 +34,7 @@ struct Event {
         e.eventId = j.value("event_id", 0);
         e.timestamp = j.value("timestamp", "");
         e.data = j.value("data", "");
+        e.sourceType = j.value("source_type", "");
         return e;
     }
     
