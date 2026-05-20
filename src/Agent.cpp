@@ -938,18 +938,21 @@ void Agent::managementLoop() {
                         std::string commandId  = cmd.value("commandId", "");
                         if (!policyType.empty() && policyManager_) {
                             LOG_INFO("POLICY_UPDATE received: type={} commandId={}", policyType, commandId);
+
+                            // ACK immediately so the Manager knows we received it.
+                            // Long-running policies (patch, antivirus) execute
+                            // asynchronously; their result arrives via STATUS_REPORT.
+                            tlsSender->sendPolicyAck(
+                                agentId, commandId, policyType, true,
+                                "Policy received, executing");
+
                             nlohmann::json policyData;
                             auto raw = cmd.value("policyData", std::string{});
                             if (!raw.empty()) {
                                 policyData = nlohmann::json::parse(raw, nullptr, false);
                                 if (policyData.is_discarded()) policyData = nlohmann::json{};
                             }
-                            bool applied = policyManager_->handlePolicyUpdate(policyType, policyData);
-
-                            // Echo commandId back so Manager can correlate the ACK to the DB row
-                            tlsSender->sendPolicyAck(
-                                agentId, commandId, policyType, applied,
-                                applied ? "Policy applied successfully" : "Policy apply failed");
+                            policyManager_->handlePolicyUpdate(policyType, policyData);
                         }
                     }
                 }

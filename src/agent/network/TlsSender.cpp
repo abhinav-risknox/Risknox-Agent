@@ -602,13 +602,9 @@ SendResult TlsSender::sendStatusReport(const std::string& agentId,
 
     bytesSent_ += MESSAGE_HEADER_SIZE + payload.size();
 
-    // Read ACK (tolerates interleaved POLICY_UPDATEs)
-    std::string respPayload;
-    if (!readExpectedMessage(MessageType::STATUS_REPORT_ACK, respPayload)) {
-        LOG_WARN("Failed to read STATUS_REPORT_ACK");
-        disconnect();
-        return SendResult::ServerError;
-    }
+    // Fire-and-forget: don't block waiting for STATUS_REPORT_ACK.
+    // If the Manager still sends an ACK, it will be harmlessly
+    // consumed by tryReadInbound() on the next management loop tick.
 
     LOG_INFO("Status report sent: type={}", reportType);
     return SendResult::Success;

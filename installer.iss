@@ -82,7 +82,7 @@ Source: "vendor\clamav\msvcp140_1.dll";      DestDir: "{app}"; Flags: ignorevers
 Source: "src\gui\RiskNoXMonitor\bin\Release\net10.0-windows\win-x64\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: ui
 
 ; Configuration File
-Source: "config.json"; DestDir: "{app}"; Flags: ignoreversion; Components: core
+Source: "config.json"; DestDir: "{commonappdata}\Risknox Pulse"; Flags: ignoreversion; Components: core
 
 ; Branding Icon
 Source: "installer_assets\risknox.ico"; DestDir: "{app}"; Flags: ignoreversion

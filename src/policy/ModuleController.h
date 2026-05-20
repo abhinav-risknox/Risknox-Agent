@@ -36,6 +36,7 @@
 #include <fstream>
 #include <filesystem>
 #include <chrono>
+#include <thread>
 #include <windows.h>
 
 #include "logtailer/LogTailer.h"
@@ -338,17 +339,66 @@ private:
     }
 
     void handleAvUpdate(ModuleCommandResult& r) {
-        auto resp = runAntivirusAction({{"action", "update_definitions"}}, 10 * 60 * 1000);
-        bool ok = resp.value("success", false);
-        r.status = ok ? "success" : "failed";
-        r.output = resp.dump();
+        // Return immediately — run the update on a background thread.
+        // The real result is reported via enqueueStatusReport.
+        r.status = "accepted";
+        r.output = "AV definition update started in background";
+        LOG_INFO("ModuleController: av_update dispatched to background thread");
+
+        auto wm = workerManager_;
+        auto exeDir = workerExeDir_;
+        auto flushCb = statusFlushCb_;
+        std::thread([wm, exeDir, flushCb]() {
+            if (!wm) return;
+            std::string exe = exeDir.empty()
+                ? "rp-antivirus.exe"
+                : (exeDir + "/rp-antivirus.exe");
+            if (!wm->spawnWorker(exe, "rp-antivirus", false)) {
+                LOG_ERROR("ModuleController [bg]: failed to spawn rp-antivirus for av_update");
+                return;
+            }
+            wm->streamEvents("rp-antivirus",
+                nlohmann::json{{"action", "update_definitions"}},
+                [](const nlohmann::json& event) {
+                    std::string type = event.value("type", "");
+                    if (type == "complete" || type == "error") {
+                        LOG_INFO("ModuleController [bg av_update]: {}", event.dump());
+                    }
+                },
+                10 * 60 * 1000);
+            if (flushCb) flushCb();
+        }).detach();
     }
 
     void handleAvVersion(ModuleCommandResult& r) {
-        auto resp = runAntivirusAction({{"action", "database_info"}}, 30000);
-        bool ok = resp.value("success", false);
-        r.status = ok ? "success" : "failed";
-        r.output = resp.dump();
+        // Return immediately — run the query on a background thread.
+        r.status = "accepted";
+        r.output = "AV version query started in background";
+        LOG_INFO("ModuleController: av_version dispatched to background thread");
+
+        auto wm = workerManager_;
+        auto exeDir = workerExeDir_;
+        auto flushCb = statusFlushCb_;
+        std::thread([wm, exeDir, flushCb]() {
+            if (!wm) return;
+            std::string exe = exeDir.empty()
+                ? "rp-antivirus.exe"
+                : (exeDir + "/rp-antivirus.exe");
+            if (!wm->spawnWorker(exe, "rp-antivirus", false)) {
+                LOG_ERROR("ModuleController [bg]: failed to spawn rp-antivirus for av_version");
+                return;
+            }
+            wm->streamEvents("rp-antivirus",
+                nlohmann::json{{"action", "database_info"}},
+                [](const nlohmann::json& event) {
+                    std::string type = event.value("type", "");
+                    if (type == "complete" || type == "error") {
+                        LOG_INFO("ModuleController [bg av_version]: {}", event.dump());
+                    }
+                },
+                30000);
+            if (flushCb) flushCb();
+        }).detach();
     }
 
     nlohmann::json runAntivirusAction(const nlohmann::json& actionCmd, DWORD timeoutMs) {

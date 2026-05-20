@@ -1,11 +1,12 @@
 <Window x:Class="RisknoxMonitor.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Risknox Agent Monitor" Width="400" Height="620"
+        Title="Risknox Agent Monitor" Width="400" Height="720"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         WindowStartupLocation="CenterScreen" ResizeMode="NoResize" FontFamily="Segoe UI">
 
     <Window.Resources>
+        <!-- ── Primary Action Button ──────────────────────────────────── -->
         <Style x:Key="ModernButtonStyle" TargetType="Button">
             <Setter Property="Padding" Value="10"/>
             <Setter Property="FontSize" Value="14"/>
@@ -41,7 +42,7 @@
             </Setter>
         </Style>
 
-        <!-- Secondary Button Style -->
+        <!-- ── Secondary Button ───────────────────────────────────────── -->
         <Style x:Key="SecondaryButtonStyle" TargetType="Button" BasedOn="{StaticResource ModernButtonStyle}">
             <Setter Property="Background" Value="#252527"/>
             <Setter Property="Foreground" Value="#A0A0A4"/>
@@ -51,6 +52,33 @@
                     <Setter Property="Foreground" Value="#FFFFFF"/>
                 </Trigger>
             </Style.Triggers>
+        </Style>
+
+        <!-- ── Window Chrome Buttons (minimize / close) ───────────────── -->
+        <Style x:Key="WindowButtonBase" TargetType="Button">
+            <Setter Property="Width" Value="46"/>
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#606066"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background"
+                                        Value="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </Window.Resources>
 
@@ -67,10 +95,10 @@
 
         <Grid>
             <Grid.RowDefinitions>
-                <RowDefinition Height="46"/>   <!-- Title Bar -->
-                <RowDefinition Height="Auto"/> <!-- Hero Status -->
-                <RowDefinition Height="*"/>    <!-- Main Dashboard -->
-                <RowDefinition Height="Auto"/> <!-- Main Actions -->
+                <RowDefinition Height="46"/>   <!-- Title Bar (pinned) -->
+                <RowDefinition Height="Auto"/> <!-- Hero Status (pinned) -->
+                <RowDefinition Height="*"/>    <!-- Dashboard -->
+                <RowDefinition Height="Auto"/> <!-- Action Button (pinned) -->
             </Grid.RowDefinitions>
 
             <!-- ══ Title Bar ══════════════════════════════════════════════ -->
@@ -81,6 +109,7 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
+                <!-- Logo -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="20,0,0,0">
                     <Canvas Width="18" Height="24" Margin="0,0,10,0" VerticalAlignment="Center">
                         <Polygon Points="0,6 6,2 6,26 0,22" Fill="#FF3B00"/>
@@ -91,30 +120,19 @@
                     <TextBlock Text=".ai" Foreground="#606066" FontWeight="SemiBold" FontSize="16" VerticalAlignment="Center"/>
                 </StackPanel>
 
+                <!-- Version label -->
+                <TextBlock x:Name="TxtVersion" Grid.Column="1" Text=""
+                           Foreground="#3A3A40" FontSize="10"
+                           HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,6,0"/>
+
+                <!-- Minimize + Close -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top">
-                    <Button x:Name="BtnClose" Content="✕" Width="46" Height="36"
-                            Background="Transparent" Foreground="#606066" FontSize="14"
-                            BorderThickness="0" Click="BtnClose_Click" Cursor="Hand">
-                        <Button.Style>
-                            <Style TargetType="Button">
-                                <Setter Property="Template">
-                                    <Setter.Value>
-                                        <ControlTemplate TargetType="Button">
-                                            <Border Background="{TemplateBinding Background}">
-                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                            </Border>
-                                        </ControlTemplate>
-                                    </Setter.Value>
-                                </Setter>
-                                <Style.Triggers>
-                                    <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter Property="Background" Value="#C42B1C"/>
-                                        <Setter Property="Foreground" Value="White"/>
-                                    </Trigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                    </Button>
+                    <Button x:Name="BtnMinimize" Content="─"
+                            Style="{StaticResource WindowButtonBase}" Tag="#333338"
+                            Click="BtnMinimize_Click"/>
+                    <Button x:Name="BtnClose" Content="✕"
+                            Style="{StaticResource WindowButtonBase}" Tag="#C42B1C"
+                            Click="BtnClose_Click"/>
                 </StackPanel>
 
                 <Border VerticalAlignment="Bottom" Height="1" Background="#252527" Grid.ColumnSpan="3"/>
@@ -152,52 +170,94 @@
                 </Grid>
             </StackPanel>
 
-            <!-- ══ Main Dashboard Area ══════════════════════════════════════ -->
-            <Grid Grid.Row="2">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="20,8,20,0">
-                    <StackPanel>
-                        <!-- System Info Card -->
-                        <Border Background="#252527" CornerRadius="10" Padding="20" Margin="0,0,0,10"
-                                BorderBrush="#2E2E30" BorderThickness="1">
-                            <StackPanel>
-                                <TextBlock Text="SYSTEM INFORMATION" FontSize="9" FontWeight="Black"
-                                           Foreground="#505056" Margin="0,0,0,16"/>
-                                <Grid Margin="0,0,0,12">
-                                    <TextBlock Text="Service Name" Foreground="#909094" FontSize="13" VerticalAlignment="Center"/>
-                                    <TextBlock Text="ResolutePulse" Foreground="#FFFFFF" FontSize="13"
-                                               FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center"/>
-                                </Grid>
-                                <Rectangle Height="1" Fill="#2E2E30" Margin="0,0,0,12"/>
-                                <Grid Margin="0,0,0,12">
-                                    <TextBlock Text="Protocol" Foreground="#909094" FontSize="13" VerticalAlignment="Center"/>
-                                    <TextBlock Text="mTLS Secured" Foreground="#FFFFFF" FontSize="13"
-                                               FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center"/>
-                                </Grid>
-                                <Rectangle Height="1" Fill="#2E2E30" Margin="0,0,0,12"/>
-                                <Grid>
-                                    <TextBlock Text="Maintenance" Foreground="#909094" FontSize="13" VerticalAlignment="Center"/>
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                                        <Button x:Name="BtnOpenLogs" Content="📝" ToolTip="View Agent Logs (Dev Mode)" 
-                                                Width="28" Height="28" Padding="0" Margin="0,0,8,0"
-                                                Background="#2E2E30" Foreground="#A0A0A4" BorderThickness="0"
-                                                FontSize="12" Cursor="Hand" Click="BtnOpenLogs_Click"
-                                                Visibility="Collapsed"
-                                                Style="{StaticResource SecondaryButtonStyle}">
-                                        </Button>
-                                        <Button x:Name="BtnOpenConfig" Content="📁" ToolTip="Open Config Directory" 
-                                                Width="28" Height="28" Padding="0"
-                                                Background="#2E2E30" Foreground="#A0A0A4" BorderThickness="0"
-                                                FontSize="12" Cursor="Hand" Click="BtnOpenConfig_Click"
-                                                Style="{StaticResource SecondaryButtonStyle}">
-                                        </Button>
-                                    </StackPanel>
-                                </Grid>
-                            </StackPanel>
-                        </Border>
+            <!-- ══ Main Dashboard Area ═════════════════════════════════════ -->
+            <Grid Grid.Row="2" Margin="20,8,20,0">
+                <StackPanel>
 
-                        <!-- Subscription Card -->
-                        <Border Background="#252527" CornerRadius="10" Padding="20"
-                                BorderBrush="#2E2E30" BorderThickness="1">
+                    <!-- ── Connection Card (compact 2-col) ─────────────── -->
+                    <Border Background="#252527" CornerRadius="10" Padding="14,12" Margin="0,0,0,8"
+                            BorderBrush="#2E2E30" BorderThickness="1">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Header -->
+                            <StackPanel Grid.Row="0" Grid.ColumnSpan="3" Orientation="Horizontal" Margin="0,0,0,10">
+                                <TextBlock Text="CONNECTION" FontSize="9" FontWeight="Black" Foreground="#505056"/>
+                                <Ellipse x:Name="ConnDot" Width="6" Height="6" Fill="#505056"
+                                         Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+
+                            <!-- Row 1: Service + mTLS -->
+                            <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,0,8">
+                                <TextBlock Text="Service" Foreground="#606066" FontSize="10"/>
+                                <TextBlock Text="ResolutePulse" Foreground="#FFFFFF" FontSize="12" FontWeight="SemiBold"/>
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" Grid.Column="2" Margin="0,0,0,8">
+                                <TextBlock Text="mTLS" Foreground="#606066" FontSize="10"/>
+                                <TextBlock x:Name="TxtConnStatus" Text="…" Foreground="#FFFFFF" FontSize="12" FontWeight="SemiBold"/>
+                            </StackPanel>
+
+                            <!-- Row 2: Manager + Events -->
+                            <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,0,8">
+                                <TextBlock Text="Manager" Foreground="#606066" FontSize="10"/>
+                                <TextBlock x:Name="TxtManagerHost" Text="—" Foreground="#FFFFFF" FontSize="12" FontWeight="SemiBold"/>
+                            </StackPanel>
+                            <StackPanel Grid.Row="2" Grid.Column="2" Margin="0,0,0,8">
+                                <TextBlock Text="Events" Foreground="#606066" FontSize="10"/>
+                                <TextBlock x:Name="TxtEventCounters" Text="—" Foreground="#FFFFFF" FontSize="12"
+                                           FontWeight="SemiBold" FontFamily="Consolas"/>
+                            </StackPanel>
+
+                            <!-- Row 3: Buffered + Maintenance -->
+                            <StackPanel Grid.Row="3" Grid.Column="0">
+                                <TextBlock Text="Buffered" Foreground="#606066" FontSize="10"/>
+                                <TextBlock x:Name="TxtBuffered" Text="—" Foreground="#FFFFFF" FontSize="12"
+                                           FontWeight="SemiBold" FontFamily="Consolas"/>
+                            </StackPanel>
+                            <StackPanel Grid.Row="3" Grid.Column="2" Orientation="Horizontal"
+                                        VerticalAlignment="Bottom" HorizontalAlignment="Right">
+                                <Button x:Name="BtnOpenLogs" Content="📝" ToolTip="View Agent Logs (Dev Mode)"
+                                        Width="24" Height="24" Padding="0" Margin="0,0,4,0"
+                                        Background="#2E2E30" Foreground="#A0A0A4" BorderThickness="0"
+                                        FontSize="10" Cursor="Hand" Click="BtnOpenLogs_Click"
+                                        Visibility="Collapsed"
+                                        Style="{StaticResource SecondaryButtonStyle}"/>
+                                <Button x:Name="BtnOpenConfig" Content="📁" ToolTip="Open Config Directory"
+                                        Width="24" Height="24" Padding="0"
+                                        Background="#2E2E30" Foreground="#A0A0A4" BorderThickness="0"
+                                        FontSize="10" Cursor="Hand" Click="BtnOpenConfig_Click"
+                                        Style="{StaticResource SecondaryButtonStyle}"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- ── Protection Modules ──────────────────────── -->
+                    <TextBlock Text="PROTECTION MODULES" FontSize="9" FontWeight="Black"
+                               Foreground="#505056" Margin="0,4,0,8"/>
+
+                    <!-- Tile Grid (rows added dynamically in code-behind) -->
+                    <Grid x:Name="ModuleTilesGrid">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="6"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                    </Grid>
+
+                    <!-- ── Subscription Card ───────────────────────── -->
+                    <Border Background="#252527" CornerRadius="10" Padding="14,12" Margin="0,8,0,0"
+                            BorderBrush="#2E2E30" BorderThickness="1">
+                        <StackPanel>
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
@@ -207,36 +267,55 @@
                                     <TextBlock Text="SUBSCRIPTION" FontSize="9" FontWeight="Black"
                                                Foreground="#505056" Margin="0,0,0,4"/>
                                     <TextBlock x:Name="TxtLicenseType" Text="Checking..."
-                                               Foreground="#FFFFFF" FontWeight="SemiBold" FontSize="14"/>
+                                               Foreground="#FFFFFF" FontWeight="SemiBold" FontSize="13"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
-                                    <TextBlock x:Name="TxtExpiry" Text="..." FontSize="15"
+                                    <TextBlock x:Name="TxtExpiry" Text="…" FontSize="14"
                                                Foreground="#FFFFFF" FontWeight="Bold" HorizontalAlignment="Right"/>
-                                    <TextBlock x:Name="TxtLicenseDetail" Text="" FontSize="11"
+                                    <TextBlock x:Name="TxtLicenseDetail" Text="" FontSize="10"
                                                Foreground="#606066" HorizontalAlignment="Right" Margin="0,2,0,0"/>
                                 </StackPanel>
                             </Grid>
-                        </Border>
 
-                        <!-- Error Banner -->
-                        <Border x:Name="ErrorBanner" Background="#3D1A00" CornerRadius="10" Padding="16"
-                                Margin="0,10,0,0" BorderBrush="#FF5B00" BorderThickness="1" Visibility="Collapsed">
-                            <StackPanel>
-                                <TextBlock Text="⚠  SYSTEM ISSUE" FontSize="9" FontWeight="Black"
-                                           Foreground="#FF8C42" Margin="0,0,0,8"/>
-                                <TextBlock x:Name="TxtError" Text="" Foreground="#FFAA66"
-                                           FontSize="12" TextWrapping="Wrap" LineHeight="18"/>
+                            <!-- Certificate Status -->
+                            <Rectangle Height="1" Fill="#2E2E30" Margin="0,10,0,8"/>
+                            <StackPanel Orientation="Horizontal">
+                                <Ellipse x:Name="CertDot" Width="8" Height="8" Fill="#505056"
+                                         Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="TxtCertStatus" Text="Certificate: checking…"
+                                           Foreground="#909094" FontSize="11" VerticalAlignment="Center"/>
                             </StackPanel>
-                        </Border>
-                    </StackPanel>
-                </ScrollViewer>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ── Error Banner ────────────────────────────── -->
+                    <Border x:Name="ErrorBanner" Background="#3D1A00" CornerRadius="10" Padding="14"
+                            Margin="0,8,0,0" BorderBrush="#FF5B00" BorderThickness="1"
+                            Visibility="Collapsed" Opacity="0">
+                        <Border.RenderTransform>
+                            <TranslateTransform x:Name="ErrorBannerTranslate" Y="0"/>
+                        </Border.RenderTransform>
+                        <StackPanel>
+                            <TextBlock Text="⚠  SYSTEM ISSUE" FontSize="9" FontWeight="Black"
+                                       Foreground="#FF8C42" Margin="0,0,0,6"/>
+                            <TextBlock x:Name="TxtError" Text="" Foreground="#FFAA66"
+                                       FontSize="12" TextWrapping="Wrap" LineHeight="18"/>
+                        </StackPanel>
+                    </Border>
+
+                </StackPanel>
             </Grid>
 
             <!-- ══ Main Action Button ══════════════════════════════════════ -->
             <Grid Grid.Row="3" Margin="20,14,20,20">
                 <Button x:Name="BtnAction" Content="Start Agent" Height="50"
-                        Style="{StaticResource ModernButtonStyle}"
-                        Background="#FF5B00" Click="BtnAction_Click">
+                        Style="{StaticResource ModernButtonStyle}" Click="BtnAction_Click">
+                    <Button.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                            <GradientStop Color="#FF5B00" Offset="0"/>
+                            <GradientStop Color="#FF3B00" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Button.Background>
                     <Button.Effect>
                         <DropShadowEffect BlurRadius="15" ShadowDepth="2" Opacity="0.3" Color="#FF5B00"/>
                     </Button.Effect>

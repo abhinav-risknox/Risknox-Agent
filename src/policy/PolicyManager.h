@@ -6,6 +6,7 @@
 #include <nlohmann/json.hpp>
 #include <string>
 #include <functional>
+#include <thread>
 
 namespace ResolutePulse {
 
@@ -59,30 +60,39 @@ public:
                          resp.value("error", "unknown"));
             }
         } else if (policyType == "patch") {
-            // On-demand worker: spawn, stream events, worker exits when done
-            workerManager_->spawnWorker("rp-patch.exe", "rp-patch", /*persistent=*/false);
-            // PipeClient::connect() in streamEvents retries every 100ms with 5s timeout
-            workerManager_->streamEvents("rp-patch", policyData,
-                [this](const nlohmann::json& event) {
-                    std::string type = event.value("type", "");
-                    LOG_INFO("PolicyManager [rp-patch]: {}", event.dump());
-                    if (statusCallback_ && type == "complete") {
-                        statusCallback_("patch_scan", event);
-                    }
-                });
+            // On-demand worker: run on a background thread so the management
+            // loop is never blocked (patch scans can take several minutes).
+            // The thread self-destructs when streamEvents() finishes.
+            auto wm = workerManager_;
+            auto cb = statusCallback_;
+            std::thread([wm, policyData, cb]() {
+                wm->spawnWorker("rp-patch.exe", "rp-patch", /*persistent=*/false);
+                wm->streamEvents("rp-patch", policyData,
+                    [cb](const nlohmann::json& event) {
+                        std::string type = event.value("type", "");
+                        LOG_INFO("PolicyManager [rp-patch]: {}", event.dump());
+                        if (cb && type == "complete") {
+                            cb("patch_scan", event);
+                        }
+                    });
+            }).detach();
             result = true;
         } else if (policyType == "antivirus") {
-            // On-demand worker: spawn, stream events, worker exits when done
-            workerManager_->spawnWorker("rp-antivirus.exe", "rp-antivirus", /*persistent=*/false);
-            // PipeClient::connect() in streamEvents retries every 100ms with 5s timeout
-            workerManager_->streamEvents("rp-antivirus", policyData,
-                [this](const nlohmann::json& event) {
-                    std::string type = event.value("type", "");
-                    LOG_INFO("PolicyManager [rp-antivirus]: {}", event.dump());
-                    if (statusCallback_ && (type == "complete" || type == "threat")) {
-                        statusCallback_("av_scan", event);
-                    }
-                });
+            // On-demand worker: run on a background thread so the management
+            // loop is never blocked (AV scans can take several minutes).
+            auto wm = workerManager_;
+            auto cb = statusCallback_;
+            std::thread([wm, policyData, cb]() {
+                wm->spawnWorker("rp-antivirus.exe", "rp-antivirus", /*persistent=*/false);
+                wm->streamEvents("rp-antivirus", policyData,
+                    [cb](const nlohmann::json& event) {
+                        std::string type = event.value("type", "");
+                        LOG_INFO("PolicyManager [rp-antivirus]: {}", event.dump());
+                        if (cb && (type == "complete" || type == "threat")) {
+                            cb("av_scan", event);
+                        }
+                    });
+            }).detach();
             result = true;
         } else if (policyType == "status_request") {
             sendStatusReport();
@@ -103,9 +113,20 @@ public:
         report["timestamp"] = getCurrentTimestamp();
 
         if (workerManager_) {
-            // Web Blocking
-            auto webResp = workerManager_->sendCommand("rp-webblock",
-                {{"action", "get_status"}}, 3000);
+            // Query both workers in parallel (halves worst-case from 6s to 3s)
+            nlohmann::json webResp, sbResp;
+            auto wm = workerManager_;
+            std::thread t1([&webResp, wm]() {
+                webResp = wm->sendCommand("rp-webblock",
+                    {{"action", "get_status"}}, 3000);
+            });
+            std::thread t2([&sbResp, wm]() {
+                sbResp = wm->sendCommand("rp-softblock",
+                    {{"action", "get_status"}}, 3000);
+            });
+            t1.join();
+            t2.join();
+
             if (webResp.value("ok", false)) {
                 report["web_blocking"] = webResp.value("status", nlohmann::json{});
                 LOG_DEBUG("PolicyManager: Web blocking status retrieved");
@@ -114,9 +135,6 @@ public:
                          webResp.value("error", "unknown"));
             }
 
-            // Software Blocking
-            auto sbResp = workerManager_->sendCommand("rp-softblock",
-                {{"action", "get_status"}}, 3000);
             if (sbResp.value("ok", false)) {
                 report["software_blocking"] = sbResp.value("status", nlohmann::json{});
                 LOG_DEBUG("PolicyManager: Software blocking status retrieved");
