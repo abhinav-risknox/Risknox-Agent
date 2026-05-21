@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="Primary-Logo_White-scaled-1536x428.png" alt="Risknox" width="420" />
+  <img src="Vertical-Logo_White-scaled-1324x1536.png" alt="Risknox" height="120" />
 </p>
 <h1 align="center">Risknox Pulse</h1>
 <p align="center">
