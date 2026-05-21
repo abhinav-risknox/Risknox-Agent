@@ -1,22 +1,16 @@
-<p align="center">
-  <img src="Primary-Logo_White-scaled-1536x428.png" alt="Risknox" width="420" />
-</p>
+<div align="center">
 
-<h1 align="center">Risknox Pulse</h1>
+<img src="Primary-Logo_White-scaled-1536x428.png" alt="Risknox" width="420" />
 
-<p align="center">
-  <b>Enterprise Windows Endpoint Security Agent</b><br/>
-  Real-time event collection · File integrity monitoring · Antivirus · Patch management · Centralized control
-</p>
+# Risknox Pulse
 
-<p align="center">
-  <img alt="C++17" src="https://img.shields.io/badge/C%2B%2B-17-blue?logo=cplusplus" />
-  <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-purple?logo=dotnet" />
-  <img alt="React" src="https://img.shields.io/badge/React-19-61DAFB?logo=react" />
-  <img alt="CMake" src="https://img.shields.io/badge/CMake-3.20+-064F8C?logo=cmake" />
-  <img alt="Docker" src="https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker" />
-  <img alt="License" src="https://img.shields.io/badge/License-Proprietary-red" />
-</p>
+**Enterprise Windows Endpoint Security Agent**
+
+Real-time event collection · File integrity monitoring · Antivirus · Patch management · Centralized control
+
+[![C++17](https://img.shields.io/badge/C%2B%2B-17-blue?logo=cplusplus)](.) [![.NET 10](https://img.shields.io/badge/.NET-10-purple?logo=dotnet)](.) [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](.) [![CMake](https://img.shields.io/badge/CMake-3.20+-064F8C?logo=cmake)](.) [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker)](.) [![License](https://img.shields.io/badge/License-Proprietary-red)](.)
+
+</div>
 
 ---
 
