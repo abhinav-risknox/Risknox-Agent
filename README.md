@@ -1,4 +1,4 @@
-<![CDATA[<p align="center">
+<p align="center">
   <img src="Primary-Logo_White-scaled-1536x428.png" alt="Risknox" width="420" />
 </p>
 
@@ -59,65 +59,40 @@ Collected telemetry flows through a **Fluent Bit → Data Prepper → OpenSearch
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                        WINDOWS ENDPOINT                         │
-│                                                                  │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │              ResolutePulse.exe  (Core Agent)             │   │
-│  │                                                          │   │
-│  │  ┌────────────┐ ┌────────┐ ┌─────────┐ ┌────────────┐  │   │
-│  │  │  Event     │ │  FIM   │ │ SysInfo │ │ Log Tailer │  │   │
-│  │  │ Collector  │ │Monitor │ │Collector│ │            │  │   │
-│  │  └─────┬──────┘ └───┬────┘ └────┬────┘ └─────┬──────┘  │   │
-│  │        │            │           │             │          │   │
-│  │        └────────────┴─────┬─────┴─────────────┘          │   │
-│  │                           │                               │   │
-│  │                    ┌──────▼──────┐                        │   │
-│  │                    │ EventQueue  │                        │   │
-│  │                    │  + Buffer   │                        │   │
-│  │                    └──────┬──────┘                        │   │
-│  │                           │                               │   │
-│  │                    ┌──────▼──────┐     ┌──────────────┐  │   │
-│  │                    │ BatchSender ├────►│  Fluent Bit  │  │   │
-│  │                    └─────────────┘     │  (TCP:5170)  │  │   │
-│  │                                        └──────┬───────┘  │   │
-│  │  ┌─ Worker Processes (Named Pipe IPC) ──────────────┐   │   │
-│  │  │  rp-webblock.exe   (persistent)                   │   │   │
-│  │  │  rp-softblock.exe  (persistent)                   │   │   │
-│  │  │  rp-patch.exe      (on-demand)                    │   │   │
-│  │  │  rp-antivirus.exe  (on-demand)                    │   │   │
-│  │  └───────────────────────────────────────────────────┘   │   │
-│  └──────────────────────────┬───────────────────────────────┘   │
-│                              │ mTLS (:1514)                      │
-└──────────────────────────────┼──────────────────────────────────┘
-                               │
-┌──────────────────────────────▼──────────────────────────────────┐
-│                      SERVER INFRASTRUCTURE                       │
-│                                                                  │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │        ResolutePulseManager  (C++ / Docker)               │  │
-│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌────────────┐  │  │
-│  │  │    CA    │ │ Agent    │ │ License  │ │  REST API  │  │  │
-│  │  │(ECC TLS)│ │ Registry │ │ Manager  │ │  (:8080)   │  │  │
-│  │  └─────────┘ └─────┬────┘ └──────────┘ └──────┬─────┘  │  │
-│  │                     │                          │         │  │
-│  │               ┌─────▼──────────────────────────▼─────┐  │  │
-│  │               │        PostgreSQL 16                  │  │  │
-│  │               └──────────────────────────────────────┘  │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                  │
-│  ┌──────────┐     ┌──────────────┐     ┌──────────────────┐    │
-│  │Fluent Bit├────►│ Data Prepper ├────►│   OpenSearch     │    │
-│  │ (:5170)  │     │   (:2021)    │     │   (:9200)        │    │
-│  └──────────┘     └──────────────┘     └────────┬─────────┘    │
-│                                                  │              │
-│                                        ┌─────────▼──────────┐  │
-│  ┌──────────────────┐                  │    OpenSearch      │  │
-│  │    Dashboard     │                  │    Dashboards      │  │
-│  │  (React :3000)   │                  │     (:5601)        │  │
-│  └──────────────────┘                  └────────────────────┘  │
-└──────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph endpoint["Windows Endpoint"]
+        direction TB
+        subgraph agent["ResolutePulse.exe - Core Agent"]
+            direction TB
+            EC["Event Collector"] & FIM["FIM Monitor"] & SI["SysInfo Collector"] & LT["Log Tailer"]
+            EC & FIM & SI & LT --> EQ["EventQueue + Buffer"]
+            EQ --> BS["BatchSender"]
+        end
+        subgraph workers["Worker Processes - Named Pipe IPC"]
+            WB["rp-webblock.exe\n(persistent)"]
+            SB["rp-softblock.exe\n(persistent)"]
+            PA["rp-patch.exe\n(on-demand)"]
+            AV["rp-antivirus.exe\n(on-demand)"]
+        end
+    end
+
+    subgraph server["Server Infrastructure"]
+        direction TB
+        subgraph mgr["ResolutePulseManager - C++ / Docker"]
+            CA["CA\n(ECC TLS)"] & AR["Agent\nRegistry"] & LM["License\nManager"] & API["REST API\n(:8080)"]
+            AR & API --> PG[("PostgreSQL 16\n(:5432)")]
+        end
+        subgraph pipeline["Data Pipeline"]
+            FB["Fluent Bit\n(:5170)"] --> DP["Data Prepper\n(:2021)"] --> OS[("OpenSearch\n(:9200)")]
+            OS --> OSD["OpenSearch Dashboards\n(:5601)"]
+        end
+        DASH["Dashboard - React\n(:3000)"]
+        DASH --> API
+    end
+
+    BS -->|TCP| FB
+    agent -->|mTLS :1514| mgr
 ```
 
 ### Wire Protocol (RPLS)
@@ -541,4 +516,3 @@ Both workflows:
 <p align="center">
   <sub>© 2026 Risknox — All Rights Reserved</sub>
 </p>
-]]>
