@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>/ — graphify tree viewer</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f9f9f9;
+      color: #333;
+    }
+    h1 {
+      margin: 20px 0 0 24px;
+      font-size: 2.2rem;
+      font-weight: bold;
+      color: #1e3a56;
+    }
+    .controls {
+      margin: 20px 0 15px 24px;
+    }
+    button {
+      margin-right: 10px;
+      padding: 8px 18px;
+      background: #007bff;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: background 0.2s ease-in-out;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    button:active {
+      background: #004085;
+    }
+    #tree-container {
+      width: calc(100vw - 48px); /* Adjust for body margin/padding */
+      height: 85vh;
+      overflow: auto;
+      border-radius: 8px;
+      background: #fff;
+      margin-left: 24px;
+      margin-right: 24px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      border: 1px solid #ddd;
+    }
+    svg {
+      background: #fff;
+      border-radius: 8px;
+      display: block; /* Important for D3 */
+    }
+    .node circle {
+      stroke-width: 2.5px;
+    }
+    .node text { /* Base style for the <text> container */
+      font: 13px 'Segoe UI', sans-serif;
+      paint-order: stroke fill; /* Ensures text is readable over lines */
+      stroke: #fff; /* White halo */
+      stroke-width: 3px; /* Halo thickness */
+      stroke-linejoin: round;
+      stroke-opacity: 0.85; /* Halo opacity */
+    }
+    .link {
+      fill: none;
+      stroke-opacity: 0.7;
+      stroke-width: 2px;
+    }
+  </style>
+</head>
+<body>
+  <h1>/ — Knowledge Graph</h1>
+  <div class="controls">
+    <button onclick="expandAll()">Expand All</button>
+    <button onclick="collapseAll()">Collapse All</button>
+    <button onclick="resetView()">Reset View</button>
+  </div>
+  <div id="tree-container">
+    <svg id="tree-svg" width="6000" height="8000"></svg>
+  </div>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script>
+    const initialJsonData = {"name":"/","total_count":706,"children":[{"name":"manager","total_count":150,"children":[{"name":"CMakeLists.txt","total_count":3,"children":[{"name":"OpenSSL","total_count":1,"children":[]},{"name":"PostgreSQL","total_count":1,"children":[]},{"name":"ResolutePulseManager","total_count":1,"children":[]}]},{"name":"dashboard","total_count":147,"children":[{"name":"index.html","total_count":1,"children":[{"name":"Dashboard UI Entry","total_count":1,"children":[]}]},{"name":"package.json","total_count":36,"children":[{"name":"@eslint/js","total_count":1,"children":[]},{"name":"@tailwindcss/postcss","total_count":1,"children":[]},{"name":"@tanstack/react-query","total_count":1,"children":[]},{"name":"@types/node","total_count":1,"children":[]},{"name":"@types/react","total_count":1,"children":[]},{"name":"@types/react-dom","total_count":1,"children":[]},{"name":"@vitejs/plugin-react","total_count":1,"children":[]},{"name":"autoprefixer","total_count":1,"children":[]},{"name":"axios","total_count":1,"children":[]},{"name":"build","total_count":1,"children":[]},{"name":"clsx","total_count":1,"children":[]},{"name":"dependencies","total_count":1,"children":[]},{"name":"dev","total_count":1,"children":[]},{"name":"devDependencies","total_count":1,"children":[]},{"name":"eslint","total_count":1,"children":[]},{"name":"eslint-plugin-react-hooks","total_count":1,"children":[]},{"name":"eslint-plugin-react-refresh","total_count":1,"children":[]},{"name":"globals","total_count":1,"children":[]},{"name":"lint","total_count":1,"children":[]},{"name":"lucide-react","total_count":1,"children":[]},{"name":"name","total_count":1,"children":[]},{"name":"postcss","total_count":1,"children":[]},{"name":"preview","total_count":1,"children":[]},{"name":"private","total_count":1,"children":[]},{"name":"react","total_count":1,"children":[]},{"name":"react-dom","total_count":1,"children":[]},{"name":"react-router-dom","total_count":1,"children":[]},{"name":"recharts","total_count":1,"children":[]},{"name":"scripts","total_count":1,"children":[]},{"name":"tailwind-merge","total_count":1,"children":[]},{"name":"tailwindcss","total_count":1,"children":[]},{"name":"type","total_count":1,"children":[]},{"name":"typescript","total_count":1,"children":[]},{"name":"typescript-eslint","total_count":1,"children":[]},{"name":"version","total_count":1,"children":[]},{"name":"vite","total_count":1,"children":[]}]},{"name":"public","total_count":7,"children":[{"name":"favicon.svg","total_count":1,"children":[{"name":"Favicon Image","total_count":1,"children":[]}]},{"name":"icons.svg","total_count":6,"children":[{"name":"Bluesky Icon","total_count":1,"children":[]},{"name":"Discord Icon","total_count":1,"children":[]},{"name":"Documentation Icon","total_count":1,"children":[]},{"name":"GitHub Icon","total_count":1,"children":[]},{"name":"Social Icon","total_count":1,"children":[]},{"name":"X Icon","total_count":1,"children":[]}]}]},{"name":"README.md","total_count":2,"children":[{"name":"React","total_count":1,"children":[]},{"name":"Vite","total_count":1,"children":[]}]},{"name":"src","total_count":60,"children":[{"name":"api","total_count":4,"children":[{"name":"client.ts","total_count":2,"children":[{"name":"api","total_count":1,"children":[]},{"name":"token","total_count":1,"children":[]}]},{"name":"endpoints.ts","total_count":2,"children":[{"name":"Agent","total_count":1,"children":[]},{"name":"endpoints","total_count":1,"children":[]}]}]},{"name":"App.tsx","total_count":2,"children":[{"name":"App()","total_count":1,"children":[]},{"name":"queryClient","total_count":1,"children":[]}]},{"name":"assets","total_count":5,"children":[{"name":"hero.png","total_count":3,"children":[{"name":"Bottom Layer (Purple Gradient)","total_count":1,"children":[]},{"name":"Isometric Illustration","total_count":1,"children":[]},{"name":"Top Layer (White Outline)","total_count":1,"children":[]}]},{"name":"react.svg","total_count":1,"children":[{"name":"React Logo","total_count":1,"children":[]}]},{"name":"vite.svg","total_count":1,"children":[{"name":"Vite SVG Image","total_count":1,"children":[]}]}]},{"name":"components","total_count":21,"children":[{"name":"common","total_count":2,"children":[{"name":"Breadcrumb.tsx","total_count":2,"children":[{"name":"Breadcrumb()","total_count":1,"children":[]},{"name":"BreadcrumbProps","total_count":1,"children":[]}]}]},{"name":"dashboard","total_count":2,"children":[{"name":"StatCard.tsx","total_count":2,"children":[{"name":"StatCard()","total_count":1,"children":[]},{"name":"StatCardProps","total_count":1,"children":[]}]}]},{"name":"layout","total_count":4,"children":[{"name":"AppShell.tsx","total_count":2,"children":[{"name":"AppShell()","total_count":1,"children":[]},{"name":"AppShellProps","total_count":1,"children":[]}]},{"name":"Sidebar.tsx","total_count":2,"children":[{"name":"navItems","total_count":1,"children":[]},{"name":"Sidebar()","total_count":1,"children":[]}]}]},{"name":"policies","total_count":13,"children":[{"name":"AntivirusScanCard.tsx","total_count":2,"children":[{"name":"AntivirusScanCard()","total_count":1,"children":[]},{"name":"AntivirusScanCardProps","total_count":1,"children":[]}]},{"name":"ConfigPushCard.tsx","total_count":7,"children":[{"name":"CONFIG_SECTIONS","total_count":1,"children":[]},{"name":"ConfigPushCard()","total_count":1,"children":[]},{"name":"ConfigPushCardProps","total_count":1,"children":[]},{"name":"DEFAULT_LOG_FORWARDING","total_count":1,"children":[]},{"name":"formatJson()","total_count":1,"children":[]},{"name":"parseResultPayload()","total_count":1,"children":[]},{"name":"TrackedCommand","total_count":1,"children":[]}]},{"name":"SoftwarePolicyCard.tsx","total_count":2,"children":[{"name":"SoftwarePolicyCard()","total_count":1,"children":[]},{"name":"SoftwarePolicyCardProps","total_count":1,"children":[]}]},{"name":"WebPolicyCard.tsx","total_count":2,"children":[{"name":"WebPolicyCard()","total_count":1,"children":[]},{"name":"WebPolicyCardProps","total_count":1,"children":[]}]}]}]},{"name":"hooks","total_count":2,"children":[{"name":"useAgents.ts","total_count":1,"children":[{"name":"useAgents","total_count":1,"children":[]}]},{"name":"useAgents.ts","total_count":1,"children":[{"name":"useAgents()","total_count":1,"children":[]}]}]},{"name":"Layouts","total_count":8,"children":[{"name":"Header.tsx","total_count":1,"children":[{"name":"Header","total_count":1,"children":[]}]},{"name":"Header.tsx","total_count":1,"children":[{"name":"Header()","total_count":1,"children":[]}]},{"name":"Sidebar.tsx","total_count":1,"children":[{"name":"Sidebar","total_count":1,"children":[]}]},{"name":"Sidebar.tsx","total_count":2,"children":[{"name":"navItems","total_count":1,"children":[]},{"name":"Sidebar()","total_count":1,"children":[]}]},{"name":"VerticalLayout.tsx","total_count":1,"children":[{"name":"VerticalLayout","total_count":1,"children":[]}]},{"name":"VerticalLayout.tsx","total_count":2,"children":[{"name":"VerticalLayout()","total_count":1,"children":[]},{"name":"VerticalLayoutProps","total_count":1,"children":[]}]}]},{"name":"lib","total_count":2,"children":[{"name":"utils.ts","total_count":1,"children":[{"name":"cn","total_count":1,"children":[]}]},{"name":"utils.ts","total_count":1,"children":[{"name":"cn()","total_count":1,"children":[]}]}]},{"name":"pages","total_count":8,"children":[{"name":"AgentDetail.tsx","total_count":1,"children":[{"name":"AgentDetail","total_count":1,"children":[]}]},{"name":"AgentDetail.tsx","total_count":1,"children":[{"name":"AgentDetail()","total_count":1,"children":[]}]},{"name":"Agents.tsx","total_count":1,"children":[{"name":"Agents","total_count":1,"children":[]}]},{"name":"Agents.tsx","total_count":1,"children":[{"name":"Agents()","total_count":1,"children":[]}]},{"name":"Dashboard.tsx","total_count":1,"children":[{"name":"Dashboard","total_count":1,"children":[]}]},{"name":"Dashboard.tsx","total_count":1,"children":[{"name":"Dashboard()","total_count":1,"children":[]}]},{"name":"Login.tsx","total_count":1,"children":[{"name":"Login","total_count":1,"children":[]}]},{"name":"Login.tsx","total_count":1,"children":[{"name":"login()","total_count":1,"children":[]}]}]},{"name":"Routes","total_count":7,"children":[{"name":"allRoutes.tsx","total_count":2,"children":[{"name":"authProtectedRoutes","total_count":1,"children":[]},{"name":"publicRoutes","total_count":1,"children":[]}]},{"name":"allRoutes.tsx","total_count":2,"children":[{"name":"authProtectedRoutes","total_count":1,"children":[]},{"name":"publicRoutes","total_count":1,"children":[]}]},{"name":"index.tsx","total_count":1,"children":[{"name":"Index","total_count":1,"children":[]}]},{"name":"index.tsx","total_count":2,"children":[{"name":"AuthProtected()","total_count":1,"children":[]},{"name":"Index()","total_count":1,"children":[]}]}]},{"name":"main.tsx","total_count":1,"children":[]}]},{"name":"tsconfig.app.json","total_count":18,"children":[{"name":"allowImportingTsExtensions","total_count":1,"children":[]},{"name":"compilerOptions","total_count":1,"children":[]},{"name":"erasableSyntaxOnly","total_count":1,"children":[]},{"name":"include","total_count":1,"children":[]},{"name":"jsx","total_count":1,"children":[]},{"name":"lib","total_count":1,"children":[]},{"name":"module","total_count":1,"children":[]},{"name":"moduleDetection","total_count":1,"children":[]},{"name":"moduleResolution","total_count":1,"children":[]},{"name":"noEmit","total_count":1,"children":[]},{"name":"noFallthroughCasesInSwitch","total_count":1,"children":[]},{"name":"noUnusedLocals","total_count":1,"children":[]},{"name":"noUnusedParameters","total_count":1,"children":[]},{"name":"skipLibCheck","total_count":1,"children":[]},{"name":"target","total_count":1,"children":[]},{"name":"tsBuildInfoFile","total_count":1,"children":[]},{"name":"types","total_count":1,"children":[]},{"name":"verbatimModuleSyntax","total_count":1,"children":[]}]},{"name":"tsconfig.json","total_count":2,"children":[{"name":"files","total_count":1,"children":[]},{"name":"references","total_count":1,"children":[]}]},{"name":"tsconfig.node.json","total_count":17,"children":[{"name":"allowImportingTsExtensions","total_count":1,"children":[]},{"name":"compilerOptions","total_count":1,"children":[]},{"name":"erasableSyntaxOnly","total_count":1,"children":[]},{"name":"include","total_count":1,"children":[]},{"name":"lib","total_count":1,"children":[]},{"name":"module","total_count":1,"children":[]},{"name":"moduleDetection","total_count":1,"children":[]},{"name":"moduleResolution","total_count":1,"children":[]},{"name":"noEmit","total_count":1,"children":[]},{"name":"noFallthroughCasesInSwitch","total_count":1,"children":[]},{"name":"noUnusedLocals","total_count":1,"children":[]},{"name":"noUnusedParameters","total_count":1,"children":[]},{"name":"skipLibCheck","total_count":1,"children":[]},{"name":"target","total_count":1,"children":[]},{"name":"tsBuildInfoFile","total_count":1,"children":[]},{"name":"types","total_count":1,"children":[]},{"name":"verbatimModuleSyntax","total_count":1,"children":[]}]},{"name":"eslint.config.js","total_count":1,"children":[]},{"name":"postcss.config.js","total_count":1,"children":[]},{"name":"tailwind.config.js","total_count":1,"children":[]},{"name":"vite.config.ts","total_count":1,"children":[]}]}]},{"name":"src","total_count":556,"children":[{"name":"agent","total_count":34,"children":[{"name":"network","total_count":21,"children":[{"name":"TlsSender.cpp","total_count":1,"children":[{"name":"TlsSender","total_count":1,"children":[]}]},{"name":"TlsSender.cpp","total_count":19,"children":[{"name":"checkLicense()","total_count":1,"children":[]},{"name":"connectWithMutualTLS()","total_count":1,"children":[]},{"name":"createSSLContext()","total_count":1,"children":[]},{"name":"disconnect()","total_count":1,"children":[]},{"name":"enqueueStatusReport()","total_count":1,"children":[]},{"name":"flushPendingStatusReports()","total_count":1,"children":[]},{"name":"initialize()","total_count":1,"children":[]},{"name":"readExpectedMessage()","total_count":1,"children":[]},{"name":"readNextMessage()","total_count":1,"children":[]},{"name":"sendBatch()","total_count":1,"children":[]},{"name":"sendHeartbeat()","total_count":1,"children":[]},{"name":"sendModuleCommandResult()","total_count":1,"children":[]},{"name":"sendPolicyAck()","total_count":1,"children":[]},{"name":"sendStatusReport()","total_count":1,"children":[]},{"name":"sslReadExact()","total_count":1,"children":[]},{"name":"sslSendRaw()","total_count":1,"children":[]},{"name":"TlsSender()","total_count":1,"children":[]},{"name":"tryReadInbound()","total_count":1,"children":[]},{"name":"waitForDataOrTimeout()","total_count":1,"children":[]}]},{"name":"TlsSender.h","total_count":1,"children":[{"name":"ResolutePulse()","total_count":1,"children":[]}]}]},{"name":"registration","total_count":13,"children":[{"name":"CertificateStore.cpp","total_count":1,"children":[{"name":"CertificateStore","total_count":1,"children":[]}]},{"name":"CertificateStore.cpp","total_count":6,"children":[{"name":"CertificateStore()","total_count":1,"children":[]},{"name":"daysUntilExpiry()","total_count":1,"children":[]},{"name":"exists()","total_count":1,"children":[]},{"name":"isValid()","total_count":1,"children":[]},{"name":"load()","total_count":1,"children":[]},{"name":"save()","total_count":1,"children":[]}]},{"name":"CertificateStore.h","total_count":1,"children":[{"name":"ResolutePulse()","total_count":1,"children":[]}]},{"name":"RegistrationClient.cpp","total_count":1,"children":[{"name":"RegistrationClient","total_count":1,"children":[]}]},{"name":"RegistrationClient.cpp","total_count":3,"children":[{"name":"generateKeyPair()","total_count":1,"children":[]},{"name":"registerWithManager()","total_count":1,"children":[]},{"name":"RegistrationClient()","total_count":1,"children":[]}]},{"name":"RegistrationClient.h","total_count":1,"children":[{"name":"ResolutePulse()","total_count":1,"children":[]}]}]}]},{"name":"Agent.cpp","total_count":1,"children":[{"name":"Agent","total_count":1,"children":[]}]},{"name":"Agent.cpp","total_count":11,"children":[{"name":"Agent()","total_count":1,"children":[]},{"name":"avScanLoop()","total_count":1,"children":[]},{"name":"initialize()","total_count":1,"children":[]},{"name":"managementLoop()","total_count":1,"children":[]},{"name":"performRegistration()","total_count":1,"children":[]},{"name":"resolveConfigDir()","total_count":1,"children":[]},{"name":"run()","total_count":1,"children":[]},{"name":"shouldStop()","total_count":1,"children":[]},{"name":"stop()","total_count":1,"children":[]},{"name":"sysInfoLoop()","total_count":1,"children":[]},{"name":"writeStatusFile()","total_count":1,"children":[]}]},{"name":"antivirus","total_count":7,"children":[{"name":"AntivirusWorker.cpp","total_count":1,"children":[{"name":"AntivirusWorker","total_count":1,"children":[]}]},{"name":"AntivirusWorker.cpp","total_count":5,"children":[{"name":"AntivirusWorker()","total_count":1,"children":[]},{"name":"getDatabaseInfo()","total_count":1,"children":[]},{"name":"main()","total_count":1,"children":[]},{"name":"runScan()","total_count":1,"children":[]},{"name":"updateDefinitions()","total_count":1,"children":[]}]},{"name":"AntivirusWorker.h","total_count":1,"children":[{"name":"ResolutePulse()","total_count":1,"children":[]}]}]},{"name":"api","total_count":2,"children":[{"name":"client.ts","total_count":1,"children":[{"name":"API Client","total_count":1,"children":[]}]},{"name":"endpoints.ts","total_count":1,"children":[{"name":"API Endpoints","total_count":1,"children":[]}]}]},{"name":"appblock","total_count":24,"children":[{"name":"SoftwareBlocker.cpp","total_count":1,"children":[{"name":"SoftwareBlocker","total_count":1,"children":[]}]},{"name":"SoftwareBlocker.cpp","total_count":22,"children":[{"name":"applyPolicy()","total_count":1,"children":[]},{"name":"blockApplication()","total_count":1,"children":[]},{"name":"getBlockedApplications()","total_count":1,"children":[]},{"name":"getCurrentTimestamp()","total_count":1,"children":[]},{"name":"getIFEODebuggerValue()","total_count":1,"children":[]},{"name":"getStatus()","total_count":1,"children":[]},{"name":"initialize()","total_count":1,"children":[]},{"name":"loadBlockedApps()","total_count":1,"children":[]},{"name":"monitorLoop()","total_count":1,"children":[]},{"name":"removeIFEOBlock()","total_count":1,"children":[]},{"name":"saveBlockedApps()","total_count":1,"children":[]},{"name":"setEventCallback()","total_count":1,"children":[]},{"name":"setIFEOBlock()","total_count":1,"children":[]},{"name":"SoftwareBlocker()","total_count":1,"children":[]},{"name":"start()","total_count":1,"children":[]},{"name":"startProcessMonitor()","total_count":1,"children":[]},{"name":"stop()","total_count":1,"children":[]},{"name":"stopAllMonitors()","total_count":1,"children":[]},{"name":"stopProcessMonitor()","total_count":1,"children":[]},{"name":"terminateProcess()","total_count":1,"children":[]},{"name":"toLower()","total_count":1,"children":[]},{"name":"unblockApplication()","total_count":1,"children":[]}]},{"name":"SoftwareBlocker.h","total_count":1,"children":[{"name":"ResolutePulse()","total_count":1,"children":[]}]}]},{"name":"buffer","total_count":13,"children":[{"name":"EventBuffer.cpp","total_count":1,"children":[{"name":"EventBuffer","total_count":1,"children":[]}]},{"name":"EventBuffer.cpp","total_count":11,"children":[{"name":"addEvent()","total_count":1,"children":[]},{"name":"addEvents()","total_count":1,"children":[]},{"name":"close()","total_count":1,"children":[]},{"name":"createSchema()","total_count":1,"children":[]},{"name":"EventBuffer()","total_count":1,"children":[]},{"name":"finalizeStatements()","total_count":1,"children":[]},{"name":"getEventCount()","total_count":1,"children":[]},{"name":"getEvents()","total_count":1,"children":[]},{"name":"initialize()","total_count":1,"children":[]},{"name":"prepareStatements()","total_count":1,"children":[]},{"name":"removeEvents()","total_count":1,"children":[]}]},{"name":"EventBuffer.h","total_count":1,"children":[{"name":"ResolutePulse()","total_count":1,"children":[]}]}]},{"name":"collector","total_count":20,"children":[{"name":"ChannelDiscovery.cpp","total_count":1,"children":[{"name":"ChannelDiscovery","total_count":1,"children":[]}]},{"name":"ChannelDiscovery.cpp","total_count":3,"children":[{"name":"channelExists()","total_count":1,"children":[]},{"name":"discover()","total_count":1,"children":[]},{"name":"getAllSystemChannels()","total_count":1,"children":[]}]},{"name":"ChannelDiscovery.h","total_count":1,"children":[{"name":"ResolutePulse()","total_count":1,"children":[]}]},{"name":"Event.cpp","total_count":1,"children":[{"name":"Event","total_count":1,"children":[]}]},{"name":"Event.h","total_count":1,"children":[{"name":"fromJson()","total_count":1,"children":[]}]},{"name":"EventCollector.cpp","total_count":1,"children":[{"name":"EventCollector","total_count":1,"children":[]}]},{"name":"EventCollector.cpp","total_count":10,"children":[{"name":"EventCollector()","total_count":1,"children":[]},{"name":"getCurrentTimestamp()","total_count":1,"children":[]},{"name":"initialize()","total_count":1,"children":[]},{"name":"processEvent()","total_count":1,"children":[]},{"name":"setEventCallback()","total_count":1,"children":[]},{"name":"start()","total_count":1,"children":[]},{"name":"stop()","total_count":1,"children":[]},{"name":"subscriptionCallback()","total_count":1,"children":[]},{"name":"utf8ToWide()","total_count":1,"children":[]},{"name":"wideToUtf8()","total_count":1,"children":[]}]},{"name":"EventCollector.h","total_count":1,"children":[{"name":"ResolutePulse()","total_count":1,"children":[]}]},{"name":"Event.cpp","total_count":1,"children":[]}]},{"name":"common","total_count":2,"children":[{"name":"Protocol.h","total_count":1,"children":[{"name":"Protocol","total_count":1,"children":[]}]},{"name":"Protocol.h","total_count":1,"children":[]}]},{"name":"components","total_count":8,"children":[{"name":"common","total_count":1,"children":[{"name":"Breadcrumb.tsx","total_count":1,"children":[{"name":"Breadcrumb Component","total_count":1,"children":[]}]}]},{"name":"dashboard","total_count":1,"children":[{"name":"StatCard.tsx","total_count":1,"children":[{"name":"StatCard Component","total_count":1,"children":[]}]}]},{"name":"layout","total_count":2,"children":[{"name":"AppShell.tsx","total_count":1,"children":[{"name":"AppShell Component","total_count":1,"children":[]}]},{"name":"Sidebar.tsx","total_count":1,"children":[{"name":"Sidebar Component","total_count":1,"children":[]}]}]},{"name":"policies","total_count":4,"children":[{"name":"AntivirusScanCard.tsx","total_count":1,"children":[{"name":"AntivirusScanCard Component","total_count":1,"children":[]}]},{"name":"ConfigPushCard.tsx","total_count":1,"children":[{"name":"ConfigPushCard Component","total_count":1,"children":[]}]},{"name":"SoftwarePolicyCard.tsx","total_count":1,"children":[{"name":"SoftwarePolicyCard Component","total_count":1,"children":[]}]},{"name":"WebPolicyCard.tsx","total_count":1,"children":[{"name":"WebPolicyCard Component","total_count":1,"children":[]}]}]}]},{"name":"config","total_count":5,"children":[{"name":"ConfigManager.cpp","total_count":1,"children":[{"name":"ConfigManager","total_count":1,"children":[]}]},{"name":"ConfigManager.cpp","total_count":2,"children":[{"name":"load()","total_count":1,"children":[]},{"name":"shouldCollectEvent()","total_count":1,"children":[]}]},{"name":"ConfigManager.h","total_count":2,"children":[{"name":"ConfigManager()","total_count":1,"children":[]},{"name":"ResolutePulse()","total_count":1,"children":[]}]}]},{"name":"fim","total_count":59,"children":[{"name":"BaselineScanner.cpp","total_count":1,"children":[{"name":"BaselineScanner","total_count":1,"children":[]}]},{"name":"BaselineScanner.cpp","total_count":10,"children":[{"name":"BaselineScanner()","total_count":1,"children":[]},{"name":"matchesExcludePattern()","total_count":1,"children":[]},{"name":"normalizePathSeparators()","total_count":1,"children":[]},{"name":"scan()","total_count":1,"children":[]},{"name":"scanDirectory()","total_count":1,"children":[]},{"name":"scanFile()","total_count":1,"children":[]},{"name":"setConfig()","total_count":1,"children":[]},{"name":"setDatabase()","total_count":1,"children":[]},{"name":"setProgressCallback()","total_count":1,"children":[]},{"name":"stop()","total_count":1,"children":[]}]},{"name":"FileHasher.cpp","total_count":1,"children":[{"name":"FileHasher","total_count":1,"children":[]}]},{"name":"FileHasher.cpp","total_count":3,"children":[{"name":"bytesToHex()","total_count":1,"children":[]},{"name":"hashData()","total_count":1,"children":[]},{"name":"hashFile()","total_count":1,"children":[]}]},{"name":"FileHasher.h","total_count":1,"children":[{"name":"ResolutePulse()","total_count":1,"children":[]}]},{"name":"FimDatabase.cpp","total_count":1,"children":[{"name":"FimDatabase","total_count":1,"children":[]}]},{"name":"FimDatabase.cpp","total_count":15,"children":[{"name":"beginTransaction()","total_count":1,"children":[]},{"name":"close()","total_count":1,"children":[]},{"name":"commitTransaction()","total_count":1,"children":[]},{"name":"createSchema()","total_count":1,"children":[]},{"name":"deleteFile()","total_count":1,"children":[]},{"name":"deleteFilesNotIn()","total_count":1,"children":[]},{"name":"FimDatabase()","total_count":1,"children":[]},{"name":"finalizeStatements()","total_count":1,"children":[]},{"name":"getAllPaths()","total_count":1,"children":[]},{"name":"getFile()","total_count":1,"children":[]},{"name":"getRecordCount()","total_count":1,"children":[]},{"name":"initialize()","total_count":1,"children":[]},{"name":"prepareStatements()","total_count":1,"children":[]},{"name":"rollbackTransaction()","total_count":1,"children":[]},{"name":"upsertFile()","total_count":1,"children":[]}]},{"name":"FimDatabase.h","total_count":1,"children":[{"name":"ResolutePulse()","total_count":1,"children":[]}]},{"name":"FimEvent.h","total_count":2,"children":[{"name":"FimEvent","total_count":1,"children":[]},{"name":"ResolutePulse()","total_count":1,"children":[]}]},{"name":"FimMonitor.cpp","total_count":10,"children":[{"name":"FimMonitor()","total_count":1,"children":[]},{"name":"getCurrentTimestamp()","total_count":1,"children":[]},{"name":"initialize()","total_count":1,"children":[]},{"name":"isPathMonitored()","total_count":1,"children":[]},{"name":"onUsnChange()","total_count":1,"children":[]},{"name":"processChange()","total_count":1,"children":[]},{"name":"rescan()","total_count":1,"children":[]},{"name":"setEventCallback()","total_count":1,"children":[]},{"name":"start()","total_count":1,"children":[]},{"name":"stop()","total_count":1,"children":[]}]},{"name":"FimMonitor.h","total_count":2,"children":[{"name":"FimMonitor","total_count":1,"children":[]},{"name":"ResolutePulse()","total_count":1,"children":[]}]},{"name":"UsnJournalReader.cpp","total_count":8,"children":[{"name":"initialize()","total_count":1,"children":[]},{"name":"monitorThread()","total_count":1,"children":[]},{"name":"resolveFilePath()","total_count":1,"children":[]},{"name":"setChangeCallback()","total_count":1,"children":[]},{"name":"start()","total_count":1,"children":[]},{"name":"stop()","total_count":1,"children":[]},{"name":"UsnJournalReader()","total_count":1,"children":[]},{"name":"wideToUtf8()","total_count":1,"children":[]}]},{"name":"UsnJournalReader.h","total_count":3,"children":[{"name":"setStartingUsn()","total_count":1,"children":[]},{"name":"UsnJournalReader","total_count":1,"children":[]},{"name":"UsnReason()","total_count":1,"children":[]}]},{"name":"BaselineScanner.h","total_count":1,"children":[]}]},{"name":"gui","total_count":62,"children":[{"name":"RiskNoXMonitor","total_count":62,"children":[{"name":"App.xaml.cs","total_count":4,"children":[{"name":".OnStartup()","total_count":1,"children":[]},{"name":"App","total_count":1,"children":[]},{"name":"App","total_count":1,"children":[]},{"name":"StartupEventArgs","total_count":1,"children":[]}]},{"name":"MainWindow.xaml.cs","total_count":57,"children":[{"name":".AnimateShieldColor()","total_count":1,"children":[]},{"name":".BtnAction_Click()","total_count":1,"children":[]},{"name":".BtnClose_Click()","total_count":1,"children":[]},{"name":".BtnCloseLogs_Click()","total_count":1,"children":[]},{"name":".BtnMinimize_Click()","total_count":1,"children":[]},{"name":".BtnOpenConfig_Click()","total_count":1,"children":[]},{"name":".BtnOpenLogs_Click()","total_count":1,"children":[]},{"name":".BuildInitialTiles()","total_count":1,"children":[]},{"name":".CapitalizeFirst()","total_count":1,"children":[]},{"name":".CreateModuleTile()","total_count":1,"children":[]},{"name":".FindStatusFile()","total_count":1,"children":[]},{"name":".HideErrorBanner()","total_count":1,"children":[]},{"name":".ReadStatusJson()","total_count":1,"children":[]},{"name":".RebuildModuleTilesGrid()","total_count":1,"children":[]},{"name":".RefreshLogs()","total_count":1,"children":[]},{"name":".SetStatusUI()","total_count":1,"children":[]},{"name":".ShieldIcon_MouseLeftButtonDown()","total_count":1,"children":[]},{"name":".ShowErrorBanner()","total_count":1,"children":[]},{"name":".StartIndicatorPulse()","total_count":1,"children":[]},{"name":".StatusToBrush()","total_count":1,"children":[]},{"name":".StopIndicatorPulse()","total_count":1,"children":[]},{"name":".Timer_Tick()","total_count":1,"children":[]},{"name":".TitleBar_MouseLeftButtonDown()","total_count":1,"children":[]},{"name":".ToggleTileExpand()","total_count":1,"children":[]},{"name":".UpdateCertStatus()","total_count":1,"children":[]},{"name":".UpdateConnectionStatus()","total_count":1,"children":[]},{"name":".UpdateLicenseFallback()","total_count":1,"children":[]},{"name":".UpdateLicenseStatus()","total_count":1,"children":[]},{"name":".UpdateModuleTiles()","total_count":1,"children":[]},{"name":".UpdatePhaseAndErrors()","total_count":1,"children":[]},{"name":".UpdateServiceStatus()","total_count":1,"children":[]},{"name":".UpdateShieldFromComponents()","total_count":1,"children":[]},{"name":".UpdateTileStatus()","total_count":1,"children":[]},{"name":"bool","total_count":1,"children":[]},{"name":"Border","total_count":1,"children":[]},{"name":"Brush","total_count":1,"children":[]},{"name":"detail","total_count":1,"children":[]},{"name":"Dictionary","total_count":1,"children":[]},{"name":"DispatcherTimer","total_count":1,"children":[]},{"name":"displayName","total_count":1,"children":[]},{"name":"Ellipse","total_count":1,"children":[]},{"name":"EventArgs","total_count":1,"children":[]},{"name":"icon","total_count":1,"children":[]},{"name":"int","total_count":1,"children":[]},{"name":"JsonElement","total_count":1,"children":[]},{"name":"key","total_count":1,"children":[]},{"name":"List","total_count":1,"children":[]},{"name":"MainWindow","total_count":1,"children":[]},{"name":"MainWindow","total_count":1,"children":[]},{"name":"MouseButtonEventArgs","total_count":1,"children":[]},{"name":"RisknoxMonitor","total_count":1,"children":[]},{"name":"RoutedEventArgs","total_count":1,"children":[]},{"name":"status","total_count":1,"children":[]},{"name":"Storyboard","total_count":1,"children":[]},{"name":"string","total_count":1,"children":[]},{"name":"TextBlock","total_count":1,"children":[]},{"name":"TileRefs","total_count":1,"children":[]}]},{"name":"AssemblyInfo.cs","total_count":1,"children":[]}]}]},{"name":"ipc","total_count":13,"children":[{"name":"PipeChannel.cpp","total_count":10,"children":[{"name":"close()","total_count":1,"children":[]},{"name":"connect()","total_count":1,"children":[]},{"name":"isConnected()","total_count":1,"children":[]},{"name":"listen()","total_count":1,"children":[]},{"name":"readAll()","total_count":1,"children":[]},{"name":"recvJson()","total_count":1,"children":[]},{"name":"sendJson()","total_count":1,"children":[]},{"name":"writeAll()","total_count":1,"children":[]},{"name":"~PipeClient()","total_count":1,"children":[]},{"name":"~PipeServer()","total_count":1,"children":[]}]},{"name":"PipeChannel.h","total_count":3,"children":[{"name":"PipeClient","total_count":1,"children":[]},{"name":"PipeServer","total_count":1,"children":[]},{"name":"ResolutePulse()","total_count":1,"children":[]}]}]},{"name":"logtailer","total_count":3,"children":[{"name":"LogTailer.h","total_count":3,"children":[{"name":"LogTailer","total_count":1,"children":[]},{"name":"ResolutePulse()","total_count":1,"children":[]},{"name":"saveOffsets()","total_count":1,"children":[]}]}]},{"name":"main.cpp","total_count":2,"children":[{"name":"main","total_count":1,"children":[]},{"name":"runConsoleMode","total_count":1,"children":[]}]},{"name":"main.cpp","total_count":6,"children":[{"name":"consoleCtrlHandler()","total_count":1,"children":[]},{"name":"getConfigPath()","total_count":1,"children":[]},{"name":"getExePath()","total_count":1,"children":[]},{"name":"main()","total_count":1,"children":[]},{"name":"printUsage()","total_count":1,"children":[]},{"name":"runConsoleMode()","total_count":1,"children":[]}]},{"name":"manager","total_count":117,"children":[{"name":"api","total_count":20,"children":[{"name":"RestApi.cpp","total_count":18,"children":[{"name":"addCorsHeaders()","total_count":1,"children":[]},{"name":"authenticate()","total_count":1,"children":[]},{"name":"generateToken()","total_count":1,"children":[]},{"name":"handleGetAgent()","total_count":1,"children":[]},{"name":"handleGetAgents()","total_count":1,"children":[]},{"name":"handleGetAgentStatus()","total_count":1,"children":[]},{"name":"handleGetAuditLog()","total_count":1,"children":[]},{"name":"handleGetCommandById()","total_count":1,"children":[]},{"name":"handleGetModuleCommands()","total_count":1,"children":[]},{"name":"handleGetPolicyCommands()","total_count":1,"children":[]},{"name":"handleHealthCheck()","total_count":1,"children":[]},{"name":"handleLogin()","total_count":1,"children":[]},{"name":"handlePostModuleCommand()","total_count":1,"children":[]},{"name":"handlePostPolicyCommand()","total_count":1,"children":[]},{"name":"registerRoutes()","total_count":1,"children":[]},{"name":"RestApi()","total_count":1,"children":[]},{"name":"start()","total_count":1,"children":[]},{"name":"stop()","total_count":1,"children":[]}]},{"name":"RestApi.h","total_count":2,"children":[{"name":"ResolutePulse()","total_count":1,"children":[]},{"name":"RestApi","total_count":1,"children":[]}]}]},{"name":"db","total_count":45,"children":[{"name":"PostgresClient.cpp","total_count":43,"children":[{"name":"ackModuleCommand()","total_count":1,"children":[]},{"name":"ackPolicyCommand()","total_count":1,"children":[]},{"name":"agentExists()","total_count":1,"children":[]},{"name":"authenticateOperator()","total_count":1,"children":[]},{"name":"blockedAgentIds","total_count":1,"children":[]},{"name":"connect()","total_count":1,"children":[]},{"name":"disconnect()","total_count":1,"children":[]},{"name":"fetchPendingModuleCommands()","total_count":1,"children":[]},{"name":"fetchPendingPolicies()","total_count":1,"children":[]},{"name":"getAgent()","total_count":1,"children":[]},{"name":"getAuditLog()","total_count":1,"children":[]},{"name":"getCertificate()","total_count":1,"children":[]},{"name":"getCertificateBySerial()","total_count":1,"children":[]},{"name":"getGlobalPolicySummary()","total_count":1,"children":[]},{"name":"getLatestStatusReports()","total_count":1,"children":[]},{"name":"getLicense()","total_count":1,"children":[]},{"name":"getModuleCommandByCommandId()","total_count":1,"children":[]},{"name":"getPolicyCommandByCommandId()","total_count":1,"children":[]},{"name":"getRevokedSerials()","total_count":1,"children":[]},{"name":"GlobalAppBlockInfo","total_count":1,"children":[]},{"name":"insertAgent()","total_count":1,"children":[]},{"name":"insertCertificate()","total_count":1,"children":[]},{"name":"insertLicense()","total_count":1,"children":[]},{"name":"isConnected()","total_count":1,"children":[]},{"name":"listAgents()","total_count":1,"children":[]},{"name":"listModuleCommands()","total_count":1,"children":[]},{"name":"listPolicyCommands()","total_count":1,"children":[]},{"name":"markModuleCommandDispatched()","total_count":1,"children":[]},{"name":"markPolicyCommandDispatched()","total_count":1,"children":[]},{"name":"name","total_count":1,"children":[]},{"name":"PostgresClient()","total_count":1,"children":[]},{"name":"reconnect()","total_count":1,"children":[]},{"name":"recordModuleCommand()","total_count":1,"children":[]},{"name":"recordModuleCommandWithOperator()","total_count":1,"children":[]},{"name":"recordPolicyCommand()","total_count":1,"children":[]},{"name":"revokeCertificate()","total_count":1,"children":[]},{"name":"storeStatusReport()","total_count":1,"children":[]},{"name":"totalKills","total_count":1,"children":[]},{"name":"updateAgentCertSerial()","total_count":1,"children":[]},{"name":"updateAgentStatus()","total_count":1,"children":[]},{"name":"updateLastSeen()","total_count":1,"children":[]},{"name":"updateModuleCommandStatus()","total_count":1,"children":[]},{"name":"updatePolicyCommandStatus()","total_count":1,"children":[]}]},{"name":"PostgresClient.h","total_count":2,"children":[{"name":"PostgresClient","total_count":1,"children":[]},{"name":"ResolutePulse()","total_count":1,"children":[]}]}]},{"name":"main.cpp","total_count":2,"children":[{"name":"main()","total_count":1,"children":[]},{"name":"signalHandler()","total_count":1,"children":[]}]},{"name":"registry","total_count":15,"children":[{"name":"AgentRegistry.cpp","total_count":7,"children":[{"name":"AgentRegistry()","total_count":1,"children":[]},{"name":"getActiveAgentCount()","total_count":1,"children":[]},{"name":"getAgent()","total_count":1,"children":[]},{"name":"isRegistered()","total_count":1,"children":[]},{"name":"refreshCache()","total_count":1,"children":[]},{"name":"registerAgent()","total_count":1,"children":[]},{"name":"updateStatus()","total_count":1,"children":[]}]},{"name":"AgentRegistry.h","total_count":2,"children":[{"name":"AgentRegistry","total_count":1,"children":[]},{"name":"ResolutePulse()","total_count":1,"children":[]}]},{"name":"LicenseManager.cpp","total_count":4,"children":[{"name":"calculateExpiry()","total_count":1,"children":[]},{"name":"checkLicenseStatus()","total_count":1,"children":[]},{"name":"getLicense()","total_count":1,"children":[]},{"name":"LicenseManager()","total_count":1,"children":[]}]},{"name":"LicenseManager.h","total_count":1,"children":[{"name":"LicenseManager","total_count":1,"children":[]}]},{"name":"LicenseManager.h","total_count":1,"children":[{"name":"ResolutePulse()","total_count":1,"children":[]}]}]},{"name":"server","total_count":35,"children":[{"name":"AgentHandler.cpp","total_count":13,"children":[{"name":"AgentHandler()","total_count":1,"children":[]},{"name":"calculateExpiryDays()","total_count":1,"children":[]},{"name":"extractAgentIdFromCert()","total_count":1,"children":[]},{"name":"handleConnection()","total_count":1,"children":[]},{"name":"handleHeartbeat()","total_count":1,"children":[]},{"name":"handleLicenseCheck()","total_count":1,"children":[]},{"name":"handleRegistration()","total_count":1,"children":[]},{"name":"handleStatusReport()","total_count":1,"children":[]},{"name":"pushModuleCommand()","total_count":1,"children":[]},{"name":"pushPolicyUpdate()","total_count":1,"children":[]},{"name":"sslReadExact()","total_count":1,"children":[]},{"name":"sslSendMessage()","total_count":1,"children":[]},{"name":"validatePublicKey()","total_count":1,"children":[]}]},{"name":"AgentHandler.h","total_count":1,"children":[{"name":"AgentHandler","total_count":1,"children":[]}]},{"name":"AgentHandler.h","total_count":1,"children":[{"name":"ResolutePulse()","total_count":1,"children":[]}]},{"name":"ManagerServer.cpp","total_count":18,"children":[{"name":"acceptLoop()","total_count":1,"children":[]},{"name":"commandIngestLoop()","total_count":1,"children":[]},{"name":"createSSLContext()","total_count":1,"children":[]},{"name":"dispatchCommand()","total_count":1,"children":[]},{"name":"dispatchModuleCommand()","total_count":1,"children":[]},{"name":"dispatchModuleCommandFromApi()","total_count":1,"children":[]},{"name":"dispatchPolicyFromApi()","total_count":1,"children":[]},{"name":"drainOutboundQueue()","total_count":1,"children":[]},{"name":"handleClient()","total_count":1,"children":[]},{"name":"initialize()","total_count":1,"children":[]},{"name":"isAgentOnline()","total_count":1,"children":[]},{"name":"loadCertificates()","total_count":1,"children":[]},{"name":"ManagerServer()","total_count":1,"children":[]},{"name":"registerSession()","total_count":1,"children":[]},{"name":"start()","total_count":1,"children":[]},{"name":"startListening()","total_count":1,"children":[]},{"name":"stop()","total_count":1,"children":[]},{"name":"unregisterSession()","total_count":1,"children":[]}]},{"name":"ManagerServer.h","total_count":1,"children":[{"name":"ManagerServer","total_count":1,"children":[]}]},{"name":"ManagerServer.h","total_count":1,"children":[{"name":"ResolutePulse()","total_count":1,"children":[]}]}]}]},{"name":"network","total_count":14,"children":[{"name":"SenderInterface.h","total_count":1,"children":[{"name":"SenderInterface","total_count":1,"children":[]}]},{"name":"SenderInterface.h","total_count":1,"children":[{"name":"ResolutePulse()","total_count":1,"children":[]}]},{"name":"TcpSender.cpp","total_count":9,"children":[{"name":"cleanup()","total_count":1,"children":[]},{"name":"connect()","total_count":1,"children":[]},{"name":"connectWithTimeout()","total_count":1,"children":[]},{"name":"createSSLContext()","total_count":1,"children":[]},{"name":"disconnect()","total_count":1,"children":[]},{"name":"initialize()","total_count":1,"children":[]},{"name":"sendBatch()","total_count":1,"children":[]},{"name":"sendRaw()","total_count":1,"children":[]},{"name":"TcpSender()","total_count":1,"children":[]}]},{"name":"TcpSender.h","total_count":1,"children":[{"name":"TcpSender","total_count":1,"children":[]}]},{"name":"TcpSender.h","total_count":2,"children":[{"name":"getLastError()","total_count":1,"children":[]},{"name":"requestStop()","total_count":1,"children":[]}]}]},{"name":"patch","total_count":15,"children":[{"name":"PatchManager.cpp","total_count":13,"children":[{"name":"applyPolicy()","total_count":1,"children":[]},{"name":"bstrToString()","total_count":1,"children":[]},{"name":"getCurrentTimestamp()","total_count":1,"children":[]},{"name":"getInstalledUpdates()","total_count":1,"children":[]},{"name":"getStatus()","total_count":1,"children":[]},{"name":"initialize()","total_count":1,"children":[]},{"name":"installUpdates()","total_count":1,"children":[]},{"name":"PatchManager()","total_count":1,"children":[]},{"name":"scanForUpdates()","total_count":1,"children":[]},{"name":"scanLoop()","total_count":1,"children":[]},{"name":"setEventCallback()","total_count":1,"children":[]},{"name":"start()","total_count":1,"children":[]},{"name":"stop()","total_count":1,"children":[]}]},{"name":"PatchManager.h","total_count":1,"children":[{"name":"PatchManager","total_count":1,"children":[]}]},{"name":"PatchManager.h","total_count":1,"children":[{"name":"ResolutePulse()","total_count":1,"children":[]}]}]},{"name":"policy","total_count":12,"children":[{"name":"CommandQueue.h","total_count":1,"children":[{"name":"CommandQueue","total_count":1,"children":[]}]},{"name":"CommandQueue.h","total_count":1,"children":[{"name":"ResolutePulse()","total_count":1,"children":[]}]},{"name":"ModuleController.h","total_count":1,"children":[{"name":"ModuleController","total_count":1,"children":[]}]},{"name":"ModuleController.h","total_count":5,"children":[{"name":"currentTimestamp()","total_count":1,"children":[]},{"name":"handleAgentRestart()","total_count":1,"children":[]},{"name":"handleAvUpdate()","total_count":1,"children":[]},{"name":"handleAvVersion()","total_count":1,"children":[]},{"name":"ResolutePulse()","total_count":1,"children":[]}]},{"name":"PolicyManager.h","total_count":1,"children":[{"name":"PolicyManager","total_count":1,"children":[]}]},{"name":"PolicyManager.h","total_count":1,"children":[{"name":"ResolutePulse()","total_count":1,"children":[]}]},{"name":"CommandQueue.cpp","total_count":1,"children":[]},{"name":"PolicyManager.cpp","total_count":1,"children":[]}]},{"name":"queue","total_count":8,"children":[{"name":"EventQueue.cpp","total_count":6,"children":[{"name":"empty()","total_count":1,"children":[]},{"name":"EventQueue()","total_count":1,"children":[]},{"name":"popBatch()","total_count":1,"children":[]},{"name":"push()","total_count":1,"children":[]},{"name":"shutdown()","total_count":1,"children":[]},{"name":"size()","total_count":1,"children":[]}]},{"name":"EventQueue.h","total_count":1,"children":[{"name":"EventQueue","total_count":1,"children":[]}]},{"name":"EventQueue.h","total_count":1,"children":[{"name":"ResolutePulse()","total_count":1,"children":[]}]}]},{"name":"sender","total_count":7,"children":[{"name":"BatchSender.cpp","total_count":5,"children":[{"name":"BatchSender()","total_count":1,"children":[]},{"name":"drainBuffer()","total_count":1,"children":[]},{"name":"senderLoop()","total_count":1,"children":[]},{"name":"start()","total_count":1,"children":[]},{"name":"stop()","total_count":1,"children":[]}]},{"name":"BatchSender.h","total_count":1,"children":[{"name":"BatchSender","total_count":1,"children":[]}]},{"name":"BatchSender.h","total_count":1,"children":[]}]},{"name":"service","total_count":11,"children":[{"name":"ServiceMain.cpp","total_count":1,"children":[{"name":"ServiceMain","total_count":1,"children":[]}]},{"name":"ServiceMain.cpp","total_count":9,"children":[{"name":"installService()","total_count":1,"children":[]},{"name":"isStopRequested()","total_count":1,"children":[]},{"name":"reportServiceStatus()","total_count":1,"children":[]},{"name":"requestStop()","total_count":1,"children":[]},{"name":"runAsService()","total_count":1,"children":[]},{"name":"serviceCtrlHandler()","total_count":1,"children":[]},{"name":"serviceMain()","total_count":1,"children":[]},{"name":"setMainFunction()","total_count":1,"children":[]},{"name":"uninstallService()","total_count":1,"children":[]}]},{"name":"ServiceMain.h","total_count":1,"children":[{"name":"ResolutePulse()","total_count":1,"children":[]}]}]},{"name":"sysinfo","total_count":38,"children":[{"name":"InstalledAppsCollector.cpp","total_count":9,"children":[{"name":"collect()","total_count":1,"children":[]},{"name":"enumerateApps()","total_count":1,"children":[]},{"name":"initialize()","total_count":1,"children":[]},{"name":"InstalledAppsCollector()","total_count":1,"children":[]},{"name":"readAppInfo()","total_count":1,"children":[]},{"name":"readRegistryDWORD()","total_count":1,"children":[]},{"name":"readRegistryString()","total_count":1,"children":[]},{"name":"utf8ToWide()","total_count":1,"children":[]},{"name":"wideToUtf8()","total_count":1,"children":[]}]},{"name":"InstalledAppsCollector.h","total_count":1,"children":[{"name":"InstalledAppsCollector","total_count":1,"children":[]}]},{"name":"InstalledAppsCollector.h","total_count":1,"children":[{"name":"ResolutePulse()","total_count":1,"children":[]}]},{"name":"OpenPortsCollector.cpp","total_count":8,"children":[{"name":"collect()","total_count":1,"children":[]},{"name":"collectTcpConnections()","total_count":1,"children":[]},{"name":"collectUdpConnections()","total_count":1,"children":[]},{"name":"getProcessName()","total_count":1,"children":[]},{"name":"getTcpState()","total_count":1,"children":[]},{"name":"initialize()","total_count":1,"children":[]},{"name":"ipToString()","total_count":1,"children":[]},{"name":"OpenPortsCollector()","total_count":1,"children":[]}]},{"name":"OpenPortsCollector.h","total_count":1,"children":[{"name":"OpenPortsCollector","total_count":1,"children":[]}]},{"name":"OpenPortsCollector.h","total_count":1,"children":[{"name":"ResolutePulse()","total_count":1,"children":[]}]},{"name":"OSInfoCollector.cpp","total_count":9,"children":[{"name":"collect()","total_count":1,"children":[]},{"name":"getArchitecture()","total_count":1,"children":[]},{"name":"getDomainInfo()","total_count":1,"children":[]},{"name":"getHostname()","total_count":1,"children":[]},{"name":"getSystemInfo()","total_count":1,"children":[]},{"name":"getUptime()","total_count":1,"children":[]},{"name":"getWindowsVersion()","total_count":1,"children":[]},{"name":"initialize()","total_count":1,"children":[]},{"name":"OSInfoCollector()","total_count":1,"children":[]}]},{"name":"OSInfoCollector.h","total_count":1,"children":[{"name":"OSInfoCollector","total_count":1,"children":[]}]},{"name":"OSInfoCollector.h","total_count":1,"children":[{"name":"ResolutePulse()","total_count":1,"children":[]}]},{"name":"SystemInfoCollector.cpp","total_count":4,"children":[{"name":"collectAll()","total_count":1,"children":[]},{"name":"getCurrentTimestamp()","total_count":1,"children":[]},{"name":"initialize()","total_count":1,"children":[]},{"name":"SystemInfoCollector()","total_count":1,"children":[]}]},{"name":"SystemInfoCollector.h","total_count":1,"children":[{"name":"SystemInfoCollector","total_count":1,"children":[]}]},{"name":"SystemInfoCollector.h","total_count":1,"children":[{"name":"ResolutePulse()","total_count":1,"children":[]}]}]},{"name":"utils","total_count":18,"children":[{"name":"Base64.cpp","total_count":4,"children":[{"name":"decode()","total_count":1,"children":[]},{"name":"encode()","total_count":1,"children":[]},{"name":"getCharTable()","total_count":1,"children":[]},{"name":"getDecodeTable()","total_count":1,"children":[]}]},{"name":"Base64.h","total_count":1,"children":[{"name":"Base64","total_count":1,"children":[]}]},{"name":"Base64.h","total_count":1,"children":[{"name":"ResolutePulse()","total_count":1,"children":[]}]},{"name":"Logger.cpp","total_count":2,"children":[{"name":"initialize()","total_count":1,"children":[]},{"name":"setLevel()","total_count":1,"children":[]}]},{"name":"Logger.h","total_count":1,"children":[{"name":"Logger","total_count":1,"children":[]}]},{"name":"Logger.h","total_count":1,"children":[{"name":"ResolutePulse()","total_count":1,"children":[]}]},{"name":"PathUtils.cpp","total_count":6,"children":[{"name":"ensureDataDirExists()","total_count":1,"children":[]},{"name":"getAgentDataDir()","total_count":1,"children":[]},{"name":"getExecutableDir()","total_count":1,"children":[]},{"name":"getHostsFilePath()","total_count":1,"children":[]},{"name":"getProgramFilesPath()","total_count":1,"children":[]},{"name":"getSystemDirectory()","total_count":1,"children":[]}]},{"name":"PathUtils.h","total_count":1,"children":[{"name":"PathUtils","total_count":1,"children":[]}]},{"name":"PathUtils.h","total_count":1,"children":[{"name":"ResolutePulse()","total_count":1,"children":[]}]}]},{"name":"webblock","total_count":17,"children":[{"name":"WebBlocker.cpp","total_count":15,"children":[{"name":"applyPolicy()","total_count":1,"children":[]},{"name":"blockUrl()","total_count":1,"children":[]},{"name":"cleanUrl()","total_count":1,"children":[]},{"name":"flushDnsCache()","total_count":1,"children":[]},{"name":"getBlockedUrls()","total_count":1,"children":[]},{"name":"getCurrentTimestamp()","total_count":1,"children":[]},{"name":"getStatus()","total_count":1,"children":[]},{"name":"initialize()","total_count":1,"children":[]},{"name":"loadBlockedUrls()","total_count":1,"children":[]},{"name":"saveBlockedUrls()","total_count":1,"children":[]},{"name":"start()","total_count":1,"children":[]},{"name":"stop()","total_count":1,"children":[]},{"name":"unblockUrl()","total_count":1,"children":[]},{"name":"updateHostsFile()","total_count":1,"children":[]},{"name":"WebBlocker()","total_count":1,"children":[]}]},{"name":"WebBlocker.h","total_count":1,"children":[{"name":"WebBlocker","total_count":1,"children":[]}]},{"name":"WebBlocker.h","total_count":1,"children":[{"name":"ResolutePulse()","total_count":1,"children":[]}]}]},{"name":"workers","total_count":24,"children":[{"name":"PatchWorker.cpp","total_count":1,"children":[{"name":"PatchWorker","total_count":1,"children":[]}]},{"name":"PatchWorker.cpp","total_count":1,"children":[{"name":"main()","total_count":1,"children":[]}]},{"name":"SoftwareBlockerWorker.cpp","total_count":1,"children":[{"name":"SoftwareBlockerWorker","total_count":1,"children":[]}]},{"name":"SoftwareBlockerWorker.cpp","total_count":1,"children":[{"name":"main()","total_count":1,"children":[]}]},{"name":"WebBlockerWorker.cpp","total_count":1,"children":[{"name":"WebBlockerWorker","total_count":1,"children":[]}]},{"name":"WebBlockerWorker.cpp","total_count":1,"children":[{"name":"main()","total_count":1,"children":[]}]},{"name":"WorkerManager.cpp","total_count":6,"children":[{"name":"PipeClient","total_count":1,"children":[]},{"name":"rp-antivirus.exe","total_count":1,"children":[]},{"name":"rp-patch.exe","total_count":1,"children":[]},{"name":"rp-softblock.exe","total_count":1,"children":[]},{"name":"rp-webblock.exe","total_count":1,"children":[]},{"name":"WorkerManager","total_count":1,"children":[]}]},{"name":"WorkerManager.cpp","total_count":11,"children":[{"name":"getAgentDir()","total_count":1,"children":[]},{"name":"isRunning()","total_count":1,"children":[]},{"name":"killKnownWorkerProcessesInDir()","total_count":1,"children":[]},{"name":"processPathMatches()","total_count":1,"children":[]},{"name":"sendCommand()","total_count":1,"children":[]},{"name":"spawnProcess()","total_count":1,"children":[]},{"name":"spawnWorker()","total_count":1,"children":[]},{"name":"stopAll()","total_count":1,"children":[]},{"name":"streamEvents()","total_count":1,"children":[]},{"name":"watchdogLoop()","total_count":1,"children":[]},{"name":"WorkerManager()","total_count":1,"children":[]}]},{"name":"WorkerManager.h","total_count":1,"children":[{"name":"ResolutePulse()","total_count":1,"children":[]}]}]},{"name":"Agent.h","total_count":1,"children":[]},{"name":"App.tsx","total_count":1,"children":[]},{"name":"main.tsx","total_count":1,"children":[]}]}]};
+
+    function transformData(jsonData) {
+        // Helper function to recursively build the children structure
+        function processNode(node, parentL1StageName) {
+            let displayName = node.name;
+            // Append total_count if it exists and is not already in the name
+            if (node.total_count !== undefined) {
+                if (!/\(Total Count: \d+\)$/.test(displayName)) {
+                    displayName += ` (Total Count: ${node.total_count})`;
+                }
+            }
+
+            const newNode = { name: displayName };
+
+            if (parentL1StageName === "Root") {
+                 newNode.originalStageName = node.name;
+            } else {
+                newNode.originalStageName = parentL1StageName;
+            }
+
+            if (node.children && node.children.length > 0) {
+                const stageNameToPass = (parentL1StageName === "Root") ? node.name : parentL1StageName;
+                newNode.children = node.children.map(child => processNode(child, stageNameToPass));
+            }
+
+            return newNode;
+        }
+
+        let rootDisplayName = jsonData.name;
+        if (jsonData.total_count !== undefined && !/\(Total Count: \d+\)$/.test(rootDisplayName)) {
+            rootDisplayName += ` (Total Count: ${jsonData.total_count})`;
+        }
+
+        return {
+            name: rootDisplayName,
+            originalStageName: "Root",
+            children: (jsonData.children || []).map(child => processNode(child, "Root"))
+        };
+    }
+
+    const treeData = transformData(initialJsonData);
+
+    // Auto-populated phaseColors: every depth-1 child of the root gets
+    // a stable colour from a bigger palette so all top-level dirs are
+    // distinguishable.
+    const PALETTE = [
+      ["#3498DB","#2980B9","#AED6F1"], ["#2ECC71","#27AE60","#A9DFBF"],
+      ["#E74C3C","#C0392B","#F5B7B1"], ["#9B59B6","#8E44AD","#D7BDE2"],
+      ["#F39C12","#D68910","#FAD7A0"], ["#1ABC9C","#117864","#A2D9CE"],
+      ["#34495E","#1B2631","#ABB2B9"], ["#E67E22","#BA4A00","#F5CBA7"],
+      ["#16A085","#0E6655","#A2D9CE"], ["#D35400","#A04000","#EDBB99"],
+      ["#7F8C8D","#566573","#D5DBDB"], ["#C0392B","#7B241C","#F5B7B1"],
+      ["#2E86C1","#1B4F72","#A9CCE3"], ["#28B463","#196F3D","#A9DFBF"],
+      ["#AF7AC5","#6C3483","#D2B4DE"],
+    ];
+    const phaseColors = { "Root": { fill: "#4A4A4A", stroke: "#333333", collapsedFill: "#6C757D" },
+                          "Default": { fill: "#BDC3C7", stroke: "#95A5A6", collapsedFill: "#ECF0F1" } };
+    (initialJsonData.children || []).forEach((c, i) => {
+      const pal = PALETTE[i % PALETTE.length];
+      phaseColors[c.name] = { fill: pal[0], stroke: pal[1], collapsedFill: pal[2] };
+    });
+
+    const levelSpecificPalettes = {
+      0: { fill: "#4A4A4A", stroke: "#333333", collapsedFill: "#6C757D" },
+      2: { fill: "#6ab04c", stroke: "#508a38", collapsedFill: "#a3d391" },
+      3: { fill: "#f0932b", stroke: "#d0730f", collapsedFill: "#f6c07e" },
+      4: { fill: "#be2edd", stroke: "#a01cb3", collapsedFill: "#e08bf2" },
+      5: { fill: "#00a8ff", stroke: "#007ac1", collapsedFill: "#74d2ff" },
+      6: { fill: "#e55039", stroke: "#c23620", collapsedFill: "#f09a8d" },
+      default: { fill: "#747d8c", stroke: "#57606f", collapsedFill: "#a4b0be" }
+    };
+
+    const svgElement = d3.select("#tree-svg");
+    const initialSvgWidth = +svgElement.attr("width");
+    const initialSvgHeight = +svgElement.attr("height");
+    const margin = { top: 40, right: 120, bottom: 80, left: 450 };
+    let width = initialSvgWidth - margin.left - margin.right;
+    let height = initialSvgHeight - margin.top - margin.bottom;
+    const duration = 500;
+    let nodeCounter = 0;
+    const g = svgElement.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+    const treemap = d3.tree().nodeSize([40, 0]);
+    let rootNode = d3.hierarchy(treeData, d => d.children);
+    rootNode.x0 = 0;
+    rootNode.y0 = 0;
+
+    if (rootNode.children) {
+      rootNode.children.forEach(d_child => {
+        if (d_child.children) { collapseBranch(d_child); }
+      });
+    }
+    updateTree(rootNode);
+
+    function collapseBranch(d) { if (d.children) { d._children = d.children; d._children.forEach(collapseBranch); d.children = null; } }
+    function expandBranch(d) { if (d._children) { d.children = d._children; d._children = null; } if (d.children) { d.children.forEach(expandBranch); } }
+    window.expandAll = () => { expandBranch(rootNode); updateTree(rootNode); };
+    window.collapseAll = () => { if (rootNode.children) { rootNode.children.forEach(collapseBranch); } updateTree(rootNode); };
+    window.resetView = () => { if (rootNode.children) { rootNode.children.forEach(d_child => { if (d_child.children || d_child._children) { collapseBranch(d_child); } }); } if (rootNode._children && !rootNode.children) { rootNode.children = rootNode._children; rootNode._children = null; } updateTree(rootNode); };
+
+    function updateTree(source) {
+      const treeLayoutData = treemap(rootNode);
+      let nodes = treeLayoutData.descendants();
+      let links = treeLayoutData.descendants().slice(1);
+
+      let minX = 0;
+      let maxX = 0;
+      if (nodes.length > 0) {
+        minX = d3.min(nodes, d => d.x);
+        maxX = d3.max(nodes, d => d.x);
+      }
+
+      let neededHeight = Math.max(initialSvgHeight, maxX - minX + margin.top + margin.bottom + 100);
+      svgElement.transition().duration(duration / 2).attr("height", neededHeight);
+      g.transition().duration(duration / 2).attr("transform", `translate(${margin.left},${margin.top - minX + 40})`);
+
+      nodes.forEach(d => { d.y = d.depth * 400; }); // Adjust horizontal separation if needed
+
+      const node = g.selectAll('g.node').data(nodes, d => d.id || (d.id = ++nodeCounter));
+      const nodeEnter = node.enter().append('g')
+        .attr('class', d => "node" + (d.children || d._children ? " node--internal" : " node--leaf") + (d._children ? " _children" : ""))
+        .attr('transform', d => `translate(${source.y0},${source.x0})`)
+        .on('click', (event, d) => { if (d.children) { d._children = d.children; d.children = null; } else if (d._children) { d.children = d._children; d._children = null; } updateTree(d); })
+        .style('cursor', d => (d.children || d._children) ? 'pointer' : 'default');
+
+      nodeEnter.append('circle').attr('r', 1e-6);
+
+      nodeEnter.append('text')
+        .attr('dy', '.35em')
+        .attr('x', d => d.children || d._children ? -14 : 14)
+        .attr('text-anchor', d => d.children || d._children ? 'end' : 'start')
+        .style("fill-opacity", 1e-6)
+        .call(wrapText, 380);
+
+      const nodeUpdate = nodeEnter.merge(node);
+      nodeUpdate.transition().duration(duration)
+        .attr('transform', d => `translate(${d.y},${d.x})`)
+        .attr('class', d => "node" + (d.children ? " node--internal" : " node--leaf") + (d._children ? " node--internal _children" : ""));
+
+      nodeUpdate.select('circle').attr('r', 8.5)
+        .style('fill', d => {
+            let palette;
+            if (d.depth === 0) {
+                palette = levelSpecificPalettes[0];
+            } else if (d.depth === 1) {
+                palette = phaseColors[d.data.originalStageName] || phaseColors.Default;
+            } else {
+                palette = levelSpecificPalettes[d.depth] || levelSpecificPalettes.default;
+            }
+            if (d._children) return palette.collapsedFill;
+            if (d.children) return palette.fill;
+            return "#fff";
+        })
+        .style('stroke', d => {
+            let palette;
+            if (d.depth === 0) {
+                palette = levelSpecificPalettes[0];
+            } else if (d.depth === 1) {
+                palette = phaseColors[d.data.originalStageName] || phaseColors.Default;
+            } else {
+                palette = levelSpecificPalettes[d.depth] || levelSpecificPalettes.default;
+            }
+            return palette.stroke;
+        });
+      nodeUpdate.select('text').style("fill-opacity", 1).call(wrapText, 380);
+
+      const nodeExit = node.exit().transition().duration(duration).attr('transform', d => `translate(${source.y},${source.x})`).remove();
+      nodeExit.select('circle').attr('r', 1e-6);
+      nodeExit.select('text').style('fill-opacity', 1e-6);
+
+      const link = g.selectAll('path.link').data(links, d => d.id);
+      const linkEnter = link.enter().insert('path', "g").attr('class', 'link').attr('d', d => { const o = { x: source.x0, y: source.y0 }; return diagonal(o, o); });
+
+      linkEnter.merge(link).transition().duration(duration).attr('d', d => diagonal(d, d.parent))
+        .style('stroke', d => {
+            const sourceNode = d.parent;
+            if (!sourceNode) return phaseColors.Default.stroke;
+            const l1AncestorName = sourceNode.data.originalStageName;
+            const colorPalette = phaseColors[l1AncestorName] || phaseColors.Default;
+            return colorPalette.stroke;
+        });
+      link.exit().transition().duration(duration).attr('d', d => { const o = { x: source.x, y: source.y }; return diagonal(o, o); }).remove();
+      nodes.forEach(d => { d.x0 = d.x; d.y0 = d.y; });
+    }
+
+    function diagonal(s, d) { return `M ${s.y} ${s.x} C ${(s.y + d.y) / 2} ${s.x}, ${(s.y + d.y) / 2} ${d.x}, ${d.y} ${d.x}`; }
+
+    function wrapText(textElements, maxWidth) {
+        const textPartColors = {
+            name: '#343a40',
+            count: '#0056b3'
+        };
+        const countRegex = /(\s\(Total Count: \d+\))$/;
+
+        textElements.each(function () {
+            const textD3 = d3.select(this);
+            const originalNodeText = textD3.datum().data.name;
+            const x = parseFloat(textD3.attr("x") || 0);
+            const initialDy = textD3.attr("dy");
+            const textAnchor = textD3.attr("text-anchor");
+            const lineHeight = 1.1;
+
+            textD3.text(null);
+
+            let namePart = originalNodeText;
+            let countPartText = "";
+
+            const countMatch = originalNodeText.match(countRegex);
+            if (countMatch && originalNodeText.endsWith(countMatch[0])) {
+                namePart = originalNodeText.substring(0, originalNodeText.length - countMatch[0].length).trim();
+                countPartText = countMatch[0].trim();
+            }
+
+            const tokens = [];
+            namePart.split(/\s+/).filter(Boolean).forEach(word => {
+                tokens.push({ text: word, type: 'name' });
+            });
+            if (countPartText) {
+                tokens.push({ text: countPartText, type: 'count' });
+            }
+
+            if (tokens.length === 0 && originalNodeText) {
+                tokens.push({ text: originalNodeText, type: 'name' });
+            }
+
+            let currentTspan = textD3.append("tspan").attr("x", x).attr("dy", initialDy);
+            if (textAnchor === "end") currentTspan.attr("text-anchor", "end");
+
+            let lineTokens = [];
+
+            for (let i = 0; i < tokens.length; i++) {
+                const tokenObj = tokens[i];
+
+                lineTokens.push(tokenObj);
+                currentTspan.text(lineTokens.map(t => t.text).join(" "));
+
+                if (currentTspan.node().getComputedTextLength() > maxWidth && lineTokens.length > 1) {
+                    lineTokens.pop();
+
+                    currentTspan.text(null);
+                    lineTokens.forEach((prevToken, idx) => {
+                        currentTspan.append("tspan")
+                            .text((idx > 0 ? " " : "") + prevToken.text)
+                            .style("fill", textPartColors[prevToken.type] || textPartColors.name)
+                            .style("font-weight", prevToken.type === 'count' ? "bold" : "normal");
+                    });
+
+                    lineTokens = [tokenObj];
+                    currentTspan = textD3.append("tspan").attr("x", x).attr("dy", lineHeight + "em");
+                    if (textAnchor === "end") currentTspan.attr("text-anchor", "end");
+                }
+            }
+
+            currentTspan.text(null);
+            lineTokens.forEach((token, idx) => {
+                currentTspan.append("tspan")
+                    .text((idx > 0 ? " " : "") + token.text)
+                    .style("fill", textPartColors[token.type] || textPartColors.name)
+                    .style("font-weight", token.type === 'count' ? "bold" : "normal");
+            });
+
+            if (textD3.selectAll("tspan > tspan").empty() && textD3.select("tspan").text().length === 0 && originalNodeText) {
+                let t = textD3.select("tspan");
+                let displayText = originalNodeText;
+                t.text(displayText).style("fill", textPartColors.name);
+                if (t.node() && t.node().getComputedTextLength() > maxWidth && displayText.length > 20) {
+                    let estimatedChars = Math.floor(maxWidth / (t.node().getComputedTextLength()/displayText.length) );
+                    displayText = displayText.substring(0, Math.max(0, estimatedChars - 3)) + "...";
+                    t.text(displayText);
+                }
+            }
+        });
+    }
+  </script>
+</body>
+</html>

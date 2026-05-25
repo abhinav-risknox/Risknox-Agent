@@ -1,0 +1,246 @@
+{
+  "nodes": [
+    {
+      "id": "WorkerManager_WorkerManager",
+      "label": "WorkerManager",
+      "file_type": "code",
+      "source_file": "src/workers/WorkerManager.cpp",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "WorkerManager_PipeClient",
+      "label": "PipeClient",
+      "file_type": "code",
+      "source_file": "src/workers/WorkerManager.cpp",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "WorkerManager_rp_softblock",
+      "label": "rp-softblock.exe",
+      "file_type": "code",
+      "source_file": "src/workers/WorkerManager.cpp",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "WorkerManager_rp_webblock",
+      "label": "rp-webblock.exe",
+      "file_type": "code",
+      "source_file": "src/workers/WorkerManager.cpp",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "WorkerManager_rp_patch",
+      "label": "rp-patch.exe",
+      "file_type": "code",
+      "source_file": "src/workers/WorkerManager.cpp",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "WorkerManager_rp_antivirus",
+      "label": "rp-antivirus.exe",
+      "file_type": "code",
+      "source_file": "src/workers/WorkerManager.cpp",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "CMakeLists_ResolutePulseManager",
+      "label": "ResolutePulseManager",
+      "file_type": "code",
+      "source_file": "manager/CMakeLists.txt",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "CMakeLists_PostgreSQL",
+      "label": "PostgreSQL",
+      "file_type": "code",
+      "source_file": "manager/CMakeLists.txt",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "CMakeLists_OpenSSL",
+      "label": "OpenSSL",
+      "file_type": "code",
+      "source_file": "manager/CMakeLists.txt",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "index_dashboard_ui",
+      "label": "Dashboard UI Entry",
+      "file_type": "code",
+      "source_file": "manager/dashboard/index.html",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "README_React",
+      "label": "React",
+      "file_type": "document",
+      "source_file": "manager/dashboard/README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "README_Vite",
+      "label": "Vite",
+      "file_type": "document",
+      "source_file": "manager/dashboard/README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "WorkerManager_WorkerManager",
+      "target": "WorkerManager_PipeClient",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/workers/WorkerManager.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "WorkerManager_WorkerManager",
+      "target": "WorkerManager_rp_softblock",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/workers/WorkerManager.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "WorkerManager_WorkerManager",
+      "target": "WorkerManager_rp_webblock",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/workers/WorkerManager.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "WorkerManager_WorkerManager",
+      "target": "WorkerManager_rp_patch",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/workers/WorkerManager.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "WorkerManager_WorkerManager",
+      "target": "WorkerManager_rp_antivirus",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/workers/WorkerManager.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "CMakeLists_ResolutePulseManager",
+      "target": "CMakeLists_PostgreSQL",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "manager/CMakeLists.txt",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "CMakeLists_ResolutePulseManager",
+      "target": "CMakeLists_OpenSSL",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "manager/CMakeLists.txt",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "index_dashboard_ui",
+      "target": "README_React",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "manager/dashboard/index.html",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "index_dashboard_ui",
+      "target": "README_Vite",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "manager/dashboard/index.html",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "resolutepulse_worker_processes",
+      "label": "Worker Processes",
+      "nodes": [
+        "WorkerManager_rp_softblock",
+        "WorkerManager_rp_webblock",
+        "WorkerManager_rp_patch",
+        "WorkerManager_rp_antivirus"
+      ],
+      "relation": "form",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "src/workers/WorkerManager.cpp"
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

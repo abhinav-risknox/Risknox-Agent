@@ -1,0 +1,431 @@
+{
+  "nodes": [
+    {
+      "id": "useAgents_useAgents",
+      "label": "useAgents",
+      "file_type": "code",
+      "source_file": "manager/dashboard/src/hooks/useAgents.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "Header_Header",
+      "label": "Header",
+      "file_type": "code",
+      "source_file": "manager/dashboard/src/Layouts/Header.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "Sidebar_Sidebar",
+      "label": "Sidebar",
+      "file_type": "code",
+      "source_file": "manager/dashboard/src/Layouts/Sidebar.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "VerticalLayout_VerticalLayout",
+      "label": "VerticalLayout",
+      "file_type": "code",
+      "source_file": "manager/dashboard/src/Layouts/VerticalLayout.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "utils_cn",
+      "label": "cn",
+      "file_type": "code",
+      "source_file": "manager/dashboard/src/lib/utils.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "AgentDetail_AgentDetail",
+      "label": "AgentDetail",
+      "file_type": "code",
+      "source_file": "manager/dashboard/src/pages/AgentDetail.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "Agents_Agents",
+      "label": "Agents",
+      "file_type": "code",
+      "source_file": "manager/dashboard/src/pages/Agents.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "Dashboard_Dashboard",
+      "label": "Dashboard",
+      "file_type": "code",
+      "source_file": "manager/dashboard/src/pages/Dashboard.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "Login_Login",
+      "label": "Login",
+      "file_type": "code",
+      "source_file": "manager/dashboard/src/pages/Login.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "allRoutes_authProtectedRoutes",
+      "label": "authProtectedRoutes",
+      "file_type": "code",
+      "source_file": "manager/dashboard/src/Routes/allRoutes.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "allRoutes_publicRoutes",
+      "label": "publicRoutes",
+      "file_type": "code",
+      "source_file": "manager/dashboard/src/Routes/allRoutes.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "index_Index",
+      "label": "Index",
+      "file_type": "code",
+      "source_file": "manager/dashboard/src/Routes/index.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "Agent_Agent",
+      "label": "Agent",
+      "file_type": "code",
+      "source_file": "src/Agent.cpp",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "main_main",
+      "label": "main",
+      "file_type": "code",
+      "source_file": "src/main.cpp",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "main_runConsoleMode",
+      "label": "runConsoleMode",
+      "file_type": "code",
+      "source_file": "src/main.cpp",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "TlsSender_TlsSender",
+      "label": "TlsSender",
+      "file_type": "code",
+      "source_file": "src/agent/network/TlsSender.cpp",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "CertificateStore_CertificateStore",
+      "label": "CertificateStore",
+      "file_type": "code",
+      "source_file": "src/agent/registration/CertificateStore.cpp",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "RegistrationClient_RegistrationClient",
+      "label": "RegistrationClient",
+      "file_type": "code",
+      "source_file": "src/agent/registration/RegistrationClient.cpp",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "AgentDetail_AgentDetail",
+      "target": "utils_cn",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "manager/dashboard/src/pages/AgentDetail.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "Agents_Agents",
+      "target": "utils_cn",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "manager/dashboard/src/pages/Agents.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "Dashboard_Dashboard",
+      "target": "utils_cn",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "manager/dashboard/src/pages/Dashboard.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "Sidebar_Sidebar",
+      "target": "utils_cn",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "manager/dashboard/src/Layouts/Sidebar.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "Agents_Agents",
+      "target": "useAgents_useAgents",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "manager/dashboard/src/pages/Agents.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "Dashboard_Dashboard",
+      "target": "useAgents_useAgents",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "manager/dashboard/src/pages/Dashboard.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "index_Index",
+      "target": "allRoutes_authProtectedRoutes",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "manager/dashboard/src/Routes/index.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "index_Index",
+      "target": "allRoutes_publicRoutes",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "manager/dashboard/src/Routes/index.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "index_Index",
+      "target": "VerticalLayout_VerticalLayout",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "manager/dashboard/src/Routes/index.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "VerticalLayout_VerticalLayout",
+      "target": "Header_Header",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "manager/dashboard/src/Layouts/VerticalLayout.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "VerticalLayout_VerticalLayout",
+      "target": "Sidebar_Sidebar",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "manager/dashboard/src/Layouts/VerticalLayout.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "allRoutes_authProtectedRoutes",
+      "target": "Dashboard_Dashboard",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "manager/dashboard/src/Routes/allRoutes.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "allRoutes_authProtectedRoutes",
+      "target": "Agents_Agents",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "manager/dashboard/src/Routes/allRoutes.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "allRoutes_authProtectedRoutes",
+      "target": "AgentDetail_AgentDetail",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "manager/dashboard/src/Routes/allRoutes.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "allRoutes_publicRoutes",
+      "target": "Login_Login",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "manager/dashboard/src/Routes/allRoutes.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "main_main",
+      "target": "main_runConsoleMode",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/main.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "main_runConsoleMode",
+      "target": "Agent_Agent",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/main.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "Agent_Agent",
+      "target": "TlsSender_TlsSender",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/Agent.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "Agent_Agent",
+      "target": "CertificateStore_CertificateStore",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/Agent.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "Agent_Agent",
+      "target": "RegistrationClient_RegistrationClient",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/Agent.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "RegistrationClient_RegistrationClient",
+      "target": "CertificateStore_CertificateStore",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/agent/registration/RegistrationClient.cpp",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "registration_flow",
+      "label": "Agent Registration Flow",
+      "nodes": [
+        "Agent_Agent",
+        "RegistrationClient_RegistrationClient",
+        "CertificateStore_CertificateStore"
+      ],
+      "relation": "participate_in",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "src/Agent.cpp"
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

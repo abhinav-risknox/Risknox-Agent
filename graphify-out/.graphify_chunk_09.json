@@ -1,0 +1,191 @@
+{
+  "nodes": [
+    {
+      "id": "fimdatabase_fimdatabase",
+      "label": "FimDatabase",
+      "file_type": "code",
+      "source_file": "src\\fim\\FimDatabase.h",
+      "source_location": "L26",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "fimevent_fimevent",
+      "label": "FimEvent",
+      "file_type": "code",
+      "source_file": "src\\fim\\FimEvent.h",
+      "source_location": "L28",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "fimmonitor_fimmonitor",
+      "label": "FimMonitor",
+      "file_type": "code",
+      "source_file": "src\\fim\\FimMonitor.h",
+      "source_location": "L16",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "usnjournalreader_usnjournalreader",
+      "label": "UsnJournalReader",
+      "file_type": "code",
+      "source_file": "src\\fim\\UsnJournalReader.h",
+      "source_location": "L56",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "app_xaml_cs_app",
+      "label": "App",
+      "file_type": "code",
+      "source_file": "src\\gui\\RiskNoXMonitor\\App.xaml.cs",
+      "source_location": "L10",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "mainwindow_xaml_cs_mainwindow",
+      "label": "MainWindow",
+      "file_type": "code",
+      "source_file": "src\\gui\\RiskNoXMonitor\\MainWindow.xaml.cs",
+      "source_location": "L20",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "pipechannel_pipeserver",
+      "label": "PipeServer",
+      "file_type": "code",
+      "source_file": "src\\ipc\\PipeChannel.h",
+      "source_location": "L22",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "pipechannel_pipeclient",
+      "label": "PipeClient",
+      "file_type": "code",
+      "source_file": "src\\ipc\\PipeChannel.h",
+      "source_location": "L57",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "logtailer_logtailer",
+      "label": "LogTailer",
+      "file_type": "code",
+      "source_file": "src\\logtailer\\LogTailer.h",
+      "source_location": "L36",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "restapi_restapi",
+      "label": "RestApi",
+      "file_type": "code",
+      "source_file": "src\\manager\\api\\RestApi.h",
+      "source_location": "L29",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "postgresclient_postgresclient",
+      "label": "PostgresClient",
+      "file_type": "code",
+      "source_file": "src\\manager\\db\\PostgresClient.h",
+      "source_location": "L92",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "agentregistry_agentregistry",
+      "label": "AgentRegistry",
+      "file_type": "code",
+      "source_file": "src\\manager\\registry\\AgentRegistry.h",
+      "source_location": "L11",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "fimmonitor_fimmonitor",
+      "target": "fimdatabase_fimdatabase",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src\\fim\\FimMonitor.h",
+      "source_location": "L47",
+      "weight": 1.0
+    },
+    {
+      "source": "fimmonitor_fimmonitor",
+      "target": "usnjournalreader_usnjournalreader",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src\\fim\\FimMonitor.h",
+      "source_location": "L49",
+      "weight": 1.0
+    },
+    {
+      "source": "restapi_restapi",
+      "target": "postgresclient_postgresclient",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src\\manager\\api\\RestApi.h",
+      "source_location": "L76",
+      "weight": 1.0
+    },
+    {
+      "source": "agentregistry_agentregistry",
+      "target": "postgresclient_postgresclient",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src\\manager\\registry\\AgentRegistry.h",
+      "source_location": "L35",
+      "weight": 1.0
+    },
+    {
+      "source": "mainwindow_xaml_cs_mainwindow",
+      "target": "fimmonitor_fimmonitor",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "src\\gui\\RiskNoXMonitor\\MainWindow.xaml.cs",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

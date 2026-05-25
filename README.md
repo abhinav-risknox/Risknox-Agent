@@ -1,21 +1,18 @@
-<![CDATA[<p align="center">
-  <img src="Primary-Logo_White-scaled-1536x428.png" alt="Risknox" width="420" />
-</p>
-
-<h1 align="center">Risknox Pulse</h1>
-
 <p align="center">
-  <b>Enterprise Windows Endpoint Security Agent</b><br/>
+  <img src="Vertical-Logo_White-scaled-1324x1536.png" alt="Risknox" height="120" />
+</p>
+<h1 align="center">Risknox Pulse</h1>
+<p align="center">
+  <strong>Enterprise Windows Endpoint Security Agent</strong><br>
   Real-time event collection · File integrity monitoring · Antivirus · Patch management · Centralized control
 </p>
-
 <p align="center">
-  <img alt="C++17" src="https://img.shields.io/badge/C%2B%2B-17-blue?logo=cplusplus" />
-  <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-purple?logo=dotnet" />
-  <img alt="React" src="https://img.shields.io/badge/React-19-61DAFB?logo=react" />
-  <img alt="CMake" src="https://img.shields.io/badge/CMake-3.20+-064F8C?logo=cmake" />
-  <img alt="Docker" src="https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker" />
-  <img alt="License" src="https://img.shields.io/badge/License-Proprietary-red" />
+  <img src="https://img.shields.io/badge/C%2B%2B-17-blue?logo=cplusplus" alt="C++17" />
+  <img src="https://img.shields.io/badge/.NET-10-purple?logo=dotnet" alt=".NET 10" />
+  <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react" alt="React" />
+  <img src="https://img.shields.io/badge/CMake-3.20+-064F8C?logo=cmake" alt="CMake" />
+  <img src="https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker" alt="Docker" />
+  <img src="https://img.shields.io/badge/License-Proprietary-red" alt="License" />
 </p>
 
 ---
@@ -59,65 +56,40 @@ Collected telemetry flows through a **Fluent Bit → Data Prepper → OpenSearch
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                        WINDOWS ENDPOINT                         │
-│                                                                  │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │              ResolutePulse.exe  (Core Agent)             │   │
-│  │                                                          │   │
-│  │  ┌────────────┐ ┌────────┐ ┌─────────┐ ┌────────────┐  │   │
-│  │  │  Event     │ │  FIM   │ │ SysInfo │ │ Log Tailer │  │   │
-│  │  │ Collector  │ │Monitor │ │Collector│ │            │  │   │
-│  │  └─────┬──────┘ └───┬────┘ └────┬────┘ └─────┬──────┘  │   │
-│  │        │            │           │             │          │   │
-│  │        └────────────┴─────┬─────┴─────────────┘          │   │
-│  │                           │                               │   │
-│  │                    ┌──────▼──────┐                        │   │
-│  │                    │ EventQueue  │                        │   │
-│  │                    │  + Buffer   │                        │   │
-│  │                    └──────┬──────┘                        │   │
-│  │                           │                               │   │
-│  │                    ┌──────▼──────┐     ┌──────────────┐  │   │
-│  │                    │ BatchSender ├────►│  Fluent Bit  │  │   │
-│  │                    └─────────────┘     │  (TCP:5170)  │  │   │
-│  │                                        └──────┬───────┘  │   │
-│  │  ┌─ Worker Processes (Named Pipe IPC) ──────────────┐   │   │
-│  │  │  rp-webblock.exe   (persistent)                   │   │   │
-│  │  │  rp-softblock.exe  (persistent)                   │   │   │
-│  │  │  rp-patch.exe      (on-demand)                    │   │   │
-│  │  │  rp-antivirus.exe  (on-demand)                    │   │   │
-│  │  └───────────────────────────────────────────────────┘   │   │
-│  └──────────────────────────┬───────────────────────────────┘   │
-│                              │ mTLS (:1514)                      │
-└──────────────────────────────┼──────────────────────────────────┘
-                               │
-┌──────────────────────────────▼──────────────────────────────────┐
-│                      SERVER INFRASTRUCTURE                       │
-│                                                                  │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │        ResolutePulseManager  (C++ / Docker)               │  │
-│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌────────────┐  │  │
-│  │  │    CA    │ │ Agent    │ │ License  │ │  REST API  │  │  │
-│  │  │(ECC TLS)│ │ Registry │ │ Manager  │ │  (:8080)   │  │  │
-│  │  └─────────┘ └─────┬────┘ └──────────┘ └──────┬─────┘  │  │
-│  │                     │                          │         │  │
-│  │               ┌─────▼──────────────────────────▼─────┐  │  │
-│  │               │        PostgreSQL 16                  │  │  │
-│  │               └──────────────────────────────────────┘  │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                  │
-│  ┌──────────┐     ┌──────────────┐     ┌──────────────────┐    │
-│  │Fluent Bit├────►│ Data Prepper ├────►│   OpenSearch     │    │
-│  │ (:5170)  │     │   (:2021)    │     │   (:9200)        │    │
-│  └──────────┘     └──────────────┘     └────────┬─────────┘    │
-│                                                  │              │
-│                                        ┌─────────▼──────────┐  │
-│  ┌──────────────────┐                  │    OpenSearch      │  │
-│  │    Dashboard     │                  │    Dashboards      │  │
-│  │  (React :3000)   │                  │     (:5601)        │  │
-│  └──────────────────┘                  └────────────────────┘  │
-└──────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph endpoint["Windows Endpoint"]
+        direction TB
+        subgraph agent["ResolutePulse.exe - Core Agent"]
+            direction TB
+            EC["Event Collector"] & FIM["FIM Monitor"] & SI["SysInfo Collector"] & LT["Log Tailer"]
+            EC & FIM & SI & LT --> EQ["EventQueue + Buffer"]
+            EQ --> BS["BatchSender"]
+        end
+        subgraph workers["Worker Processes - Named Pipe IPC"]
+            WB["rp-webblock.exe\n(persistent)"]
+            SB["rp-softblock.exe\n(persistent)"]
+            PA["rp-patch.exe\n(on-demand)"]
+            AV["rp-antivirus.exe\n(on-demand)"]
+        end
+    end
+
+    subgraph server["Server Infrastructure"]
+        direction TB
+        subgraph mgr["ResolutePulseManager - C++ / Docker"]
+            CA["CA\n(ECC TLS)"] & AR["Agent\nRegistry"] & LM["License\nManager"] & API["REST API\n(:8080)"]
+            AR & API --> PG[("PostgreSQL 16\n(:5432)")]
+        end
+        subgraph pipeline["Data Pipeline"]
+            FB["Fluent Bit\n(:5170)"] --> DP["Data Prepper\n(:2021)"] --> OS[("OpenSearch\n(:9200)")]
+            OS --> OSD["OpenSearch Dashboards\n(:5601)"]
+        end
+        DASH["Dashboard - React\n(:3000)"]
+        DASH --> API
+    end
+
+    BS -->|TCP| FB
+    agent -->|mTLS :1514| mgr
 ```
 
 ### Wire Protocol (RPLS)
@@ -160,7 +132,7 @@ The agent uses a **multi-process architecture** (inspired by Wazuh) with Named P
 | **PowerShell** | Testing, ClamAV vendor updater |
 | **Lua** | Fluent Bit XML event parsing |
 
-### C++ Dependencies (vcpkg)
+### C++ Dependencies (vendored / system)
 
 | Library | Purpose |
 |---|---|
@@ -266,10 +238,9 @@ Agent/
 
 ### Agent Build (Windows)
 
-- **MinGW-w64** (GCC 12+) or MSVC with C++17 support
+- **MinGW-w64** (GCC 12+) — e.g. `C:\MinGW`
 - **CMake** ≥ 3.20
-- **vcpkg** — [Install guide](https://vcpkg.io/en/getting-started.html)
-- **OpenSSL** (via vcpkg)
+- **MSYS2 / mingw64 OpenSSL** — installed at `C:\msys64\mingw64` (provides `libssl`, `libcrypto`)
 - **PostgreSQL 18** (optional — only needed for building the Manager on Windows)
 
 ### Server Infrastructure (Docker)
@@ -291,22 +262,45 @@ Agent/
 
 ### Agent (Windows — MinGW)
 
+> **Note:** All C++ dependencies (nlohmann-json, spdlog, cpp-httplib, SQLite3) are vendored
+> in `thirdparty/` — no package manager is needed. Only OpenSSL must be present on the system.
+
+#### Debug Build
+
 ```powershell
-# 1. Configure
+# 1. Configure (debug symbols, no stripping)
 cmake -B build -G "MinGW Makefiles" `
-  -DCMAKE_TOOLCHAIN_FILE="<vcpkg-root>/scripts/buildsystems/vcpkg.cmake" `
-  -DCMAKE_BUILD_TYPE=Release
+  -DCMAKE_BUILD_TYPE=Debug `
+  -DOPENSSL_ROOT_DIR=C:/msys64/mingw64
 
 # 2. Build all targets
-cmake --build build -j
+cmake --build build -- -j4
+```
 
-# Output executables:
-#   build/ResolutePulse.exe          (core agent)
-#   build/rp-webblock.exe            (web blocking worker)
-#   build/rp-softblock.exe           (software blocking worker)
-#   build/rp-patch.exe               (patch management worker)
-#   build/rp-antivirus.exe           (antivirus worker)
-#   build/ResolutePulseManager.exe   (manager — if PostgreSQL found)
+#### Release Build
+
+```powershell
+# 1. Configure (optimised, symbols stripped)
+cmake -B build -G "MinGW Makefiles" `
+  -DCMAKE_BUILD_TYPE=Release `
+  -DOPENSSL_ROOT_DIR=C:/msys64/mingw64
+
+# 2. Build all targets
+cmake --build build -- -j4
+```
+
+> **Important:** MinGW Makefiles is a single-config generator — `CMAKE_BUILD_TYPE` is baked
+> in at configure time. To switch between Debug and Release, delete the `build/` directory
+> (or run `Remove-Item -Recurse -Force build`) and re-configure.
+
+```
+Output executables:
+  build/ResolutePulse.exe          (core agent)
+  build/rp-webblock.exe            (web blocking worker)
+  build/rp-softblock.exe           (software blocking worker)
+  build/rp-patch.exe               (patch management worker)
+  build/rp-antivirus.exe           (antivirus worker)
+  build/ResolutePulseManager.exe   (manager — if PostgreSQL found)
 ```
 
 ### Manager + Dashboard (Docker)
@@ -541,4 +535,3 @@ Both workflows:
 <p align="center">
   <sub>© 2026 Risknox — All Rights Reserved</sub>
 </p>
-]]>

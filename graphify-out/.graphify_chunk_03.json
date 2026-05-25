@@ -1,0 +1,76 @@
+{
+  "nodes": [
+    {
+      "id": "hero_isometric_illustration",
+      "label": "Isometric Illustration",
+      "file_type": "image",
+      "source_file": "manager/dashboard/src/assets/hero.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "hero_top_layer",
+      "label": "Top Layer (White Outline)",
+      "file_type": "image",
+      "source_file": "manager/dashboard/src/assets/hero.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "hero_bottom_layer",
+      "label": "Bottom Layer (Purple Gradient)",
+      "file_type": "image",
+      "source_file": "manager/dashboard/src/assets/hero.png",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "hero_top_layer",
+      "target": "hero_isometric_illustration",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "manager/dashboard/src/assets/hero.png",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "hero_bottom_layer",
+      "target": "hero_isometric_illustration",
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "manager/dashboard/src/assets/hero.png",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "hero_isometric_layers",
+      "label": "Isometric Layers Component",
+      "nodes": [
+        "hero_isometric_illustration",
+        "hero_top_layer",
+        "hero_bottom_layer"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "manager/dashboard/src/assets/hero.png"
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

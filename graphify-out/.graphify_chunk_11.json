@@ -1,0 +1,369 @@
+{
+  "nodes": [
+    {
+      "id": "servicemain_servicemain",
+      "label": "ServiceMain",
+      "file_type": "code",
+      "source_file": "src/service/ServiceMain.h",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "installedappscollector_installedappscollector",
+      "label": "InstalledAppsCollector",
+      "file_type": "code",
+      "source_file": "src/sysinfo/InstalledAppsCollector.h",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "openportscollector_openportscollector",
+      "label": "OpenPortsCollector",
+      "file_type": "code",
+      "source_file": "src/sysinfo/OpenPortsCollector.h",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "osinfocollector_osinfocollector",
+      "label": "OSInfoCollector",
+      "file_type": "code",
+      "source_file": "src/sysinfo/OSInfoCollector.h",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "systeminfocollector_systeminfocollector",
+      "label": "SystemInfoCollector",
+      "file_type": "code",
+      "source_file": "src/sysinfo/SystemInfoCollector.h",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "base64_base64",
+      "label": "Base64",
+      "file_type": "code",
+      "source_file": "src/utils/Base64.h",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "logger_logger",
+      "label": "Logger",
+      "file_type": "code",
+      "source_file": "src/utils/Logger.h",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "pathutils_pathutils",
+      "label": "PathUtils",
+      "file_type": "code",
+      "source_file": "src/utils/PathUtils.h",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "webblocker_webblocker",
+      "label": "WebBlocker",
+      "file_type": "code",
+      "source_file": "src/webblock/WebBlocker.h",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "patchworker_main",
+      "label": "PatchWorker",
+      "file_type": "code",
+      "source_file": "src/workers/PatchWorker.cpp",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "softwareblockerworker_main",
+      "label": "SoftwareBlockerWorker",
+      "file_type": "code",
+      "source_file": "src/workers/SoftwareBlockerWorker.cpp",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "webblockerworker_main",
+      "label": "WebBlockerWorker",
+      "file_type": "code",
+      "source_file": "src/workers/WebBlockerWorker.cpp",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "systeminfocollector_systeminfocollector",
+      "target": "installedappscollector_installedappscollector",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/sysinfo/SystemInfoCollector.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "systeminfocollector_systeminfocollector",
+      "target": "openportscollector_openportscollector",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/sysinfo/SystemInfoCollector.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "systeminfocollector_systeminfocollector",
+      "target": "osinfocollector_osinfocollector",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/sysinfo/SystemInfoCollector.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "systeminfocollector_systeminfocollector",
+      "target": "logger_logger",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/sysinfo/SystemInfoCollector.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "installedappscollector_installedappscollector",
+      "target": "logger_logger",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/sysinfo/InstalledAppsCollector.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "openportscollector_openportscollector",
+      "target": "logger_logger",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/sysinfo/OpenPortsCollector.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "osinfocollector_osinfocollector",
+      "target": "logger_logger",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/sysinfo/OSInfoCollector.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "webblocker_webblocker",
+      "target": "logger_logger",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/webblock/WebBlocker.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "webblocker_webblocker",
+      "target": "pathutils_pathutils",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/webblock/WebBlocker.h",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "patchworker_main",
+      "target": "logger_logger",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/workers/PatchWorker.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "patchworker_main",
+      "target": "pathutils_pathutils",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/workers/PatchWorker.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "softwareblockerworker_main",
+      "target": "logger_logger",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/workers/SoftwareBlockerWorker.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "softwareblockerworker_main",
+      "target": "pathutils_pathutils",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/workers/SoftwareBlockerWorker.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "webblockerworker_main",
+      "target": "logger_logger",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/workers/WebBlockerWorker.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "webblockerworker_main",
+      "target": "pathutils_pathutils",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/workers/WebBlockerWorker.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "webblockerworker_main",
+      "target": "webblocker_webblocker",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/workers/WebBlockerWorker.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "installedappscollector_installedappscollector",
+      "target": "openportscollector_openportscollector",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "openportscollector_openportscollector",
+      "target": "osinfocollector_osinfocollector",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "softwareblockerworker_main",
+      "target": "webblockerworker_main",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "patchworker_main",
+      "target": "softwareblockerworker_main",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": null,
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "system_info_collection",
+      "label": "System Information Collection",
+      "nodes": [
+        "systeminfocollector_systeminfocollector",
+        "installedappscollector_installedappscollector",
+        "openportscollector_openportscollector",
+        "osinfocollector_osinfocollector"
+      ],
+      "relation": "participate_in",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "src/sysinfo/SystemInfoCollector.cpp"
+    },
+    {
+      "id": "agent_workers",
+      "label": "Agent Workers",
+      "nodes": [
+        "patchworker_main",
+        "softwareblockerworker_main",
+        "webblockerworker_main"
+      ],
+      "relation": "participate_in",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": null
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

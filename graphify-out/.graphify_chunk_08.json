@@ -1,0 +1,228 @@
+{
+  "nodes": [
+    {
+      "id": "antivirusworker_antivirusworker",
+      "label": "AntivirusWorker",
+      "file_type": "code",
+      "source_file": "src/antivirus/AntivirusWorker.cpp",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "softwareblocker_softwareblocker",
+      "label": "SoftwareBlocker",
+      "file_type": "code",
+      "source_file": "src/appblock/SoftwareBlocker.cpp",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "eventbuffer_eventbuffer",
+      "label": "EventBuffer",
+      "file_type": "code",
+      "source_file": "src/buffer/EventBuffer.cpp",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "channeldiscovery_channeldiscovery",
+      "label": "ChannelDiscovery",
+      "file_type": "code",
+      "source_file": "src/collector/ChannelDiscovery.cpp",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "event_event",
+      "label": "Event",
+      "file_type": "code",
+      "source_file": "src/collector/Event.cpp",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "eventcollector_eventcollector",
+      "label": "EventCollector",
+      "file_type": "code",
+      "source_file": "src/collector/EventCollector.cpp",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "protocol_protocol",
+      "label": "Protocol",
+      "file_type": "code",
+      "source_file": "src/common/Protocol.h",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "configmanager_configmanager",
+      "label": "ConfigManager",
+      "file_type": "code",
+      "source_file": "src/config/ConfigManager.cpp",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "baselinescanner_baselinescanner",
+      "label": "BaselineScanner",
+      "file_type": "code",
+      "source_file": "src/fim/BaselineScanner.cpp",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "filehasher_filehasher",
+      "label": "FileHasher",
+      "file_type": "code",
+      "source_file": "src/fim/FileHasher.cpp",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "fimdatabase_fimdatabase",
+      "label": "FimDatabase",
+      "file_type": "code",
+      "source_file": "src/fim/FimDatabase.cpp",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "baselinescanner_baselinescanner",
+      "target": "filehasher_filehasher",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/fim/BaselineScanner.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "baselinescanner_baselinescanner",
+      "target": "fimdatabase_fimdatabase",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/fim/BaselineScanner.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "eventbuffer_eventbuffer",
+      "target": "event_event",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/buffer/EventBuffer.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "eventcollector_eventcollector",
+      "target": "event_event",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/collector/EventCollector.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "configmanager_configmanager",
+      "target": "softwareblocker_softwareblocker",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "src/config/ConfigManager.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "configmanager_configmanager",
+      "target": "baselinescanner_baselinescanner",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "src/config/ConfigManager.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "configmanager_configmanager",
+      "target": "antivirusworker_antivirusworker",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "src/config/ConfigManager.cpp",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "fim_module_hyperedge",
+      "label": "File Integrity Monitoring Module",
+      "nodes": [
+        "baselinescanner_baselinescanner",
+        "filehasher_filehasher",
+        "fimdatabase_fimdatabase"
+      ],
+      "relation": "form",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "src/fim/BaselineScanner.cpp"
+    },
+    {
+      "id": "event_collection_module_hyperedge",
+      "label": "Event Collection Module",
+      "nodes": [
+        "eventcollector_eventcollector",
+        "event_event",
+        "eventbuffer_eventbuffer",
+        "channeldiscovery_channeldiscovery"
+      ],
+      "relation": "form",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "src/collector/EventCollector.cpp"
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

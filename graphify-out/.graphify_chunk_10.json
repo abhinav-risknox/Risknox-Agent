@@ -1,0 +1,211 @@
+{
+  "nodes": [
+    {
+      "id": "licensemanager_licensemanager",
+      "label": "LicenseManager",
+      "file_type": "code",
+      "source_file": "src/manager/registry/LicenseManager.h",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "agenthandler_agenthandler",
+      "label": "AgentHandler",
+      "file_type": "code",
+      "source_file": "src/manager/server/AgentHandler.h",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "managerserver_managerserver",
+      "label": "ManagerServer",
+      "file_type": "code",
+      "source_file": "src/manager/server/ManagerServer.h",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "senderinterface_senderinterface",
+      "label": "SenderInterface",
+      "file_type": "code",
+      "source_file": "src/network/SenderInterface.h",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tcpsender_tcpsender",
+      "label": "TcpSender",
+      "file_type": "code",
+      "source_file": "src/network/TcpSender.h",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "patchmanager_patchmanager",
+      "label": "PatchManager",
+      "file_type": "code",
+      "source_file": "src/patch/PatchManager.h",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "commandqueue_commandqueue",
+      "label": "CommandQueue",
+      "file_type": "code",
+      "source_file": "src/policy/CommandQueue.h",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "modulecontroller_modulecontroller",
+      "label": "ModuleController",
+      "file_type": "code",
+      "source_file": "src/policy/ModuleController.h",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "policymanager_policymanager",
+      "label": "PolicyManager",
+      "file_type": "code",
+      "source_file": "src/policy/PolicyManager.h",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "eventqueue_eventqueue",
+      "label": "EventQueue",
+      "file_type": "code",
+      "source_file": "src/queue/EventQueue.h",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "batchsender_batchsender",
+      "label": "BatchSender",
+      "file_type": "code",
+      "source_file": "src/sender/BatchSender.h",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "servicemain_servicemain",
+      "label": "ServiceMain",
+      "file_type": "code",
+      "source_file": "src/service/ServiceMain.cpp",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "managerserver_managerserver",
+      "target": "agenthandler_agenthandler",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/manager/server/ManagerServer.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "agenthandler_agenthandler",
+      "target": "managerserver_managerserver",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/manager/server/AgentHandler.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "tcpsender_tcpsender",
+      "target": "senderinterface_senderinterface",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/network/TcpSender.h",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "batchsender_batchsender",
+      "target": "senderinterface_senderinterface",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/sender/BatchSender.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "batchsender_batchsender",
+      "target": "eventqueue_eventqueue",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/sender/BatchSender.cpp",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "modulecontroller_modulecontroller",
+      "target": "batchsender_batchsender",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/policy/ModuleController.h",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "policymanager_policymanager",
+      "target": "modulecontroller_modulecontroller",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "src/policy/PolicyManager.cpp",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [],
+  "input_tokens": 0,
+  "output_tokens": 0
+}
