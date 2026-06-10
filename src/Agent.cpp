@@ -1,6 +1,7 @@
 #include "Agent.h"
 #include "utils/Logger.h"
 #include "utils/PathUtils.h"
+#include "utils/MotwChecker.h"
 #include "service/ServiceMain.h"
 #include "fim/FimEvent.h"
 
@@ -10,6 +11,7 @@
 
 #include <thread>
 #include <chrono>
+#include <algorithm>
 
 namespace ResolutePulse {
 
@@ -207,6 +209,34 @@ bool Agent::initialize(const std::string& configPath) {
         fimConfig.excludePatterns = fimCfg.exclude_patterns;
         fimConfig.maxFileSizeMb = fimCfg.max_file_size_mb;
         fimConfig.hashFiles = true;
+
+        // Auto-discover all users' Downloads folders and add to FIM watch list
+        {
+            const auto& dlCfg = config.getDownloadScanConfig();
+            if (dlCfg.enabled) {
+                // Enumerate C:\Users\* to find all user profile directories
+                std::filesystem::path usersRoot = "C:\\Users";
+                std::error_code ec;
+                for (const auto& entry : std::filesystem::directory_iterator(usersRoot, ec)) {
+                    if (!entry.is_directory(ec)) continue;
+                    std::string name = entry.path().filename().string();
+                    // Skip system pseudo-profiles
+                    if (name == "Public" || name == "Default" ||
+                        name == "Default User" || name == "All Users") continue;
+                    std::filesystem::path dlPath = entry.path() / "Downloads";
+                    if (std::filesystem::exists(dlPath, ec)) {
+                        std::string dlStr = dlPath.string();
+                        // Only add if not already in the list
+                        if (std::find(fimConfig.directories.begin(),
+                                      fimConfig.directories.end(), dlStr)
+                            == fimConfig.directories.end()) {
+                            fimConfig.directories.push_back(dlStr);
+                            LOG_INFO("Download scan: watching {}", dlStr);
+                        }
+                    }
+                }
+            }
+        }
         
         // Resolve FIM db_path to ProgramData directory
         std::string fimDbPath = fimCfg.db_path;
@@ -227,18 +257,58 @@ bool Agent::initialize(const std::string& configPath) {
             fimMonitor_.reset();
         } else {
             // FIM events go to the same queue as event log events
-            fimMonitor_->setEventCallback([this, &config](const FimEvent& fimEvent) {
+            const auto& dlCfg = config.getDownloadScanConfig();
+            fimMonitor_->setEventCallback([this, dlCfg](const FimEvent& fimEvent) {
                 // Convert FimEvent to Event for the queue
                 Event event;
                 event.channel = "FIM";
-                event.eventId = 0;  // FIM events don't have Windows Event IDs
+                event.eventId = 0;
                 event.timestamp = fimEvent.timestamp;
-                event.data = fimEvent.toJson().dump();  // Store FIM data as JSON in data field
+                event.data = fimEvent.toJson().dump();
                 event.sourceType = "winevent";
-                
+
                 queue_->push(std::move(event));
-                LOG_DEBUG("FIM event queued: {} {}", 
+                LOG_DEBUG("FIM event queued: {} {}",
                          changeTypeToString(fimEvent.changeType), fimEvent.path);
+
+                // ── New-file AV trigger ───────────────────────────────────────
+                // Trigger on Created OR Modified (browsers rename .crdownload → final file,
+                // which USN Journal reports as Modified, not Created).
+                // MotW check is deferred to the debounce loop so Zone.Identifier has
+                // time to be written by the browser before we check it.
+                if (dlCfg.enabled &&
+                    (fimEvent.changeType == FimChangeType::Created ||
+                     fimEvent.changeType == FimChangeType::Modified)) {
+
+                    // Only act on files inside a Downloads-like directory
+                    std::string lowerPath = fimEvent.path;
+                    std::transform(lowerPath.begin(), lowerPath.end(),
+                                   lowerPath.begin(), ::tolower);
+                    bool inDownloads = lowerPath.find("\\downloads\\") != std::string::npos;
+
+                    if (inDownloads) {
+                        // Extension filter (empty list = scan all)
+                        bool extOk = dlCfg.scan_extensions.empty();
+                        if (!extOk) {
+                            for (const auto& ext : dlCfg.scan_extensions) {
+                                if (lowerPath.size() >= ext.size() &&
+                                    lowerPath.compare(lowerPath.size() - ext.size(),
+                                                      ext.size(), ext) == 0) {
+                                    extOk = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (extOk) {
+                            // Queue for debounce — MotW check happens there after 5s
+                            // so Zone.Identifier is guaranteed to exist by then
+                            LOG_INFO("Download detected, queuing for scan: {}", fimEvent.path);
+                            std::lock_guard<std::mutex> lock(avScanQueueMutex_);
+                            avScanQueue_.push_back(fimEvent.path);
+                        }
+                    }
+                }
             });
         }
     }
@@ -290,6 +360,29 @@ bool Agent::initialize(const std::string& configPath) {
     }
     // Note: rp-patch.exe and rp-antivirus.exe are on-demand workers spawned
     // per-request by PolicyManager, not persistent background processes.
+
+    // ── USB Auto-Scan ─────────────────────────────────────────────────────────
+    const auto& usbCfg = config.getUsbScanConfig();
+    if (usbCfg.enabled && config.getAntivirusConfig().enabled) {
+        LOG_INFO("Initializing USB monitor (auto-scan on insertion)...");
+        usbMonitor_ = std::make_unique<UsbMonitor>();
+        usbMonitor_->setPollIntervalMs(usbCfg.poll_interval_ms);
+        usbMonitor_->setArrivalCallback([this](const UsbDriveInfo& drive) {
+            LOG_INFO("USB inserted: {} ({}) — queuing AV scan", drive.driveLetter, drive.volumeName);
+            // Trigger an immediate AV scan on the USB drive
+            nlohmann::json policy;
+            policy["action"] = "quick_scan";
+            policy["path"]   = drive.driveLetter + "\\";
+            if (policyManager_) {
+                policyManager_->handlePolicyUpdate("antivirus", policy);
+            }
+        });
+        usbMonitor_->setRemovalCallback([](const std::string& driveLetter) {
+            LOG_INFO("USB removed: {}", driveLetter);
+        });
+        usbMonitor_->start();
+        LOG_INFO("USB monitor started");
+    }
 
     // Setup PolicyManager - dispatches policies to workers via Named Pipe IPC
     policyManager_ = std::make_unique<PolicyManager>();
@@ -518,6 +611,18 @@ int Agent::run() {
         fimMonitor_->start();
         LOG_INFO("FIM monitoring started");
     }
+
+    // Start download-scan debounce thread if enabled
+    {
+        const auto& dlCfg2 = ConfigManager::instance().getDownloadScanConfig();
+        if (dlCfg2.enabled && ConfigManager::instance().getAntivirusConfig().enabled) {
+            avScanDebounceStop_ = false;
+            int debounceSeconds = dlCfg2.debounce_seconds;
+            avScanDebounceThread_ = std::thread(&Agent::avScanDebounceLoop, this, debounceSeconds);
+            LOG_INFO("Download scan watcher started (debounce={}s, motw_only={})",
+                     debounceSeconds, dlCfg2.motw_only);
+        }
+    }
     
     // Workers are already running as subprocesses (spawned during initialize())
     LOG_INFO("Security worker subprocesses active");
@@ -662,6 +767,17 @@ int Agent::run() {
 
 void Agent::stop() {
     stopRequested_ = true;
+
+    // Stop USB monitor
+    if (usbMonitor_) {
+        usbMonitor_->stop();
+    }
+
+    // Stop download-scan debounce thread
+    avScanDebounceStop_ = true;
+    if (avScanDebounceThread_.joinable()) {
+        avScanDebounceThread_.join();
+    }
 }
 
 bool Agent::shouldStop() const {
@@ -676,6 +792,57 @@ bool Agent::shouldStop() const {
     }
     
     return false;
+}
+
+void Agent::avScanDebounceLoop(int debounceSeconds) {
+    LOG_DEBUG("AV scan debounce loop started ({}s)", debounceSeconds);
+
+    while (!avScanDebounceStop_.load()) {
+        std::this_thread::sleep_for(std::chrono::seconds(debounceSeconds));
+
+        if (avScanDebounceStop_.load()) break;
+
+        std::vector<std::string> filesToScan;
+        {
+            std::lock_guard<std::mutex> lock(avScanQueueMutex_);
+            filesToScan.swap(avScanQueue_);
+        }
+
+        if (filesToScan.empty()) continue;
+
+        const auto& dlCfg = ConfigManager::instance().getDownloadScanConfig();
+        LOG_INFO("AV debounce fired: checking {} file(s)", filesToScan.size());
+
+        // Deduplicate paths
+        std::sort(filesToScan.begin(), filesToScan.end());
+        filesToScan.erase(std::unique(filesToScan.begin(), filesToScan.end()),
+                          filesToScan.end());
+
+        // Scan each file individually via rp-antivirus.exe
+        for (const auto& filePath : filesToScan) {
+            if (avScanDebounceStop_.load()) break;
+
+            // MotW check here — Zone.Identifier is now written by browser after 5s debounce
+            if (dlCfg.motw_only) {
+                auto motw = checkMotw(filePath);
+                if (!motw.hasMotw) {
+                    LOG_INFO("Skipping (no MotW): {}", filePath);
+                    continue;
+                }
+                LOG_INFO("MotW confirmed (Zone {}): {}", motw.zoneId, filePath);
+            }
+
+            LOG_INFO("Scanning downloaded file: {}", filePath);
+            nlohmann::json policy;
+            policy["action"] = "quick_scan";
+            policy["path"]   = filePath;
+            if (policyManager_) {
+                policyManager_->handlePolicyUpdate("antivirus", policy);
+            }
+        }
+    }
+
+    LOG_DEBUG("AV scan debounce loop stopped");
 }
 
 void Agent::sysInfoLoop() {

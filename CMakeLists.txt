@@ -94,6 +94,10 @@ set(AGENT_SOURCES
     src/ipc/PipeChannel.cpp
     # Worker process manager
     src/workers/WorkerManager.cpp
+    # USB monitor
+    src/usb/UsbMonitor.cpp
+    # Threat notification
+    src/notification/ThreatNotifier.cpp
 )
 
 set(AGENT_HEADERS
@@ -178,11 +182,32 @@ strip_target(${PROJECT_NAME})
 # =============================================================================
 
 # Find PostgreSQL
-set(PG_ROOT "C:/Program Files/PostgreSQL/18")
-find_path(LIBPQ_INCLUDE_DIR libpq-fe.h HINTS "${PG_ROOT}/include")
-set(LIBPQ_DLL "${PG_ROOT}/bin/libpq.dll")
+find_path(PG_ROOT_DIR pg_config.h
+    HINTS
+        "C:/Program Files/PostgreSQL/18/include"
+        "C:/Program Files/PostgreSQL/17/include"
+        "C:/Program Files/PostgreSQL/16/include"
+        "C:/vcpkg/installed/x64-windows/include"
+    NO_DEFAULT_PATH
+)
+if(PG_ROOT_DIR)
+    get_filename_component(PG_ROOT "${PG_ROOT_DIR}/.." ABSOLUTE)
+else()
+    set(PG_ROOT "C:/Program Files/PostgreSQL/17")
+endif()
+find_path(LIBPQ_INCLUDE_DIR libpq-fe.h
+    HINTS "${PG_ROOT}/include" "C:/vcpkg/installed/x64-windows/include")
+find_file(LIBPQ_DLL libpq.dll
+    HINTS "${PG_ROOT}/bin" "C:/vcpkg/installed/x64-windows/bin")
+if(NOT LIBPQ_DLL)
+    set(LIBPQ_DLL "")
+endif()
+if(NOT LIBPQ_INCLUDE_DIR)
+    set(LIBPQ_INCLUDE_DIR "")
+endif()
 
-if(EXISTS "${LIBPQ_DLL}" AND LIBPQ_INCLUDE_DIR)
+if(EXISTS "${LIBPQ_DLL}" AND LIBPQ_INCLUDE_DIR
+   AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/manager/ca/CertificateAuthority.cpp")
     set(MANAGER_SOURCES
         src/manager/main.cpp
         src/manager/ca/CertificateAuthority.cpp
@@ -242,8 +267,11 @@ else()
 endif()
 
 # =============================================================================
-# Test: Certificate Authority
+# Tests — only build when manager source files are present
 # =============================================================================
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/manager/ca/CertificateAuthority.cpp"
+   AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_ca.cpp")
+
 add_executable(test_ca
     tests/test_ca.cpp
     src/manager/ca/CertificateAuthority.cpp
@@ -464,6 +492,8 @@ target_link_libraries(verify_licenses PRIVATE
     advapi32
 )
 
+endif() # manager sources present
+
 # =============================================================================
 # Install targets
 # =============================================================================
@@ -545,6 +575,7 @@ strip_target(rp-patch)
 # ── rp-antivirus.exe ──────────────────────────────────────────────────────────
 add_executable(rp-antivirus
     src/antivirus/AntivirusWorker.cpp
+    src/notification/ThreatNotifier.cpp
     src/ipc/PipeChannel.cpp
     src/utils/Logger.cpp
     src/utils/PathUtils.cpp
@@ -554,7 +585,7 @@ target_include_directories(rp-antivirus PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
 )
 target_compile_definitions(rp-antivirus PRIVATE ${WORKER_COMPILE_DEFS})
-target_link_libraries(rp-antivirus PRIVATE ws2_32 advapi32)
+target_link_libraries(rp-antivirus PRIVATE ws2_32 advapi32 shell32 wtsapi32 userenv)
 install(TARGETS rp-antivirus DESTINATION bin)
 strip_target(rp-antivirus)
 

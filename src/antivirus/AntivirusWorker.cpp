@@ -4,6 +4,7 @@
 #include "utils/PathUtils.h"
 
 #include <windows.h>
+#include <shellapi.h>
 #include <filesystem>
 #include <string>
 #include <regex>
@@ -21,7 +22,8 @@ AntivirusWorker::AntivirusWorker(const std::string& binDir, const std::string& d
 // runScan - spawn clamscan.exe, read stdout line-by-line, send events to pipe
 // ─────────────────────────────────────────────────────────────────────────────
 
-void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe) {
+void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe,
+                               ThreatNotifier* notifier, const std::string& quarantineDir) {
     namespace fs = std::filesystem;
 
     fs::path binDir  = fs::path(binDir_);
@@ -196,6 +198,46 @@ void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe) {
                     {"threat", threat}
                 });
                 LOG_WARN("THREAT DETECTED: {} - {}", filePath, threat);
+
+                // Show notification to the user and act on their response
+                if (notifier) {
+                    std::string fileName = std::filesystem::path(filePath).filename().string();
+                    ThreatNotification notification;
+                    notification.fileName  = fileName;
+                    notification.filePath  = filePath;
+                    notification.threatName = threat;
+                    notification.sourceUrl = "";  // MotW HostUrl filled in by caller if available
+                    notification.autoCloseSeconds = 10;
+
+                    ThreatAction action = notifier->notify(notification);
+                    switch (action) {
+                        case ThreatAction::Quarantine:
+                        case ThreatAction::Dismissed:
+                        case ThreatAction::Unknown:
+                            if (!quarantineDir.empty()) {
+                                notifier->quarantine(filePath, threat, quarantineDir);
+                                pipe.sendJson({
+                                    {"type",      "quarantined"},
+                                    {"file",      filePath},
+                                    {"threat",    threat},
+                                    {"quarantine", quarantineDir}
+                                });
+                            }
+                            break;
+                        case ThreatAction::Ignore:
+                            LOG_WARN("THREAT IGNORED by user: {} - {}", filePath, threat);
+                            pipe.sendJson({ {"type","ignored"}, {"file",filePath}, {"threat",threat} });
+                            break;
+                        case ThreatAction::Details:
+                            // Quarantine and open quarantine folder
+                            if (!quarantineDir.empty()) {
+                                notifier->quarantine(filePath, threat, quarantineDir);
+                            }
+                            ShellExecuteA(nullptr, "open", quarantineDir.c_str(),
+                                          nullptr, nullptr, SW_SHOWNORMAL);
+                            break;
+                    }
+                }
             } else if (!line.empty()
                        && line.rfind("Scanning ", 0) != 0
                        && line.rfind("Loading: ", 0) != 0) {
@@ -259,6 +301,30 @@ void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe) {
     });
 
     LOG_INFO("AV scan complete: {} files scanned, {} threats", filesScanned, threats);
+
+    // Non-blocking clean-scan notification (no threats found)
+    if (threats == 0) {
+        fs::path agentDir = fs::path(binDir_).parent_path();
+        fs::path toastScript = agentDir / "ScanCompleteToast.ps1";
+        if (fs::exists(toastScript)) {
+            std::string fileName = fs::path(path).filename().string();
+            std::string psCmd =
+                "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass"
+                " -File \"" + toastScript.string() + "\""
+                " -FileName \"" + fileName + "\"";
+            STARTUPINFOA si2 = {};
+            si2.cb        = sizeof(si2);
+            si2.dwFlags   = STARTF_USESHOWWINDOW;
+            si2.wShowWindow = SW_HIDE;
+            PROCESS_INFORMATION pi2 = {};
+            if (CreateProcessA(nullptr, const_cast<char*>(psCmd.c_str()),
+                               nullptr, nullptr, FALSE, CREATE_NO_WINDOW,
+                               nullptr, nullptr, &si2, &pi2)) {
+                CloseHandle(pi2.hProcess);
+                CloseHandle(pi2.hThread);
+            }
+        }
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -462,8 +528,25 @@ int main() {
         return 1;
     }
 
-    std::string action = cmd.value("action", "quick_scan");
-    std::string path   = cmd.value("path", agentDir.string());  // default: scan agent dir
+    std::string action       = cmd.value("action", "quick_scan");
+    std::string path         = cmd.value("path", agentDir.string());
+    std::string quarantineDir = cmd.value("quarantine_dir", "");
+
+    // Build quarantine dir if not specified by caller
+    if (quarantineDir.empty()) {
+        quarantineDir = (PathUtils::getAgentDataDir() / "antivirus" / "quarantine").string();
+    }
+
+    // Resolve Notification.ps1 next to this executable
+    std::filesystem::path scriptPath = agentDir / "Notification.ps1";
+    ThreatNotifier notifier;
+    if (std::filesystem::exists(scriptPath)) {
+        notifier.setScriptPath(scriptPath.string());
+        LOG_INFO("rp-antivirus: threat notifications enabled via {}", scriptPath.string());
+    } else {
+        LOG_WARN("rp-antivirus: Notification.ps1 not found at {}, notifications disabled",
+                 scriptPath.string());
+    }
 
     if (action == "update_definitions") {
         bool ok = worker.updateDefinitions();
@@ -482,8 +565,9 @@ int main() {
             {"database", info}
         });
     } else {
-        // quick_scan or full_scan
-        worker.runScan(path, pipe);
+        // quick_scan or full_scan — pass notifier so threats show a popup
+        ThreatNotifier* notifierPtr = std::filesystem::exists(scriptPath) ? &notifier : nullptr;
+        worker.runScan(path, pipe, notifierPtr, quarantineDir);
     }
 
     pipe.close();

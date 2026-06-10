@@ -85,6 +85,20 @@ struct AppBlockConfigData {
     int monitor_interval_ms = 300;
 };
 
+struct UsbScanConfigData {
+    bool enabled = false;
+    int poll_interval_ms = 2000;   // how often to poll for new drives
+    int scan_delay_seconds = 2;    // wait after insertion before scanning
+};
+
+struct DownloadScanConfigData {
+    bool enabled = false;
+    bool motw_only = true;                     // only scan internet-zone files
+    int debounce_seconds = 5;                  // batch new files for N seconds before scanning
+    std::vector<std::string> watch_paths;      // directories to watch (via FIM)
+    std::vector<std::string> scan_extensions;  // empty = scan all, else filter by ext
+};
+
 class ConfigManager {
 public:
     static ConfigManager& instance();
@@ -113,6 +127,8 @@ public:
     const WebBlockConfigData& getWebBlockConfig() const { return webBlockConfig_; }
     const AppBlockConfigData& getAppBlockConfig() const { return appBlockConfig_; }
     const AntivirusConfigData& getAntivirusConfig() const { return avConfig_; }
+    const UsbScanConfigData& getUsbScanConfig() const { return usbScanConfig_; }
+    const DownloadScanConfigData& getDownloadScanConfig() const { return downloadScanConfig_; }
     
     // Check if an event should be collected
     bool shouldCollectEvent(const std::string& channel, int eventId) const;
@@ -144,6 +160,8 @@ private:
     WebBlockConfigData webBlockConfig_;
     AppBlockConfigData appBlockConfig_;
     AntivirusConfigData avConfig_;
+    UsbScanConfigData usbScanConfig_;
+    DownloadScanConfigData downloadScanConfig_;
 };
 
 } // namespace ResolutePulse
