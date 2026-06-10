@@ -27,6 +27,7 @@
 #include "utils/PathUtils.h"
 #include "patch/PatchManager.h"
 #include "common/Protocol.h"
+#include "endpoint/EndpointManager.h"
 
 #include <nlohmann/json.hpp>
 #include <string>
@@ -98,9 +99,19 @@ public:
         else if (cmd.verb == "av_update")        handleAvUpdate(result);
         else if (cmd.verb == "av_version")       handleAvVersion(result);
         else {
-            result.status = "unsupported";
-            result.output = "Unknown verb: " + cmd.verb;
-            LOG_WARN("ModuleController: unknown verb '{}'", cmd.verb);
+            nlohmann::json endpointResult;
+            std::string errorMsg;
+            if (Endpoint::EndpointManager::handleCommand(cmd.verb, cmd.params, endpointResult, errorMsg)) {
+                result.status = "success";
+                result.output = endpointResult.dump();
+            } else if (!errorMsg.empty() && errorMsg.find("Unknown verb") == std::string::npos) {
+                result.status = "failed";
+                result.output = errorMsg;
+            } else {
+                result.status = "unsupported";
+                result.output = "Unknown verb: " + cmd.verb;
+                LOG_WARN("ModuleController: unknown verb '{}'", cmd.verb);
+            }
         }
 
         return result;

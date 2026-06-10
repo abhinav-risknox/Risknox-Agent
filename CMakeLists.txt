@@ -94,6 +94,12 @@ set(AGENT_SOURCES
     src/ipc/PipeChannel.cpp
     # Worker process manager
     src/workers/WorkerManager.cpp
+    # Endpoint Management module
+    src/endpoint/EndpointManager.cpp
+    src/endpoint/InventoryCollector.cpp
+    src/endpoint/PasswordPolicyManager.cpp
+    src/endpoint/SessionManager.cpp
+    src/endpoint/UserManager.cpp
 )
 
 set(AGENT_HEADERS
@@ -134,6 +140,12 @@ set(AGENT_HEADERS
     src/webblock/WebBlocker.h
     # Software Blocking module
     src/appblock/SoftwareBlocker.h
+    # Endpoint Management module
+    src/endpoint/EndpointManager.h
+    src/endpoint/InventoryCollector.h
+    src/endpoint/PasswordPolicyManager.h
+    src/endpoint/SessionManager.h
+    src/endpoint/UserManager.h
     # Common
     ${COMMON_HEADERS}
 )
@@ -168,6 +180,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     netapi32
     ole32
     oleaut32
+    wtsapi32
 )
 
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)

@@ -142,7 +142,10 @@ private:
         SSL* ssl = nullptr;
         std::queue<std::string> outboundQueue;  // serialized wire messages
         std::mutex              queueMutex;
+        SOCKET                  wakeupRead = INVALID_SOCKET;
+        SOCKET                  wakeupWrite = INVALID_SOCKET;
     };
+    static bool createWakeupSocketPair(SOCKET& readSock, SOCKET& writeSock);
     std::unordered_map<std::string, std::shared_ptr<SessionInfo>> activeSessions_;
     std::mutex                             sessionsMutex_;
 

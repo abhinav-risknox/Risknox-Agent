@@ -11,6 +11,8 @@
 
 #ifdef _WIN32
 #include <ws2tcpip.h>
+#else
+#include <fcntl.h>
 #endif
 
 #include <filesystem>
@@ -357,24 +359,59 @@ void ManagerServer::handleClient(SOCKET clientSocket, const std::string& clientA
     AgentHandler handler(*ca_, *db_, this);
     std::string agentId;
 
+    SOCKET wakeupRead = INVALID_SOCKET;
+
     while (running_.load()) {
         // Drain any outbound commands queued by dispatch threads.
         // We own the SSL*, so SSL_write is safe here.
         if (!agentId.empty()) {
             drainOutboundQueue(agentId, ssl);
-        }
-
-        if (!handler.handleConnection(ssl, clientAddr, hasClientCert)) {
-            break; 
-        }
-        // After first successful authenticated message, retrieve the agentId
-        // and register in the session map
-        if (agentId.empty() && hasClientCert) {
-            agentId = handler.getLastAgentId();
-            if (!agentId.empty()) {
-                registerSession(agentId, ssl);
+            // Cache wakeup socket for select
+            if (wakeupRead == INVALID_SOCKET) {
+                std::lock_guard<std::mutex> lk(sessionsMutex_);
+                auto it = activeSessions_.find(agentId);
+                if (it != activeSessions_.end()) {
+                    wakeupRead = it->second->wakeupRead;
+                }
             }
         }
+
+        // Wait for agent data OR internal wakeup
+        fd_set readfds;
+        FD_ZERO(&readfds);
+        SOCKET sock = SSL_get_fd(ssl);
+        FD_SET(sock, &readfds);
+        SOCKET maxFd = sock;
+
+        if (wakeupRead != INVALID_SOCKET) {
+            FD_SET(wakeupRead, &readfds);
+            if (wakeupRead > maxFd) maxFd = wakeupRead;
+        }
+
+        struct timeval tv = { 0, 500000 }; // 500ms fallback to check running_
+        int ready = select(static_cast<int>(maxFd) + 1, &readfds, nullptr, nullptr, &tv);
+
+        if (ready > 0) {
+            if (wakeupRead != INVALID_SOCKET && FD_ISSET(wakeupRead, &readfds)) {
+                char dummy[64];
+                recv(wakeupRead, dummy, static_cast<int>(sizeof(dummy)), 0);
+            }
+        }
+
+        if ((ready > 0 && FD_ISSET(sock, &readfds)) || SSL_pending(ssl) > 0) {
+            if (!handler.handleConnection(ssl, clientAddr, hasClientCert)) {
+                break; 
+            }
+            // After first successful authenticated message, retrieve the agentId
+            // and register in the session map
+            if (agentId.empty() && hasClientCert) {
+                agentId = handler.getLastAgentId();
+                if (!agentId.empty()) {
+                    registerSession(agentId, ssl);
+                }
+            }
+        }
+        // If timeout: loop back to drainOutboundQueue()
     }
 
     // Cleanup - unregister session
@@ -392,17 +429,60 @@ void ManagerServer::handleClient(SOCKET clientSocket, const std::string& clientA
 // Session registry
 // ─────────────────────────────────────────────────────────────
 
+bool ManagerServer::createWakeupSocketPair(SOCKET& readSock, SOCKET& writeSock) {
+#ifdef _WIN32
+    readSock = socket(AF_INET, SOCK_DGRAM, 0);
+    writeSock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (readSock == INVALID_SOCKET || writeSock == INVALID_SOCKET) return false;
+
+    struct sockaddr_in loopback = {};
+    loopback.sin_family = AF_INET;
+    loopback.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    loopback.sin_port = 0;
+
+    if (bind(readSock, (struct sockaddr*)&loopback, sizeof(loopback)) == SOCKET_ERROR) return false;
+    socklen_t addrLen = sizeof(loopback);
+    if (getsockname(readSock, (struct sockaddr*)&loopback, &addrLen) == SOCKET_ERROR) return false;
+    if (connect(writeSock, (struct sockaddr*)&loopback, sizeof(loopback)) == SOCKET_ERROR) return false;
+
+    u_long mode = 1;
+    ioctlsocket(readSock, FIONBIO, &mode);
+    ioctlsocket(writeSock, FIONBIO, &mode);
+    return true;
+#else
+    int fds[2];
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, fds) == -1) return false;
+    
+    for (int i = 0; i < 2; ++i) {
+        int flags = fcntl(fds[i], F_GETFL, 0);
+        fcntl(fds[i], F_SETFL, flags | O_NONBLOCK);
+    }
+    
+    readSock = fds[0];
+    writeSock = fds[1];
+    return true;
+#endif
+}
+
 void ManagerServer::registerSession(const std::string& agentId, SSL* ssl) {
     std::lock_guard<std::mutex> lk(sessionsMutex_);
     auto info = std::make_shared<SessionInfo>();
     info->ssl = ssl;
+    if (!createWakeupSocketPair(info->wakeupRead, info->wakeupWrite)) {
+        LOG_WARN("Failed to create wakeup socket pair for agent {}", agentId);
+    }
     activeSessions_[agentId] = std::move(info);
     LOG_INFO("Session registered: agent={}", agentId);
 }
 
 void ManagerServer::unregisterSession(const std::string& agentId) {
     std::lock_guard<std::mutex> lk(sessionsMutex_);
-    activeSessions_.erase(agentId);
+    auto it = activeSessions_.find(agentId);
+    if (it != activeSessions_.end()) {
+        if (it->second->wakeupRead != INVALID_SOCKET) closesocket(it->second->wakeupRead);
+        if (it->second->wakeupWrite != INVALID_SOCKET) closesocket(it->second->wakeupWrite);
+        activeSessions_.erase(it);
+    }
     LOG_INFO("Session unregistered: agent={}", agentId);
 }
 
@@ -563,6 +643,10 @@ std::string ManagerServer::dispatchCommand(const std::string& agentId,
     {
         std::lock_guard<std::mutex> lk(session->queueMutex);
         session->outboundQueue.push(std::move(wireMsg));
+        if (session->wakeupWrite != INVALID_SOCKET) {
+            char dummy = '1';
+            send(session->wakeupWrite, &dummy, 1, 0);
+        }
     }
 
     LOG_INFO("Policy '{}' enqueued for agent {} (commandId={})", policyType, agentId, commandId);
@@ -614,6 +698,10 @@ void ManagerServer::dispatchModuleCommand(const std::string& agentId,
     {
         std::lock_guard<std::mutex> lk(session->queueMutex);
         session->outboundQueue.push(std::move(wireMsg));
+        if (session->wakeupWrite != INVALID_SOCKET) {
+            char dummy = '1';
+            send(session->wakeupWrite, &dummy, 1, 0);
+        }
     }
 
     LOG_INFO("MODULE_COMMAND '{}' enqueued for agent {} (commandId={})",
@@ -672,6 +760,10 @@ void ManagerServer::dispatchModuleCommandFromApi(const std::string& agentId,
     {
         std::lock_guard<std::mutex> lk(session->queueMutex);
         session->outboundQueue.push(std::move(wireMsg));
+        if (session->wakeupWrite != INVALID_SOCKET) {
+            char dummy = '1';
+            send(session->wakeupWrite, &dummy, 1, 0);
+        }
     }
 
     LOG_INFO("REST API: MODULE_COMMAND '{}' enqueued for agent {} (commandId={})",

@@ -111,6 +111,38 @@ void RestApi::registerRoutes() {
         handleGetPolicyCommands(req, res);
     });
 
+    // ── Endpoint Management ──
+    httpServer_->Get(R"(/api/agents/([^/]+)/endpoint/users)", [this](const Req& req, Res& res) {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleEndpointCommand(req, res, "user_list");
+    });
+    httpServer_->Get(R"(/api/agents/([^/]+)/endpoint/groups)", [this](const Req& req, Res& res) {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleEndpointCommand(req, res, "group_list");
+    });
+    httpServer_->Get(R"(/api/agents/([^/]+)/endpoint/sessions)", [this](const Req& req, Res& res) {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleEndpointCommand(req, res, "session_list");
+    });
+    httpServer_->Get(R"(/api/agents/([^/]+)/endpoint/inventory)", [this](const Req& req, Res& res) {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleEndpointCommand(req, res, "inventory_collect");
+    });
+    httpServer_->Get(R"(/api/agents/([^/]+)/endpoint/password-policy)", [this](const Req& req, Res& res) {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleEndpointCommand(req, res, "password_policy_get");
+    });
+    httpServer_->Post(R"(/api/agents/([^/]+)/endpoint/password-policy)", [this](const Req& req, Res& res) {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleEndpointCommand(req, res, "password_policy_set");
+    });
+
     // ── Unified command lookup ──
     httpServer_->Get(R"(/api/commands/([^/]+))", [this](const Req& req, Res& res) {
         addCorsHeaders(res);
@@ -403,6 +435,58 @@ void RestApi::handleGetModuleCommands(const httplib::Request& req, httplib::Resp
     resp["commands"] = arr;
     resp["count"]    = arr.size();
     res.set_content(resp.dump(), "application/json");
+}
+
+void RestApi::handleEndpointCommand(const httplib::Request& req, httplib::Response& res, const std::string& verb) {
+    try {
+        std::string agentId = req.matches[1];
+        nlohmann::json params = nlohmann::json::object();
+        
+        if (req.method == "POST" && !req.body.empty()) {
+            params = nlohmann::json::parse(req.body);
+        }
+
+        // Generate a unique commandId
+        std::string commandId = agentId + "-" + verb + "-" +
+            std::to_string(time(nullptr)) + "-" +
+            generateToken().substr(0, 8);
+
+        // Resolve operator identity from token
+        std::string operatorName = "unknown";
+        {
+            auto it = req.headers.find("Authorization");
+            if (it != req.headers.end() && it->second.size() > 7) {
+                std::string token = it->second.substr(7);
+                std::lock_guard<std::mutex> lk(tokenMutex_);
+                auto tit = tokens_.find(token);
+                if (tit != tokens_.end()) operatorName = tit->second.username;
+            }
+        }
+
+        // Record in DB with operator identity
+        db_.recordModuleCommandWithOperator(agentId, commandId, verb,
+                                             params.dump(), operatorName, true);
+
+        // Attempt immediate dispatch
+        server_.dispatchModuleCommandFromApi(agentId, commandId, verb, params);
+
+        nlohmann::json resp;
+        resp["command_id"]   = commandId;
+        resp["agent_id"]     = agentId;
+        resp["verb"]         = verb;
+        resp["status"]       = "queued";
+        resp["initiated_by"] = operatorName;
+        res.set_content(resp.dump(), "application/json");
+
+        LOG_INFO("REST API: endpoint command queued: verb={} agent={} by={}",
+                 verb, agentId, operatorName);
+
+    } catch (const std::exception& e) {
+        res.status = 400;
+        nlohmann::json err;
+        err["error"] = std::string("Invalid request: ") + e.what();
+        res.set_content(err.dump(), "application/json");
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

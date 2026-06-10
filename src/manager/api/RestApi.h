@@ -59,6 +59,9 @@ private:
     void handlePostModuleCommand(const httplib::Request& req, httplib::Response& res);
     void handleGetModuleCommands(const httplib::Request& req, httplib::Response& res);
 
+    // ── Endpoint Management endpoints ──
+    void handleEndpointCommand(const httplib::Request& req, httplib::Response& res, const std::string& verb);
+
     // ── Policy command endpoints ──
     void handlePostPolicyCommand(const httplib::Request& req, httplib::Response& res);
     void handleGetPolicyCommands(const httplib::Request& req, httplib::Response& res);
