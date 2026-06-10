@@ -276,7 +276,13 @@ void UsnJournalReader::monitorThread() {
             change.usn = record->Usn;
             change.timestamp = record->TimeStamp.QuadPart;
             change.isDirectory = (record->FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-            
+
+            // For RenameNewName, evict the stale cache entry so OpenFileById
+            // re-resolves to the post-rename path (e.g. "file.zip" not "file.tmp").
+            if (record->Reason & 0x00002000) { // RenameNewName
+                pathCache_.erase(record->FileReferenceNumber);
+            }
+
             // Try to resolve full path
             change.filePath = resolveFilePath(record->FileReferenceNumber);
             

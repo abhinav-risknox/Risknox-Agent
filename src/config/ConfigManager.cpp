@@ -207,6 +207,28 @@ bool ConfigManager::load(const std::string& configPath) {
                 avConfig_.scan_paths = { "C:\\Users" };  // sensible default
             }
         }
+
+        // USB scan config (optional)
+        if (config.contains("usb_scan")) {
+            auto& usb = config["usb_scan"];
+            usbScanConfig_.enabled           = usb.value("enabled", false);
+            usbScanConfig_.poll_interval_ms  = usb.value("poll_interval_ms", 2000);
+            usbScanConfig_.scan_delay_seconds = usb.value("scan_delay_seconds", 2);
+        }
+
+        // Download/new-file scan config (optional)
+        if (config.contains("download_scan")) {
+            auto& ds = config["download_scan"];
+            downloadScanConfig_.enabled          = ds.value("enabled", false);
+            downloadScanConfig_.motw_only         = ds.value("motw_only", true);
+            downloadScanConfig_.debounce_seconds  = ds.value("debounce_seconds", 5);
+            if (ds.contains("watch_paths")) {
+                downloadScanConfig_.watch_paths = ds["watch_paths"].get<std::vector<std::string>>();
+            }
+            if (ds.contains("scan_extensions")) {
+                downloadScanConfig_.scan_extensions = ds["scan_extensions"].get<std::vector<std::string>>();
+            }
+        }
         
         loaded_ = true;
         LOG_INFO("Configuration loaded successfully from: {}", configPath);

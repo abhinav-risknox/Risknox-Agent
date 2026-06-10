@@ -142,10 +142,10 @@ std::string FimMonitor::getCurrentTimestamp() {
 void FimMonitor::onUsnChange(const UsnChange& change) {
     // Skip directories
     if (change.isDirectory) return;
-    
+
     // Skip if not in monitored paths
     if (!isPathMonitored(change.filePath)) return;
-    
+
     // Process the change
     processChange(change.filePath, change);
 }
@@ -199,7 +199,7 @@ void FimMonitor::processChange(const std::string& filePath, const UsnChange& cha
         if (newRecord) {
             if (existingRecord && *existingRecord != *newRecord) {
                 // File changed
-                event.changeType = change.isSecurityChange() ? 
+                event.changeType = change.isSecurityChange() ?
                     FimChangeType::PermissionChanged : FimChangeType::Modified;
                 event.oldHash = existingRecord->hash;
                 event.oldSize = existingRecord->size;
@@ -207,12 +207,12 @@ void FimMonitor::processChange(const std::string& filePath, const UsnChange& cha
                 event.newHash = newRecord->hash;
                 event.newSize = newRecord->size;
                 event.newMtime = newRecord->mtime;
-                
+
                 // Update database
                 database_->upsertFile(*newRecord);
-                
+
                 LOG_DEBUG("FIM: File modified: {}", filePath);
-                
+
                 if (eventCallback_) {
                     eventCallback_(event);
                 }
@@ -221,9 +221,41 @@ void FimMonitor::processChange(const std::string& filePath, const UsnChange& cha
                 event.changeType = FimChangeType::Created;
                 event.newHash = newRecord->hash;
                 event.newSize = newRecord->size;
-                
+
                 database_->upsertFile(*newRecord);
-                
+
+                if (eventCallback_) {
+                    eventCallback_(event);
+                }
+            }
+        }
+    } else if (change.isRename()) {
+        // Browser downloads rename .crdownload -> final file; USN reports RenameNewName.
+        // Treat the new name as a creation so download scan triggers correctly.
+        if (change.reason & static_cast<uint32_t>(UsnReason::RenameNewName)) {
+            event.changeType = FimChangeType::Created;
+            // Try to hash for FIM integrity; fire callback regardless (path is what matters for AV scan)
+            auto newRecord = scanner_->scanFile(filePath);
+            if (newRecord) {
+                event.newHash = newRecord->hash;
+                event.newSize = newRecord->size;
+                event.newMtime = newRecord->mtime;
+                database_->upsertFile(*newRecord);
+            } else {
+                LOG_INFO("FIM: scanFile could not read {} (locked/missing) — callback still fires", filePath);
+            }
+            LOG_INFO("FIM: File renamed to: {}", filePath);
+            if (eventCallback_) {
+                eventCallback_(event);
+            }
+        } else if (change.reason & static_cast<uint32_t>(UsnReason::RenameOldName)) {
+            if (existingRecord) {
+                event.changeType = FimChangeType::Deleted;
+                event.oldHash = existingRecord->hash;
+                event.oldSize = existingRecord->size;
+                event.oldMtime = existingRecord->mtime;
+                database_->deleteFile(filePath);
+                LOG_DEBUG("FIM: File renamed from: {}", filePath);
                 if (eventCallback_) {
                     eventCallback_(event);
                 }

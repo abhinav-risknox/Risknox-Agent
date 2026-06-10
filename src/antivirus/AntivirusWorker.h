@@ -4,6 +4,7 @@
 // Wraps clamscan.exe and freshclam.exe as child subprocesses,
 // streams scan events back to the core agent via Named Pipe.
 
+#include "notification/ThreatNotifier.h"
 #include <string>
 #include <nlohmann/json.hpp>
 
@@ -23,8 +24,11 @@ public:
     AntivirusWorker(const std::string& binDir, const std::string& dbDir);
 
     // Run a scan on `path`. Emits JSON events to `pipe`.
+    // If notifier is set, shows a threat popup when a threat is found.
     void runScan(const std::string& path,
-                 class PipeServer& pipe);
+                 class PipeServer& pipe,
+                 ThreatNotifier* notifier = nullptr,
+                 const std::string& quarantineDir = "");
 
     // Run freshclam to update virus definitions.
     // Returns true on success.

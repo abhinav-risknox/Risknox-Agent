@@ -16,6 +16,7 @@
 #include "policy/ModuleController.h"
 #include "workers/WorkerManager.h"
 #include "logtailer/LogTailer.h"
+#include "usb/UsbMonitor.h"
 
 #include <memory>
 #include <atomic>
@@ -64,6 +65,14 @@ private:
     std::unique_ptr<PolicyManager>  policyManager_;
     std::unique_ptr<ModuleController> moduleController_;
     std::unique_ptr<LogTailer>      logTailer_;
+    std::unique_ptr<UsbMonitor>     usbMonitor_;
+
+    // Debounce queue for download/FIM-triggered AV scans
+    std::mutex                      avScanQueueMutex_;
+    std::vector<std::string>        avScanQueue_;
+    std::thread                     avScanDebounceThread_;
+    std::atomic<bool>               avScanDebounceStop_{false};
+    void avScanDebounceLoop(int debounceSeconds);
     
     // Registration components
     std::unique_ptr<CertificateStore> certStore_;
