@@ -28,6 +28,7 @@ public partial class NotificationWindow : Window
     private string _severity   = "high";
     private int    _slotIndex  = 0;
     private int    _timeout    = 10;
+    private string _mode       = "threat";
 
     // ── State ───────────────────────────────────────────────────
     private int  _exitCode       = 0;
@@ -43,6 +44,11 @@ public partial class NotificationWindow : Window
     private readonly DispatcherTimer _confirmTimer    = new();
     private int _tickCount = 0;
     private int _totalTicks;
+
+    // ── Cached Brushes ──────────────────────────────────────────
+    private static readonly SolidColorBrush BrushCountdownOrange = new((Color)ColorConverter.ConvertFromString("#F97316"));
+    private static readonly SolidColorBrush BrushCountdownRed    = new((Color)ColorConverter.ConvertFromString("#EF4444"));
+    private static readonly SolidColorBrush BrushCountdownGray   = new((Color)ColorConverter.ConvertFromString("#404044"));
 
     // ── Consts ──────────────────────────────────────────────────
 
@@ -64,6 +70,11 @@ public partial class NotificationWindow : Window
         ApplyFileTypeIcon();
         SetupCountdown();
         SetupConfirmTimer();
+
+        if (_mode.Equals("safe", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplySafeMode();
+        }
 
         Loaded       += OnLoaded;
         Closing      += (_, _) => Environment.ExitCode = _exitCode;
@@ -87,6 +98,7 @@ public partial class NotificationWindow : Window
                 case "--severity": _severity   = args[++i]; break;
                 case "--slot":     int.TryParse(args[++i], out _slotIndex); break;
                 case "--timeout":  int.TryParse(args[++i], out _timeout); break;
+                case "--mode":     _mode       = args[++i]; break;
             }
         }
     }
@@ -120,6 +132,39 @@ public partial class NotificationWindow : Window
         TxtSeverity.Text        = label;
         IconTile.Background     = BrushFromHex(tileBg);
         IconTile.BorderBrush    = BrushFromHex(tileBorder);
+    }
+
+    // ═════════════════════════════════════════════════════════════
+    // FEATURE: SAFE MODE OVERRIDE
+    // ═════════════════════════════════════════════════════════════
+    private void ApplySafeMode()
+    {
+        // ── Morph accent → green ────────────────────────────
+        AccentBar.Fill = BrushFromHex("#22C55E");
+
+        // ── Morph icon → checkmark ──────────────────────────
+        IconTile.Background  = BrushFromHex("#0D2818");
+        IconTile.BorderBrush = BrushFromHex("#14401D");
+        ShieldGroup.Visibility = Visibility.Collapsed;
+        CheckGroup.Visibility  = Visibility.Visible;
+
+        // ── Morph text ──────────────────────────────────────
+        RunMainPrefix.Text = "Download Verified Safe \u2014 ";
+        RunThreatName.Text = _fileName;
+        TxtThreat.Visibility = Visibility.Collapsed;
+        TxtPath.Text         = "No threats detected";
+        TxtPath.Foreground   = BrushFromHex("#A0A0A4");
+
+        // ── Hide buttons ────────────────────────────────────
+        BtnQuarantine.Visibility = Visibility.Collapsed;
+        LnkIgnore.Visibility     = Visibility.Collapsed;
+        DotSep.Visibility        = Visibility.Collapsed;
+        LnkDetails.Visibility    = Visibility.Collapsed;
+        FileTypeBadge.Visibility = Visibility.Collapsed;
+        SeverityBadge.Visibility = Visibility.Collapsed;
+
+        // ── Countdown bar → green ───────────────────────────
+        CountdownFill.Fill  = BrushFromHex("#22C55E");
     }
 
     // ═════════════════════════════════════════════════════════════
@@ -159,15 +204,15 @@ public partial class NotificationWindow : Window
 
             double secsLeft = (_totalTicks - _tickCount) / 10.0;
             if (secsLeft <= 2)
-                CountdownFill.Fill = BrushFromHex("#EF4444"); // Red
+                CountdownFill.Fill = BrushCountdownRed;
             else if (secsLeft <= 5)
-                CountdownFill.Fill = BrushFromHex("#F97316"); // Orange
+                CountdownFill.Fill = BrushCountdownOrange;
             // else stays default gray
 
             if (_tickCount >= _totalTicks)
             {
                 _countdownTimer.Stop();
-                CloseWithResult(4, "AUTO_QUARANTINE");
+                CloseWithResult(_mode.Equals("safe", StringComparison.OrdinalIgnoreCase) ? 3 : 4, "TIMEOUT");
             }
         };
     }
@@ -203,7 +248,6 @@ public partial class NotificationWindow : Window
 
         // ── Morph text ──────────────────────────────────────
         RunMainPrefix.Text = "Quarantined \u2014 ";
-        RunThreatName.Text = "";
         RunThreatName.Text = _fileName;
         TxtThreat.Visibility = Visibility.Collapsed;
         TxtPath.Text         = "Threat moved to quarantine vault";
@@ -239,6 +283,8 @@ public partial class NotificationWindow : Window
         TxtThreat.Visibility     = Visibility.Visible;
         TxtPath.Text             = _filePath;
         TxtPath.Foreground       = BrushFromHex("#606066");
+        RunThreatName.Foreground = BrushFromHex("#A0A0A4");
+        SeverityBadge.Visibility = Visibility.Visible;
         BtnQuarantine.Visibility = Visibility.Visible;
         LnkUndo.Visibility       = Visibility.Collapsed;
         LnkIgnore.Visibility     = Visibility.Visible;

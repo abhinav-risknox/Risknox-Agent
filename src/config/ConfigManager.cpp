@@ -211,8 +211,7 @@ bool ConfigManager::load(const std::string& configPath) {
         // USB scan config (optional)
         if (config.contains("usb_scan")) {
             auto& usb = config["usb_scan"];
-            usbScanConfig_.enabled           = usb.value("enabled", false);
-            usbScanConfig_.poll_interval_ms  = usb.value("poll_interval_ms", 2000);
+            usbScanConfig_.enabled            = usb.value("enabled", false);
             usbScanConfig_.scan_delay_seconds = usb.value("scan_delay_seconds", 2);
         }
 

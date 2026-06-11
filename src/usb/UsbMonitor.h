@@ -4,7 +4,6 @@
 #include <functional>
 #include <thread>
 #include <atomic>
-#include <set>
 
 namespace ResolutePulse {
 
@@ -19,6 +18,8 @@ struct UsbDriveInfo {
 using UsbArrivalCallback = std::function<void(const UsbDriveInfo&)>;
 using UsbRemovalCallback = std::function<void(const std::string& driveLetter)>;
 
+/// Event-driven USB monitor using RegisterDeviceNotification.
+/// Zero CPU while idle — fires callbacks instantly on insertion/removal.
 class UsbMonitor {
 public:
     UsbMonitor() = default;
@@ -26,20 +27,26 @@ public:
 
     void setArrivalCallback(UsbArrivalCallback cb) { onArrival_ = std::move(cb); }
     void setRemovalCallback(UsbRemovalCallback cb) { onRemoval_ = std::move(cb); }
-    void setPollIntervalMs(int ms) { pollIntervalMs_ = ms; }
+    void setScanDelaySeconds(int s)  { scanDelaySeconds_ = s; }
 
     bool start();
     void stop();
 
+    // Called from WndProc — public so the message handler can reach them
+    void handleArrival(unsigned long unitMask);
+    void handleRemoval(unsigned long unitMask);
+
 private:
-    void monitorLoop();
-    std::set<std::string> getRemovableDrives() const;
+    void messageLoop();
+
+    static char driveLetterFromMask(unsigned long unitMask);
     UsbDriveInfo getDriveInfo(const std::string& driveLetter) const;
 
     UsbArrivalCallback onArrival_;
     UsbRemovalCallback onRemoval_;
 
-    int               pollIntervalMs_ = 2000;
+    int               scanDelaySeconds_ = 2;
+    unsigned long     threadId_         = 0;
     std::atomic<bool> running_{false};
     std::atomic<bool> stopRequested_{false};
     std::thread       monitorThread_;

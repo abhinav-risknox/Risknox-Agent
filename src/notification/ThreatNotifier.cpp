@@ -3,49 +3,40 @@
 
 #include <Windows.h>
 #include <filesystem>
-#include <fstream>
-#include <sstream>
 #include <chrono>
 #include <ctime>
+#include <sstream>
 
 namespace ResolutePulse {
 
 // ─────────────────────────────────────────────────────────────────────────────
-// notify — spawn Notification.ps1 in the active user session and read result
+// notify — launch ThreatNotification.exe and read exit code
 // ─────────────────────────────────────────────────────────────────────────────
 
 ThreatAction ThreatNotifier::notify(const ThreatNotification& info) const {
-    if (scriptPath_.empty() || !std::filesystem::exists(scriptPath_)) {
-        LOG_WARN("ThreatNotifier: Notification.ps1 not found at '{}', defaulting to quarantine",
-                 scriptPath_);
+    if (exePath_.empty() || !std::filesystem::exists(exePath_)) {
+        LOG_WARN("ThreatNotifier: WPF exe not found at '{}', defaulting to quarantine", exePath_);
         return ThreatAction::Quarantine;
     }
 
-    // Write result to a temp file so we don't need a stdout pipe.
-    // Piping stdout causes PowerShell to detect non-console output and suppresses
-    // the WinForms window. Using a result file matches ScanCompleteToast's spawn
-    // pattern (no STARTF_USESTDHANDLES) which is known to show its window correctly.
-    char tempDir[MAX_PATH] = {};
-    GetTempPathA(MAX_PATH, tempDir);
-    std::string resultFile = std::string(tempDir) + "rp_notifier_result.txt";
-
-    // Remove any stale result file from a previous run
-    DeleteFileA(resultFile.c_str());
-
+    // Build CLI: ThreatNotification.exe --file "x" --threat "y" --path "z" ...
     std::ostringstream cmd;
-    cmd << "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass"
-        << " -File \"" << scriptPath_ << "\""
-        << " -FileName \""        << info.fileName        << "\""
-        << " -ThreatName \""      << info.threatName      << "\""
-        << " -FilePath \""        << info.filePath        << "\""
-        << " -SourceUrl \""       << info.sourceUrl       << "\""
-        << " -AutoCloseSeconds "  << info.autoCloseSeconds
-        << " -ResultFile \""      << resultFile           << "\"";
+    cmd << "\"" << exePath_ << "\""
+        << " --file \""     << info.fileName        << "\""
+        << " --threat \""   << info.threatName      << "\""
+        << " --path \""     << info.filePath        << "\""
+        << " --timeout "    << info.autoCloseSeconds;
+
+    if (!info.sourceUrl.empty())
+        cmd << " --source \"" << info.sourceUrl << "\"";
+    if (!info.severity.empty())
+        cmd << " --severity " << info.severity;
+    if (!info.hash.empty())
+        cmd << " --hash \"" << info.hash << "\"";
 
     std::string cmdStr = cmd.str();
+    LOG_DEBUG("ThreatNotifier: Launching WPF: {}", cmdStr);
 
-    // No pipe handles — spawn exactly like ScanCompleteToast.ps1 so the WinForms
-    // window is not suppressed by STARTF_USESTDHANDLES stdout redirection.
     STARTUPINFOA si = {};
     si.cb          = sizeof(si);
     si.dwFlags     = STARTF_USESHOWWINDOW;
@@ -57,47 +48,56 @@ ThreatAction ThreatNotifier::notify(const ThreatNotification& info) const {
         const_cast<char*>(cmdStr.c_str()),
         nullptr, nullptr,
         FALSE,
-        CREATE_NO_WINDOW,
+        0,     // No CREATE_NO_WINDOW — WPF needs to create its own window
         nullptr, nullptr,
         &si, &pi
     );
 
     if (!ok) {
-        LOG_ERROR("ThreatNotifier: Failed to launch Notification.ps1: {}", GetLastError());
+        LOG_ERROR("ThreatNotifier: Failed to launch ThreatNotification.exe: {}", GetLastError());
         return ThreatAction::Quarantine;
     }
 
-    // Allow the PowerShell process to bring its WinForms window to the foreground.
+    // Allow the WPF window to come to foreground
     AllowSetForegroundWindow(pi.dwProcessId);
 
-    // Wait for the script to exit (max 60s — auto-close default is 10s)
-    WaitForSingleObject(pi.hProcess, 60000);
+    // Wait for the process to exit (max 120s — double the typical timeout)
+    DWORD waitResult = WaitForSingleObject(pi.hProcess, 120000);
+
+    ThreatAction result = ThreatAction::Quarantine;
+    if (waitResult == WAIT_OBJECT_0) {
+        DWORD exitCode = 0;
+        GetExitCodeProcess(pi.hProcess, &exitCode);
+        result = parseExitCode(exitCode);
+        LOG_INFO("ThreatNotifier: WPF exit code = {} → {}", exitCode,
+                 exitCode == 0 ? "QUARANTINE" :
+                 exitCode == 1 ? "IGNORE" :
+                 exitCode == 2 ? "DETAILS" :
+                 exitCode == 3 ? "DISMISSED" :
+                 exitCode == 4 ? "AUTO_QUARANTINE" : "UNKNOWN");
+    } else {
+        LOG_WARN("ThreatNotifier: WPF process timed out, defaulting to quarantine");
+    }
+
     CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
 
-    // Read the result from the temp file
-    std::string output;
-    std::ifstream rf(resultFile);
-    if (rf.is_open()) {
-        std::getline(rf, output);
-        rf.close();
-    }
-    DeleteFileA(resultFile.c_str());
-
-    // Trim trailing whitespace
-    while (!output.empty() && (output.back() == '\r' || output.back() == '\n' || output.back() == ' '))
-        output.pop_back();
-
-    LOG_INFO("ThreatNotifier: User action = '{}'", output);
-    return parseAction(output);
+    return result;
 }
 
-ThreatAction ThreatNotifier::parseAction(const std::string& output) const {
-    if (output == "QUARANTINE") return ThreatAction::Quarantine;
-    if (output == "IGNORE")     return ThreatAction::Ignore;
-    if (output == "DETAILS")    return ThreatAction::Details;
-    if (output == "DISMISSED")  return ThreatAction::Dismissed;
-    return ThreatAction::Unknown;
+// ─────────────────────────────────────────────────────────────────────────────
+// parseExitCode — map WPF exit codes to ThreatAction
+// ─────────────────────────────────────────────────────────────────────────────
+
+ThreatAction ThreatNotifier::parseExitCode(unsigned long exitCode) const {
+    switch (exitCode) {
+        case 0:  return ThreatAction::Quarantine;
+        case 1:  return ThreatAction::Ignore;
+        case 2:  return ThreatAction::Details;
+        case 3:  return ThreatAction::Dismissed;
+        case 4:  return ThreatAction::AutoQuarantine;
+        default: return ThreatAction::Unknown;
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

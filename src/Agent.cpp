@@ -366,7 +366,7 @@ bool Agent::initialize(const std::string& configPath) {
     if (usbCfg.enabled && config.getAntivirusConfig().enabled) {
         LOG_INFO("Initializing USB monitor (auto-scan on insertion)...");
         usbMonitor_ = std::make_unique<UsbMonitor>();
-        usbMonitor_->setPollIntervalMs(usbCfg.poll_interval_ms);
+        usbMonitor_->setScanDelaySeconds(usbCfg.scan_delay_seconds);
         usbMonitor_->setArrivalCallback([this](const UsbDriveInfo& drive) {
             LOG_INFO("USB inserted: {} ({}) — queuing AV scan", drive.driveLetter, drive.volumeName);
             // Trigger an immediate AV scan on the USB drive

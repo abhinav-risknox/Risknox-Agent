@@ -91,8 +91,7 @@ int runConsoleMode(const std::string& configPath) {
 
 int main(int argc, char* argv[]) {
     std::string exePath = getExePath();
-    std::string configPath = getConfigPath();
-    if (configPath.empty()) return 1;
+    std::string configPath = "";
     bool consoleMode = false;
     bool installMode = false;
     bool uninstallMode = false;
@@ -105,9 +104,9 @@ int main(int argc, char* argv[]) {
             printUsage(argv[0]);
             return 0;
         }
-    else if (arg == "--console" || arg == "-c") {
-        consoleMode = true;
-    }
+        else if (arg == "--console" || arg == "-c") {
+            consoleMode = true;
+        }
         else if (arg == "--install") {
             installMode = true;
         }
@@ -122,6 +121,11 @@ int main(int argc, char* argv[]) {
             printUsage(argv[0]);
             return 1;
         }
+    }
+
+    if (!installMode && !uninstallMode && configPath.empty()) {
+        configPath = getConfigPath();
+        if (configPath.empty()) return 1;
     }
     
     // Handle install/uninstall

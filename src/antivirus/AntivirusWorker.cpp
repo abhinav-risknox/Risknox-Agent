@@ -212,6 +212,7 @@ void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe,
                     ThreatAction action = notifier->notify(notification);
                     switch (action) {
                         case ThreatAction::Quarantine:
+                        case ThreatAction::AutoQuarantine:
                         case ThreatAction::Dismissed:
                         case ThreatAction::Unknown:
                             if (!quarantineDir.empty()) {
@@ -304,21 +305,21 @@ void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe,
 
     // Non-blocking clean-scan notification (no threats found)
     if (threats == 0) {
-        fs::path agentDir = fs::path(binDir_).parent_path();
-        fs::path toastScript = agentDir / "ScanCompleteToast.ps1";
-        if (fs::exists(toastScript)) {
+        fs::path agentDir = PathUtils::getExecutableDir();
+        fs::path notifierExe = agentDir / "ThreatNotification.exe";
+        if (fs::exists(notifierExe)) {
             std::string fileName = fs::path(path).filename().string();
-            std::string psCmd =
-                "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass"
-                " -File \"" + toastScript.string() + "\""
-                " -FileName \"" + fileName + "\"";
+            std::string cmdStr = "\"" + notifierExe.string() + "\" --mode safe"
+                                 " --file \"" + fileName + "\""
+                                 " --timeout 5";
+                                 
             STARTUPINFOA si2 = {};
-            si2.cb        = sizeof(si2);
-            si2.dwFlags   = STARTF_USESHOWWINDOW;
-            si2.wShowWindow = SW_HIDE;
+            si2.cb = sizeof(si2);
+            si2.dwFlags = STARTF_USESHOWWINDOW;
+            si2.wShowWindow = SW_SHOW;
             PROCESS_INFORMATION pi2 = {};
-            if (CreateProcessA(nullptr, const_cast<char*>(psCmd.c_str()),
-                               nullptr, nullptr, FALSE, CREATE_NO_WINDOW,
+            if (CreateProcessA(nullptr, const_cast<char*>(cmdStr.c_str()),
+                               nullptr, nullptr, FALSE, 0,
                                nullptr, nullptr, &si2, &pi2)) {
                 CloseHandle(pi2.hProcess);
                 CloseHandle(pi2.hThread);
@@ -537,15 +538,16 @@ int main() {
         quarantineDir = (PathUtils::getAgentDataDir() / "antivirus" / "quarantine").string();
     }
 
-    // Resolve Notification.ps1 next to this executable
-    std::filesystem::path scriptPath = agentDir / "Notification.ps1";
+    // Resolve notification UI (WPF exe)
+    std::filesystem::path exePath = agentDir / "ThreatNotification.exe";
     ThreatNotifier notifier;
-    if (std::filesystem::exists(scriptPath)) {
-        notifier.setScriptPath(scriptPath.string());
-        LOG_INFO("rp-antivirus: threat notifications enabled via {}", scriptPath.string());
+    bool notificationsEnabled = false;
+    if (std::filesystem::exists(exePath)) {
+        notifier.setExePath(exePath.string());
+        notificationsEnabled = true;
+        LOG_INFO("rp-antivirus: threat notifications enabled via WPF ({})", exePath.string());
     } else {
-        LOG_WARN("rp-antivirus: Notification.ps1 not found at {}, notifications disabled",
-                 scriptPath.string());
+        LOG_WARN("rp-antivirus: ThreatNotification.exe not found, notifications disabled");
     }
 
     if (action == "update_definitions") {
@@ -566,7 +568,7 @@ int main() {
         });
     } else {
         // quick_scan or full_scan — pass notifier so threats show a popup
-        ThreatNotifier* notifierPtr = std::filesystem::exists(scriptPath) ? &notifier : nullptr;
+        ThreatNotifier* notifierPtr = notificationsEnabled ? &notifier : nullptr;
         worker.runScan(path, pipe, notifierPtr, quarantineDir);
     }
 

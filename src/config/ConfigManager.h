@@ -87,7 +87,6 @@ struct AppBlockConfigData {
 
 struct UsbScanConfigData {
     bool enabled = false;
-    int poll_interval_ms = 2000;   // how often to poll for new drives
     int scan_delay_seconds = 2;    // wait after insertion before scanning
 };
 

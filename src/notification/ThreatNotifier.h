@@ -5,10 +5,11 @@
 namespace ResolutePulse {
 
 enum class ThreatAction {
-    Quarantine,
-    Ignore,
-    Details,
-    Dismissed,
+    Quarantine,    // Exit code 0
+    Ignore,        // Exit code 1
+    Details,       // Exit code 2
+    Dismissed,     // Exit code 3
+    AutoQuarantine,// Exit code 4
     Unknown
 };
 
@@ -17,13 +18,15 @@ struct ThreatNotification {
     std::string filePath;
     std::string threatName;
     std::string sourceUrl;
+    std::string severity;       // critical | high | medium | low
+    std::string hash;           // SHA256 (optional)
     int         autoCloseSeconds = 10;
 };
 
 class ThreatNotifier {
 public:
-    // Path to Notification.ps1 — set once at startup
-    void setScriptPath(const std::string& path) { scriptPath_ = path; }
+    // Path to ThreatNotification.exe — set once at startup
+    void setExePath(const std::string& path) { exePath_ = path; }
 
     // Show the notification window and return the user's action.
     // Blocks until the user clicks or the timer expires.
@@ -35,9 +38,9 @@ public:
                     const std::string& quarantineDir) const;
 
 private:
-    std::string scriptPath_;
+    std::string exePath_;   // ThreatNotification.exe
 
-    ThreatAction parseAction(const std::string& output) const;
+    ThreatAction parseExitCode(unsigned long exitCode) const;
 };
 
 } // namespace ResolutePulse
