@@ -1,41 +1,55 @@
-# ResolutePulse Detailed REST API Documentation
+# ResolutePulse REST API Reference
 
-This document provides a comprehensive technical reference for the ResolutePulse Manager REST API (`RestApi.cpp`), including exact request structures, expected parameters, and response schemas.
+This document provides a production-grade specification for the ResolutePulse Manager REST API. All requests and responses are transmitted over `application/json`.
 
 ## Base Configuration
-- **CORS**: All endpoints return `Access-Control-Allow-Origin: *` and respond 204 to `OPTIONS`.
-- **Authentication**: Unless noted, all requests require a valid Bearer token in the header:
-  `Authorization: Bearer <token>`
-- **Content-Type**: Must be `application/json` for requests. Responses are `application/json`.
+- **Base URL:** `http(s)://<manager_ip>:<port>`
+- **CORS:** Global `Access-Control-Allow-Origin: *` is enforced. Preflight `OPTIONS` requests are handled automatically with a `204 No Content`.
+- **Authentication:** Most endpoints require a valid Bearer token.
+  ```http
+  Authorization: Bearer <token>
+  ```
+- **Error Handling:** Errors return a `400 Bad Request`, `401 Unauthorized`, or `404 Not Found` with a standard JSON structure:
+  ```json
+  { "error": "Descriptive error message" }
+  ```
 
 ---
 
 ## Authentication & Health
 
 ### `POST /api/auth/login`
-Authenticates an operator and returns a token.
-- **Auth Required**: No
-- **Request Body**:
+**Description:** Authenticates an operator and issues a session token.
+**Auth Required:** No
+
+#### Request
+- **Body (`application/json`):**
   ```json
   {
     "username": "admin",
-    "password": "password"
+    "password": "SecurePassword123!"
   }
   ```
-- **Response** (200 OK):
+
+#### Response
+- **Status `200 OK`:**
   ```json
   {
-    "token": "4f1b7a2d...",
+    "token": "4f1b7a2de98f7...",
     "username": "admin",
     "expires_in": 28800
   }
   ```
-- **Errors**: `401 Unauthorized` for invalid credentials.
 
 ### `GET /api/health`
-Check system status without authentication.
-- **Auth Required**: No
-- **Response** (200 OK):
+**Description:** Returns the system health status, database connectivity, and server state.
+**Auth Required:** No
+
+#### Request
+*(No parameters or body)*
+
+#### Response
+- **Status `200 OK`:**
   ```json
   {
     "status": "healthy",
@@ -50,10 +64,17 @@ Check system status without authentication.
 ## Agent Registry & Status
 
 ### `GET /api/agents`
-List all registered agents and their current status.
-- **Response** (200 OK):
+**Description:** Retrieves a list of all registered endpoint agents.
+**Auth Required:** Yes
+
+#### Request
+*(No parameters or body)*
+
+#### Response
+- **Status `200 OK`:**
   ```json
   {
+    "count": 1,
     "agents": [
       {
         "agent_id": "DESKTOP-ABC1234",
@@ -67,14 +88,20 @@ List all registered agents and their current status.
         "last_seen_at": "2026-06-16T13:30:00Z",
         "online": true
       }
-    ],
-    "count": 1
+    ]
   }
   ```
 
 ### `GET /api/agents/{agent_id}`
-Get detailed information about a specific agent, including its active license.
-- **Response** (200 OK):
+**Description:** Retrieves detailed information about a specific agent, including its active license.
+**Auth Required:** Yes
+
+#### Request
+- **Path Parameters:**
+  - `agent_id` (string): Unique identifier for the agent.
+
+#### Response
+- **Status `200 OK`:**
   ```json
   {
     "agent_id": "DESKTOP-ABC1234",
@@ -85,8 +112,8 @@ Get detailed information about a specific agent, including its active license.
     "status": "active",
     "cert_serial": "01:23:45:67",
     "ip_address": "192.168.1.50",
-    "registered_at": "...",
-    "last_seen_at": "...",
+    "registered_at": "2026-06-15T10:00:00Z",
+    "last_seen_at": "2026-06-16T13:30:00Z",
     "online": true,
     "license": {
       "type": "Enterprise",
@@ -97,8 +124,15 @@ Get detailed information about a specific agent, including its active license.
   ```
 
 ### `GET /api/agents/{agent_id}/status`
-Retrieve the latest 20 health/status reports pushed by the agent.
-- **Response** (200 OK):
+**Description:** Retrieves the latest active status reports (e.g., `module_status`) pushed by the agent.
+**Auth Required:** Yes
+
+#### Request
+- **Path Parameters:**
+  - `agent_id` (string): Unique identifier for the agent.
+
+#### Response
+- **Status `200 OK`:**
   ```json
   {
     "agent_id": "DESKTOP-ABC1234",
@@ -121,8 +155,13 @@ Retrieve the latest 20 health/status reports pushed by the agent.
 ## Core Command Subsystem
 
 ### `POST /api/agents/{agent_id}/module-command`
-Manually dispatch a raw module command to the agent.
-- **Request Body**:
+**Description:** Dispatches a raw, asynchronous module command to the agent.
+**Auth Required:** Yes
+
+#### Request
+- **Path Parameters:**
+  - `agent_id` (string): Unique identifier for the agent.
+- **Body (`application/json`):**
   ```json
   {
     "verb": "diagnostics",
@@ -131,7 +170,9 @@ Manually dispatch a raw module command to the agent.
     }
   }
   ```
-- **Response** (200 OK):
+
+#### Response
+- **Status `200 OK`:**
   ```json
   {
     "command_id": "DESKTOP-ABC1234-diagnostics-1686900000-abcd1234",
@@ -143,8 +184,15 @@ Manually dispatch a raw module command to the agent.
   ```
 
 ### `GET /api/commands/{command_id}`
-Unified lookup for polling the result of any dispatched command (module or policy).
-- **Response** (200 OK) for a completed command:
+**Description:** Polling endpoint to retrieve the execution status and return payload of any command (module, policy, or endpoint management).
+**Auth Required:** Yes
+
+#### Request
+- **Path Parameters:**
+  - `command_id` (string): The command identifier returned when the command was dispatched.
+
+#### Response
+- **Status `200 OK`:**
   ```json
   {
     "type": "module",
@@ -155,8 +203,36 @@ Unified lookup for polling the result of any dispatched command (module or polic
     "params": {},
     "status": "acked",
     "ack_status": "success",
-    "result_payload": { ... json payload from agent ... },
+    "result_payload": { "architecture": "x64", "build": "19045" },
     "created_at": "2026-06-16T13:30:00Z"
+  }
+  ```
+
+### `GET /api/audit-log`
+**Description:** Retrieves the centralized audit log, mapping dispatched commands to the operators who initiated them.
+**Auth Required:** Yes
+
+#### Request
+- **Query Parameters:**
+  - `agent_id` (string, optional): Filter by agent.
+  - `limit` (integer, optional): Pagination limit (default: 100).
+  - `offset` (integer, optional): Pagination offset (default: 0).
+
+#### Response
+- **Status `200 OK`:**
+  ```json
+  {
+    "count": 1,
+    "entries": [
+      {
+         "id": 1,
+         "agent_id": "DESKTOP-ABC1234",
+         "command_id": "...",
+         "operator_name": "admin",
+         "verb": "diagnostics",
+         "created_at": "2026-06-16T13:30:00Z"
+      }
+    ]
   }
   ```
 
@@ -164,13 +240,21 @@ Unified lookup for polling the result of any dispatched command (module or polic
 
 ## Native Endpoint Management
 
-These endpoints wrap `handleEndpointCommand`. They translate standard REST routes into asynchronous module commands automatically.
+These routes provide native REST abstractions for managing operating system endpoints. Under the hood, they automatically queue an asynchronous module command. The response from all of these endpoints is a `command_id` indicating the job is queued. Use `GET /api/commands/{command_id}` to retrieve the actual result payload once the agent finishes execution.
 
 ### System Inventory
-#### `GET /api/agents/{agent_id}/endpoint/inventory`
-- **Translates to**: verb `inventory_collect`
-- **Request Body**: None
-- **Result Payload Structure**:
+
+### `GET /api/agents/{agent_id}/endpoint/inventory`
+**Description:** Dispatches an `inventory_collect` command to perform a deep hardware and software scan.
+**Auth Required:** Yes
+
+#### Request
+- **Path Parameters:**
+  - `agent_id` (string): Target agent.
+
+#### Response
+- **Status `200 OK`:** Returns standard queued command response. 
+- **Eventual `result_payload` (from `GET /api/commands/{command_id}`):**
   ```json
   {
     "architecture": "x64",
@@ -178,18 +262,44 @@ These endpoints wrap `handleEndpointCommand`. They translate standard REST route
     "version": "10.0",
     "num_processors": "16",
     "ip_addresses": [ { "adapter": "Ethernet", "ip": "192.168.1.50", "version": "IPv4" } ],
-    "logical_disks": [ { "drive": "C:", "type": "Local", "total_bytes": 100000, "free_bytes": 50000 } ]
+    "logical_disks": [ { "drive": "C:", "type": "Local", "total_bytes": 10000000, "free_bytes": 5000000 } ]
   }
   ```
 
 ### User Management
-#### `GET /api/agents/{agent_id}/endpoint/users`
-- **Translates to**: verb `user_list`
-- **Result Payload Structure**: `[ { "username": "admin", "full_name": "Administrator", "is_enabled": true, "is_locked": false, "password_required": true, "password_expires": false } ]`
 
-#### `POST /api/agents/{agent_id}/endpoint/users`
-- **Translates to**: verb `user_create`
-- **Request Body**:
+### `GET /api/agents/{agent_id}/endpoint/users`
+**Description:** Dispatches a `user_list` command to retrieve all local OS users.
+**Auth Required:** Yes
+
+#### Request
+- **Path Parameters:**
+  - `agent_id` (string): Target agent.
+
+#### Response
+- **Status `200 OK`:** Returns standard queued command response. 
+- **Eventual `result_payload`:**
+  ```json
+  [ 
+    { 
+      "username": "admin", 
+      "full_name": "Administrator", 
+      "is_enabled": true, 
+      "is_locked": false, 
+      "password_required": true, 
+      "password_expires": false 
+    } 
+  ]
+  ```
+
+### `POST /api/agents/{agent_id}/endpoint/users`
+**Description:** Dispatches a `user_create` command to create a new local OS user.
+**Auth Required:** Yes
+
+#### Request
+- **Path Parameters:**
+  - `agent_id` (string): Target agent.
+- **Body (`application/json`):**
   ```json
   {
     "username": "newuser",
@@ -198,55 +308,160 @@ These endpoints wrap `handleEndpointCommand`. They translate standard REST route
   }
   ```
 
-#### `DELETE /api/agents/{agent_id}/endpoint/users/{username}`
-- **Translates to**: verb `user_delete`
-- **Request Body**: None (Username passed in URL)
+#### Response
+- **Status `200 OK`:** Returns standard queued command response. 
 
-#### `POST /api/agents/{agent_id}/endpoint/users/{username}/enable`
-- **Translates to**: verb `user_enable`
+### `DELETE /api/agents/{agent_id}/endpoint/users/{username}`
+**Description:** Dispatches a `user_delete` command to remove a local OS user.
+**Auth Required:** Yes
 
-#### `POST /api/agents/{agent_id}/endpoint/users/{username}/disable`
-- **Translates to**: verb `user_disable`
+#### Request
+- **Path Parameters:**
+  - `agent_id` (string): Target agent.
+  - `username` (string): Target user account name.
 
-#### `POST /api/agents/{agent_id}/endpoint/users/{username}/password`
-- **Translates to**: verb `user_password_change`
-- **Request Body**:
+#### Response
+- **Status `200 OK`:** Returns standard queued command response. 
+
+### `POST /api/agents/{agent_id}/endpoint/users/{username}/enable`
+**Description:** Dispatches a `user_enable` command to re-enable a suspended local user.
+**Auth Required:** Yes
+
+#### Request
+- **Path Parameters:**
+  - `agent_id` (string): Target agent.
+  - `username` (string): Target user account name.
+
+#### Response
+- **Status `200 OK`:** Returns standard queued command response. 
+
+### `POST /api/agents/{agent_id}/endpoint/users/{username}/disable`
+**Description:** Dispatches a `user_disable` command to suspend a local user.
+**Auth Required:** Yes
+
+#### Request
+- **Path Parameters:**
+  - `agent_id` (string): Target agent.
+  - `username` (string): Target user account name.
+
+#### Response
+- **Status `200 OK`:** Returns standard queued command response. 
+
+### `POST /api/agents/{agent_id}/endpoint/users/{username}/password`
+**Description:** Dispatches a `user_password_change` command to forcefully change a local user's password.
+**Auth Required:** Yes
+
+#### Request
+- **Path Parameters:**
+  - `agent_id` (string): Target agent.
+  - `username` (string): Target user account name.
+- **Body (`application/json`):**
   ```json
   {
     "password": "NewSecurePassword123!"
   }
   ```
 
+#### Response
+- **Status `200 OK`:** Returns standard queued command response. 
+
 ### Group Management
-#### `GET /api/agents/{agent_id}/endpoint/groups`
-- **Translates to**: verb `group_list`
-- **Result Payload Structure**: `[ { "groupname": "Administrators" }, { "groupname": "Users" } ]`
 
-#### `POST /api/agents/{agent_id}/endpoint/groups/{groupname}/users/{username}`
-- **Translates to**: verb `group_add_user`
-- **Request Body**: None (Both variables extracted from URL)
+### `GET /api/agents/{agent_id}/endpoint/groups`
+**Description:** Dispatches a `group_list` command to retrieve all local OS user groups.
+**Auth Required:** Yes
 
-#### `DELETE /api/agents/{agent_id}/endpoint/groups/{groupname}/users/{username}`
-- **Translates to**: verb `group_remove_user`
-- **Request Body**: None (Both variables extracted from URL)
+#### Request
+- **Path Parameters:**
+  - `agent_id` (string): Target agent.
+
+#### Response
+- **Status `200 OK`:** Returns standard queued command response. 
+- **Eventual `result_payload`:**
+  ```json
+  [ { "groupname": "Administrators" }, { "groupname": "Users" } ]
+  ```
+
+### `POST /api/agents/{agent_id}/endpoint/groups/{groupname}/users/{username}`
+**Description:** Dispatches a `group_add_user` command to add a local user to a local group.
+**Auth Required:** Yes
+
+#### Request
+- **Path Parameters:**
+  - `agent_id` (string): Target agent.
+  - `groupname` (string): Target group name.
+  - `username` (string): Target user account name.
+
+#### Response
+- **Status `200 OK`:** Returns standard queued command response. 
+
+### `DELETE /api/agents/{agent_id}/endpoint/groups/{groupname}/users/{username}`
+**Description:** Dispatches a `group_remove_user` command to remove a local user from a local group.
+**Auth Required:** Yes
+
+#### Request
+- **Path Parameters:**
+  - `agent_id` (string): Target agent.
+  - `groupname` (string): Target group name.
+  - `username` (string): Target user account name.
+
+#### Response
+- **Status `200 OK`:** Returns standard queued command response. 
 
 ### Session Management
-#### `GET /api/agents/{agent_id}/endpoint/sessions`
-- **Translates to**: verb `session_list`
-- **Result Payload Structure**: `[ { "session_id": 1, "station_name": "Console", "username": "admin", "state": "Active" } ]`
 
-#### `POST /api/agents/{agent_id}/endpoint/sessions/{session_id}/logoff`
-- **Translates to**: verb `session_logoff`
-- **Request Body**: None (Session ID extracted from URL as integer)
+### `GET /api/agents/{agent_id}/endpoint/sessions`
+**Description:** Dispatches a `session_list` command to query active remote and local user sessions on the OS.
+**Auth Required:** Yes
 
-#### `POST /api/agents/{agent_id}/endpoint/sessions/{session_id}/disconnect`
-- **Translates to**: verb `session_disconnect`
-- **Request Body**: None (Session ID extracted from URL as integer)
+#### Request
+- **Path Parameters:**
+  - `agent_id` (string): Target agent.
 
-### Password Policy
-#### `GET /api/agents/{agent_id}/endpoint/password-policy`
-- **Translates to**: verb `password_policy_get`
-- **Result Payload Structure**:
+#### Response
+- **Status `200 OK`:** Returns standard queued command response. 
+- **Eventual `result_payload`:**
+  ```json
+  [ { "session_id": 1, "station_name": "Console", "username": "admin", "state": "Active" } ]
+  ```
+
+### `POST /api/agents/{agent_id}/endpoint/sessions/{session_id}/logoff`
+**Description:** Dispatches a `session_logoff` command to force close a user's session.
+**Auth Required:** Yes
+
+#### Request
+- **Path Parameters:**
+  - `agent_id` (string): Target agent.
+  - `session_id` (integer): ID of the session to terminate.
+
+#### Response
+- **Status `200 OK`:** Returns standard queued command response. 
+
+### `POST /api/agents/{agent_id}/endpoint/sessions/{session_id}/disconnect`
+**Description:** Dispatches a `session_disconnect` command to safely disconnect an RDP session without closing it.
+**Auth Required:** Yes
+
+#### Request
+- **Path Parameters:**
+  - `agent_id` (string): Target agent.
+  - `session_id` (integer): ID of the session to disconnect.
+
+#### Response
+- **Status `200 OK`:** Returns standard queued command response. 
+
+### OS Password Policy
+
+### `GET /api/agents/{agent_id}/endpoint/password-policy`
+**Description:** Dispatches a `password_policy_get` command to fetch the OS-level local password policy requirements.
+**Auth Required:** Yes
+
+#### Request
+- **Path Parameters:**
+  - `agent_id` (string): Target agent.
+
+#### Response
+- **Status `200 OK`:** Returns standard queued command response. 
+- **Eventual `result_payload`:**
   ```json
   {
     "min_length": 8,
@@ -256,9 +471,15 @@ These endpoints wrap `handleEndpointCommand`. They translate standard REST route
   }
   ```
 
-#### `POST /api/agents/{agent_id}/endpoint/password-policy`
-- **Translates to**: verb `password_policy_set`
-- **Request Body** (All fields optional; pass `-1` or omit to keep current value):
+### `POST /api/agents/{agent_id}/endpoint/password-policy`
+**Description:** Dispatches a `password_policy_set` command to modify the OS-level local password policy.
+**Auth Required:** Yes
+
+#### Request
+- **Path Parameters:**
+  - `agent_id` (string): Target agent.
+- **Body (`application/json`):**
+  *(All fields are optional; omitting a field or passing `-1` retains the existing value)*
   ```json
   {
     "min_length": 12,
@@ -267,3 +488,6 @@ These endpoints wrap `handleEndpointCommand`. They translate standard REST route
     "history_length": 10
   }
   ```
+
+#### Response
+- **Status `200 OK`:** Returns standard queued command response. 
