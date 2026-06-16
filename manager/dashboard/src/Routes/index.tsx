@@ -1,7 +1,7 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { authProtectedRoutes, publicRoutes } from './allRoutes';
-import { VerticalLayout } from '../Layouts/VerticalLayout';
+import VerticalLayout from '../Layouts/index';
 
 const AuthProtected: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const token = localStorage.getItem('rn_token');

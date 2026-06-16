@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
-import { Globe, Plus, Trash2, ShieldAlert, RefreshCw } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { endpoints } from '../../api/endpoints';
+import { Card, CardBody, CardHeader, Input, Button, InputGroup, Form } from 'reactstrap';
 
 interface WebPolicyCardProps {
   agentId: string;
-  blockedUrls: any[];
+  blockedUrls: string[];
   online: boolean;
 }
 
 export const WebPolicyCard: React.FC<WebPolicyCardProps> = ({ agentId, blockedUrls, online }) => {
-  const [newUrl, setNewUrl] = useState('');
+  const [url, setUrl] = useState('');
   const queryClient = useQueryClient();
 
   const policyMutation = useMutation({
@@ -18,78 +18,105 @@ export const WebPolicyCard: React.FC<WebPolicyCardProps> = ({ agentId, blockedUr
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agent-history', agentId] });
       queryClient.invalidateQueries({ queryKey: ['agent-status', agentId] });
-      setNewUrl('');
+      setUrl('');
     }
   });
 
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newUrl) return;
-    policyMutation.mutate({ action: 'block', url: newUrl });
+    if (!url) return;
+    policyMutation.mutate({ action: 'block', url });
   };
 
-  const handleRemove = (url: string) => {
-    policyMutation.mutate({ action: 'unblock', url });
+  const handleRemove = (urlToRemove: string) => {
+    policyMutation.mutate({ action: 'unblock', url: urlToRemove });
   };
 
   return (
-    <div className="bg-rn-black-card border border-rn-white/5 rounded-3xl p-6 h-full flex flex-col">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500">
-            <Globe className="w-5 h-5" />
+    <Card className="h-100 mb-0">
+      <CardHeader className="d-flex align-items-center border-0 pt-4 pb-0 px-4">
+        <div className="d-flex align-items-center gap-3">
+          <div className="avatar-sm flex-shrink-0">
+            <div className="avatar-title bg-info-subtle text-info rounded fs-18">
+              <i className="ri-global-line fs-20"></i>
+            </div>
           </div>
           <div>
-            <h3 className="text-lg font-display font-bold text-rn-white">Web Blocking</h3>
-            <p className="text-xs text-rn-white/40">DNS sinkholing for unauthorized domains</p>
+            <h6 className="fs-15 fw-bold mb-1">Web Traffic Blocking</h6>
+            <p className="text-muted fs-12 mb-0">DNS and Proxy level URL filtering</p>
           </div>
         </div>
-      </div>
+      </CardHeader>
+      
+      <CardBody className="p-4 d-flex flex-column">
+        <Form onSubmit={handleAdd} className="mb-4">
+          <InputGroup>
+            <Input 
+              type="text" 
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="Enter domain (e.g. facebook.com)"
+              disabled={!online || policyMutation.isPending}
+              required
+            />
+            <Button 
+              color="info" 
+              type="submit"
+              disabled={!online || policyMutation.isPending || !url}
+              className="d-flex align-items-center justify-content-center text-white"
+              style={{ width: '46px' }}
+            >
+              {policyMutation.isPending ? <i className="ri-refresh-line icon-spin fs-16"></i> : <i className="ri-add-line fs-16"></i>}
+            </Button>
+          </InputGroup>
+        </Form>
 
-      <form onSubmit={handleAdd} className="flex gap-2 mb-6">
-        <input 
-          type="text" 
-          value={newUrl}
-          onChange={(e) => setNewUrl(e.target.value)}
-          placeholder="Enter domain (e.g. facebook.com)"
-          className="flex-1 bg-rn-black border border-rn-white/10 rounded-xl py-2 px-4 text-sm focus:outline-none focus:ring-1 focus:ring-rn-orange/50 transition-all"
-          disabled={!online || policyMutation.isPending}
-        />
-        <button 
-          type="submit"
-          disabled={!online || policyMutation.isPending || !newUrl}
-          className="p-2.5 rounded-xl bg-rn-orange hover:bg-rn-orange-dim text-white transition-all disabled:opacity-50"
-        >
-          {policyMutation.isPending ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
-        </button>
-      </form>
-
-      <div className="flex-1 overflow-y-auto space-y-2 min-h-[200px]">
-        {blockedUrls.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-rn-white/10 italic text-sm">
-            No domains blocked
-          </div>
-        ) : (
-          blockedUrls.map((item, idx) => (
-            <div key={idx} className="flex items-center justify-between p-3 rounded-2xl bg-rn-white/[0.02] border border-rn-white/5 group hover:border-rn-white/10 transition-all">
-              <div className="flex items-center gap-3">
-                <ShieldAlert className="w-4 h-4 text-rn-white/20 group-hover:text-rn-orange/60 transition-colors" />
-                <div>
-                  <p className="text-sm font-bold text-rn-white/80">{item.url}</p>
-                  <p className="text-[10px] text-rn-white/20 uppercase tracking-widest font-bold">Source: {item.source}</p>
-                </div>
-              </div>
-              <button 
-                onClick={() => handleRemove(item.url)}
-                disabled={!online || policyMutation.isPending}
-                className="p-2 text-rn-white/20 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all opacity-0 group-hover:opacity-100 disabled:opacity-0"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+        <div className="flex-grow-1 overflow-auto pe-2" style={{ minHeight: '200px' }}>
+          {(!blockedUrls || blockedUrls.length === 0) ? (
+            <div className="h-100 d-flex flex-column items-center justify-content-center text-muted fst-italic fs-13 text-center">
+              No URLs currently blocked
             </div>
-          ))
-        )}
-      </div>
-    </div>
+          ) : (
+            <div className="d-flex flex-column gap-2">
+              {blockedUrls.map((item: any, idx: number) => {
+                const itemUrl = typeof item === 'string' ? item : item.url;
+                const status = typeof item === 'object' ? item.status : null;
+                const source = typeof item === 'object' ? item.source : null;
+                
+                return (
+                  <div key={idx} className="d-flex align-items-center justify-content-between p-3 border rounded bg-light hover-shadow transition-all">
+                    <div className="d-flex align-items-center gap-3">
+                      <div className="avatar-xs flex-shrink-0">
+                        <div className="avatar-title bg-white border text-secondary rounded">
+                          <i className="ri-link fs-14"></i>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="fs-13 fw-semibold text-body mb-0 font-monospace">{itemUrl}</p>
+                        {(status || source) && (
+                          <div className="d-flex align-items-center gap-2 mt-1">
+                            {status && <span className={`badge ${status === 'active' ? 'bg-danger-subtle text-danger' : 'bg-warning-subtle text-warning'} fs-10 tracking-widest text-uppercase`}>{status}</span>}
+                            {source && <span className="text-muted fs-11 font-monospace">Source: {source}</span>}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <Button 
+                      color="ghost-danger" 
+                      size="sm"
+                      className="btn-icon"
+                      onClick={() => handleRemove(itemUrl)}
+                      disabled={!online || policyMutation.isPending}
+                    >
+                      <i className="ri-delete-bin-line fs-16"></i>
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </CardBody>
+    </Card>
   );
 };

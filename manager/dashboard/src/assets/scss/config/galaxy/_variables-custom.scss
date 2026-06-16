@@ -1,0 +1,161 @@
+//
+// custom-variables
+//
+
+// Vertical menu
+$vertical-menu-width: 250px;
+$vertical-menu-width-md: 180px;
+$vertical-menu-width-sm: 70px;
+
+$vertical-menu-z-index: 1002;
+$vertical-menu-item-font-size: 0.9375rem;
+$vertical-menu-item-font-family: $font-family-secondary;
+$vertical-menu-sub-item-font-family: $font-family-primary;
+$vertical-menu-item-padding-x: 1.5rem;
+$vertical-menu-item-padding-y: 0.625rem;
+$vertical-menu-sub-item-font-size: 0.813rem;
+$vertical-menu-item-icon-width: 1.75rem;
+$vertical-menu-sub-item-padding-x: 1.5rem;
+$vertical-menu-sub-item-padding-y: 0.55rem;
+
+// Light Menu
+$vertical-menu-bg: $white;
+$vertical-menu-border: $border-color;
+$vertical-menu-item-color: #6d7080;
+$vertical-menu-item-bg: rgba($primary, .15);
+$vertical-menu-item-hover-color: $primary;
+$vertical-menu-item-active-color: $primary;
+$vertical-menu-item-active-bg: rgba($primary, .15);
+$vertical-menu-sub-item-color: #7c7f90;
+$vertical-menu-sub-item-hover-color: $primary;
+$vertical-menu-sub-item-active-color: $primary;
+$vertical-menu-title-color: #919da9;
+$vertical-menu-box-shadow: 0 2px 4px rgba(15, 34, 58, 0.12);
+$vertical-menu-dropdown-box-shadow: 0 2px 4px rgba(15, 34, 58, 0.12);
+
+//sidebar dark - PURE BLACK WITH ORANGE ACCENTS ⬛
+$dark-vertical-menu-bg: #1a1d29; // ✅ Pure black
+$dark-vertical-menu-border: #1a1d29; // ✅ Subtle border
+$dark-vertical-menu-item-color: #e0e0e0; // ✅ Light text
+$dark-vertical-menu-item-bg: rgba(#FF5B00, .10); // ✅ Subtle orange tint
+$dark-vertical-menu-item-hover-color: #FF5B00; // ✅ Orange on hover
+$dark-vertical-menu-item-active-color: #FF5B00; // ✅ Orange when active
+$dark-vertical-menu-item-active-bg: rgba(#FF5B00, .18); // ✅ Brighter orange bg
+$dark-vertical-menu-sub-item-color: #b0b0b0; // ✅ Muted text
+$dark-vertical-menu-sub-item-hover-color: #FF5B00; // ✅ Orange submenu hover
+$dark-vertical-menu-sub-item-active-color: #FF5B00; // ✅ Orange submenu active
+$dark-vertical-menu-title-color: #808080; // ✅ Section titles
+$dark-vertical-menu-box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+$dark-vertical-menu-dropdown-box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+$dark-twocolumn-menu-iconview-bg: #1a1a1a; // ✅ Dark icon view
+
+//sidebar gradient - ORANGE GRADIENTS FOR FUTURE USE
+$vertical-menu-item-color-gradient: rgba($white, .85);
+$vertical-menu-item-bg-gradient: rgba(#FF5B00, .12);
+$vertical-menu-item-hover-color-gradient: #FF5B00;
+$vertical-menu-item-active-color-gradient: #FF5B00;
+$vertical-menu-item-active-bg-gradient: rgba(#FF5B00, .20);
+$vertical-menu-sub-item-color-gradient: rgba($white, .75);
+$vertical-menu-sub-item-hover-color-gradient: #FF5B00;
+$vertical-menu-sub-item-active-color-gradient: #FF5B00;
+$vertical-menu-title-color-gradient: rgba($white, .65);
+$vertical-menu-box-shadow-gradient: 0 2px 4px rgba(0, 0, 0, 0.15);
+$vertical-menu-dropdown-box-shadow-gradient: 0 2px 4px rgba(0, 0, 0, 0.15);
+
+//gradient one - ORANGE TO BLACK
+$vertical-menu-bg-gradient: linear-gradient(135deg, #FF5B00 0%, #0a0a0a 100%);
+$vertical-menu-border-gradient: #0a0a0a;
+$twocolumn-menu-iconview-bg-gradient: #FF5B00;
+
+//gradient-2 - WARM ORANGE VARIANT
+$vertical-menu-bg-gradient-2: linear-gradient(135deg, lighten(#FF5B00, 10%) 0%, darken(#FF5B00, 15%) 100%);
+$vertical-menu-border-gradient-2: darken(#FF5B00, 15%);
+$twocolumn-menu-iconview-bg-gradient-2: lighten(#FF5B00, 10%);
+
+//gradient-3 - ORANGE TO DARK
+$vertical-menu-bg-gradient-3: linear-gradient(135deg, #FF5B00 0%, #1a1a1a 100%);
+$vertical-menu-border-gradient-3: #1a1a1a;
+$twocolumn-menu-iconview-bg-gradient-3: #FF5B00;
+
+//gradient-4 - DARK TO ORANGE
+$vertical-menu-bg-gradient-4: linear-gradient(135deg, #1a1a1a 0%, #FF5B00 100%);
+$vertical-menu-border-gradient-4: #FF5B00;
+$twocolumn-menu-iconview-bg-gradient-4: #1a1a1a;
+
+// Topbar - (Default Light)
+$header-height: 70px;
+$header-bg: transparent;
+$header-border: $border-color;
+$header-item-color: $gray-700;
+$header-item-bg: rgba($primary, .12);
+$header-item-sub-color: #878a99;
+$topbar-user-bg: #f3f3f9;
+$topbar-search-bg: #f3f3f9;
+$topbar-search-color: #495057;
+
+//page title 
+$page-title-box-shadow: 0 1px 2px rgba(56, 65, 74, 0.15);
+$page-title-border: none;
+
+// Topbar - dark - ORANGE THEME
+$dark-header-bg: #FF5B00;
+$dark-header-border: #FF5B00;
+$dark-header-item-color: rgba($white, .95);
+$dark-header-item-bg: lighten(#FF5B00, 8%);
+$dark-header-item-sub-color: rgba($white, .75);
+$dark-topbar-user-bg: darken(#FF5B00, 10%);
+$dark-topbar-search-bg: rgba($white, .10);
+$dark-topbar-search-color: $white;
+
+// Horizontal Menu
+$horizontal-menu-box-shadow: 0 2px 4px rgba(15, 34, 58, 0.12);
+$horizontal-menu-dropdown-box-shadow: 0 0px 5px rgba(15, 34, 58, 0.15);
+$horizontal-menu-dropdown-min-width: 12rem;
+$horizontal-menu-item-padding-x: 1.5rem;
+$horizontal-menu-item-padding-y: 0.75rem;
+$topnav-bg: $white;
+$topnav-item-color: darken($gray-600, 10%);
+$topnav-item-active-color: $primary;
+
+// Two Column Menu (Default Light)
+$twocolumn-menu-iconview-width: 70px;
+$twocolumn-menu-width: 220px;
+$twocolumn-menu-box-shadow: 0 2px 4px rgba(15, 34, 58, 0.12);
+$twocolumn-menu-z-index: 1002;
+$twocolumn-menu-iconview-bg: $white;
+
+//semibox layout
+$semibox-width: 110px;
+
+// Brand 
+$navbar-brand-box-width: 240px;
+
+// Boxed layout width
+$boxed-layout-width: 1300px;
+$boxed-body-bg: darken($body-bg, 4%);
+
+// Footer
+$footer-height: 60px;
+$footer-bg: $white;
+$footer-color: #98a6ad;
+
+// Chat
+$chat-primary-bg: var(--#{$prefix}light);
+$chat-secondary-bg: rgba(var(--#{$prefix}primary-rgb), 0.15);
+$chat-secondary-color: var(--#{$prefix}primary);
+
+// Timeline
+$timeline-color: var(--#{$prefix}secondary-bg);
+
+//auth pages
+$auth-bg-cover: linear-gradient(-45deg, $primary 50%, $success);
+
+$input-bg-custom: $body-secondary-bg;
+$input-border-custom: $border-color-translucent;
+
+//galaxy demos
+$card-bg-fill: #12141a;
+//body-images
+$body-bg-image-1: none ;
+$body-bg-image-2: none ;
+$body-bg-image-3: none ;

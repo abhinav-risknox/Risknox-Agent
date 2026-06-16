@@ -1,0 +1,197 @@
+$body-bg-dark: #12141a; // Pure dark background
+
+// scss-docs-start sass-dark-mode-vars
+// scss-docs-start theme-text-dark-variables
+$primary-text-emphasis-dark: tint-color($primary, 20%);
+$secondary-text-emphasis-dark: tint-color($secondary, 20%);
+$success-text-emphasis-dark: tint-color($success, 20%);
+$info-text-emphasis-dark: tint-color($info, 20%);
+$warning-text-emphasis-dark: tint-color($warning, 20%);
+$danger-text-emphasis-dark: tint-color($danger, 20%);
+$light-text-emphasis-dark: tint-color($body-bg-dark, 25%);
+$dark-text-emphasis-dark: tint-color($body-bg-dark, 30%);
+// scss-docs-end theme-text-dark-variables
+
+// scss-docs-start theme-bg-subtle-dark-variables
+$primary-bg-subtle-dark: rgba(#FF5B00, 0.15); // ✅ Blaze Orange tint
+$secondary-bg-subtle-dark: rgba(#FFFD98, 0.15); // ✅ Lime Cream tint
+$success-bg-subtle-dark: rgba($success, 0.15);
+$info-bg-subtle-dark: rgba($info, 0.15);
+$warning-bg-subtle-dark: rgba(#FFFD98, 0.15); // ✅ Lime Cream
+$danger-bg-subtle-dark: rgba($danger, 0.15);
+$light-bg-subtle-dark: rgba(#EAEAEB, 0.18); // ✅ Platinum tint
+$dark-bg-subtle-dark: tint-color($body-bg-dark, 10%);
+// scss-docs-end theme-bg-subtle-dark-variables
+
+// scss-docs-start theme-border-subtle-dark-variables
+$primary-border-subtle-dark: shade-color(#FF5B00, 35%); // ✅ Blaze Orange
+$secondary-border-subtle-dark: shade-color(#FFFD98, 50%); // ✅ Lime Cream
+$success-border-subtle-dark: shade-color($success, 50%);
+$info-border-subtle-dark: shade-color($info, 50%);
+$warning-border-subtle-dark: shade-color(#FFFD98, 50%); // ✅ Lime Cream
+$danger-border-subtle-dark: shade-color($danger, 50%);
+$light-border-subtle-dark: tint-color($body-bg-dark, 12%);
+$dark-border-subtle-dark: tint-color($body-bg-dark, 15%);
+// scss-docs-end theme-border-subtle-dark-variables
+
+// ✅ NEUTRAL COLORS FOR CLEAN DARK THEME
+$body-color-dark: #e0e0e0; // Light neutral text
+$body-secondary-color-dark: #a0a0a0; // Muted neutral text
+$body-secondary-bg-dark: #12141a; // Dark cards/secondary bg
+$body-tertiary-color-dark: #b0b0b0; // Tertiary text
+$body-tertiary-bg-dark: #1e2125; // Tertiary background (slightly lighter)
+$body-emphasis-color-dark: #f0f0f0; // Bright white
+$border-color-dark: #2a2a2a; // Neutral borders
+$border-color-translucent-dark: rgba(#FF5B00, 0.15); // ✅ Orange tint borders
+$headings-color-dark: #f0f0f0; // Bright headings
+$link-color-dark: #FF5B00; // ✅ Blaze Orange links
+$link-hover-color-dark: #FF8E4D; // ✅ Lighter orange on hover
+$code-color-dark: $code-color;
+
+//custom only default themes colors
+$light-dark: #12141a;
+$dark-color: tint-color($body-bg-dark, 10%);
+
+$dropdown-bg-dark: #12141a;
+$dropdown-link-color-dark: #b0b0b0;
+$dropdown-link-hover-color-dark: #d0d0d0;
+$dropdown-link-hover-bg-dark: #1e2125;
+$dropdown-border-width-dark: 1px;
+$dropdown-link-active-color-dark: #FF5B00; // ✅ Blaze Orange active
+$dropdown-link-active-bg-dark: rgba(#FF5B00, 0.1); // ✅ Orange tint
+
+$input-bg-custom-dark: #1e2125; // ✅ Slightly lighter than body for contrast
+$input-border-custom-dark: #32383e; // ✅ Visible border
+
+//
+// Forms
+//
+
+$form-select-indicator-color-dark: #e0e0e0;
+$form-select-indicator-dark: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='none' stroke='%23a6b0cf' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/></svg>");
+
+$form-switch-color-dark: rgba($white, .25);
+$form-switch-bg-image-dark: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'><circle r='3' fill='rgba(255,255,255,0.25)'/></svg>");
+
+// scss-docs-start form-validation-colors-dark
+$form-valid-color-dark: $green-400;
+$form-valid-border-color-dark: $green-400;
+$form-invalid-color-dark: $red-400;
+$form-invalid-border-color-dark: $red-400;
+// scss-docs-end form-validation-colors-dark
+
+//
+// Accordion
+//
+
+$accordion-icon-color-dark: $primary-text-emphasis-dark;
+$accordion-icon-active-color-dark: $primary-text-emphasis-dark;
+
+$accordion-button-icon-dark: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23FF5B00'><path fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/></svg>");
+$accordion-button-active-icon-dark: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23FF5B00'><path fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/></svg>");
+// scss-docs-end sass-dark-mode-vars
+
+/*********************variables-custom dark Mode - BLACK WITH ORANGE THEME***************************/
+
+// Horizontal Menu
+$topnav-bg-dark: #12141a;
+$topnav-item-color-dark: #e0e0e0;
+$topnav-item-active-color-dark: #FF5B00; // ✅ Blaze Orange active
+
+// Topbar
+$header-bg-dark: #12141a;
+$header-border-dark: $border-color-dark;
+$header-item-color-dark: #e0e0e0;
+$header-item-bg-dark: #12141a;
+$header-item-sub-color-dark: #b0b0b0;
+$topbar-user-bg-dark: transparent;
+$topbar-search-bg-dark: rgba(30, 33, 37, 0.80);
+$topbar-search-color-dark: $white;
+
+//page-title
+$page-title-border-dark: $border-color-dark;
+$page-title-box-shadow-dark: 0 1px 2px rgba(0, 0, 0, 0.15);
+
+// Topbar - dark - ORANGE THEME
+$dark-header-bg-dark: #FF5B00; // ✅ Blaze Orange header option
+$dark-header-border-dark: #FF5B00;
+$dark-header-item-color-dark: rgba($white, .95);
+$dark-header-item-bg-dark: #FF8E4D; // ✅ Lighter orange
+$dark-header-item-sub-color-dark: #FFB380; // ✅ Even lighter orange
+$dark-topbar-user-bg-dark: #CC4900; // ✅ Darker orange
+$dark-topbar-search-bg-dark: rgba($white, .10);
+$dark-topbar-search-color-dark: $white;
+
+//two column
+$twocolumn-menu-box-shadow-dark: 0 2px 4px rgba(0, 0, 0, 0.25);
+
+// boxed 
+$boxed-body-bg-dark: darken($body-bg-dark, 4%);
+
+// Footer
+$footer-bg-dark: #12141a;
+$footer-color-dark: #b0b0b0;
+
+//sidebar light 
+$vertical-menu-bg-dark: $white;
+$vertical-menu-border-dark: $white;
+$vertical-menu-item-color-dark: darken($gray-600, 10%);
+$vertical-menu-item-bg-dark: rgba(#FF5B00, .15); // ✅ Blaze Orange
+$vertical-menu-item-hover-color-dark: #FF5B00; // ✅ Blaze Orange
+$vertical-menu-item-active-color-dark: #FF5B00; // ✅ Blaze Orange
+$vertical-menu-item-active-bg-dark: rgba(#FF5B00, .15); // ✅ Blaze Orange
+$vertical-menu-sub-item-color-dark: darken($gray-600, 4%);
+$vertical-menu-sub-item-hover-color-dark: #FF5B00; // ✅ Blaze Orange
+$vertical-menu-sub-item-active-color-dark: #FF5B00; // ✅ Blaze Orange
+$vertical-menu-title-color-dark: #878a99; // gray-600
+
+//sidebar dark - PURE BLACK SIDEBAR ⬛
+$dark-vertical-menu-bg-dark: #12141a; // ✅ Pure dark black
+$dark-vertical-menu-border-dark: #1e2125; // Subtle border
+$dark-vertical-menu-item-color-dark: #e0e0e0; // Light text
+$dark-vertical-menu-item-bg-dark: rgba(#FF5B00, .10); // ✅ Subtle orange tint
+$dark-vertical-menu-item-hover-color-dark: #FF5B00; // ✅ Blaze Orange on hover
+$dark-vertical-menu-item-active-color-dark: #FF5B00; // ✅ Blaze Orange when active
+$dark-vertical-menu-item-active-bg-dark: rgba(#FF5B00, .18); // ✅ Brighter orange bg
+$dark-vertical-menu-sub-item-color-dark: #b0b0b0;
+$dark-vertical-menu-sub-item-hover-color-dark: #FF5B00; // ✅ Blaze Orange submenu hover
+$dark-vertical-menu-sub-item-active-color-dark: #FF5B00; // ✅ Blaze Orange submenu active
+$dark-vertical-menu-title-color-dark: #808080;
+$dark-vertical-menu-box-shadow-dark: 0 2px 4px rgba(0, 0, 0, 0.15);
+$dark-vertical-menu-dropdown-box-shadow-dark: 0 2px 4px rgba(0, 0, 0, 0.15);
+$dark-twocolumn-menu-iconview-bg-dark: rgba(30, 33, 37, 0.5);
+
+//sidebar gradient (optional - for future use)
+$vertical-menu-item-color-gradient-dark: rgba($white, .85);
+$vertical-menu-item-bg-gradient-dark: rgba(#FF5B00, .12); // ✅ Blaze Orange
+$vertical-menu-item-hover-color-gradient-dark: #FF5B00; // ✅ Blaze Orange
+$vertical-menu-item-active-color-gradient-dark: #FF5B00; // ✅ Blaze Orange
+$vertical-menu-item-active-bg-gradient-dark: rgba(#FF5B00, .20); // ✅ Blaze Orange
+$vertical-menu-sub-item-color-gradient-dark: rgba($white, .75);
+$vertical-menu-sub-item-hover-color-gradient-dark: #FF5B00; // ✅ Blaze Orange
+$vertical-menu-sub-item-active-color-gradient-dark: #FF5B00; // ✅ Blaze Orange
+$vertical-menu-title-color-gradient-dark: rgba($white, .65);
+
+//gradient options (for future use if you want to enable gradient backgrounds)
+$vertical-menu-bg-gradient-dark: linear-gradient(135deg, #FF5B00 0%, #12141a 100%);
+$vertical-menu-border-gradient-dark: #12141a;
+$twocolumn-menu-iconview-bg-gradient-dark: #FF5B00;
+
+$vertical-menu-bg-gradient-2-dark: linear-gradient(135deg, #FF8E4D 0%, #CC4900 100%);
+$vertical-menu-border-gradient-2-dark: #CC4900;
+$twocolumn-menu-iconview-bg-gradient-2-dark: #FF8E4D;
+
+$vertical-menu-bg-gradient-3-dark: linear-gradient(135deg, #FF5B00 0%, #1e2125 100%);
+$vertical-menu-border-gradient-3-dark: #1e2125;
+$twocolumn-menu-iconview-bg-gradient-3-dark: #FF5B00;
+
+$vertical-menu-bg-gradient-4-dark: linear-gradient(135deg, #1e2125 0%, #FF5B00 100%);
+$vertical-menu-border-gradient-4-dark: #FF5B00;
+$twocolumn-menu-iconview-bg-gradient-4-dark: #1e2125;
+
+//body-images
+//galaxy demos
+$card-bg-fill-dark: #1e2125; // ✅ Slightly lighter for cards
+$body-bg-image-1-dark: none;
+$body-bg-image-2-dark: none;
+$body-bg-image-3-dark: none;

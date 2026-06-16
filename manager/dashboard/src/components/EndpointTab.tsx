@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { endpoints } from '../api/endpoints';
-import { Users, Monitor, FolderTree, Cpu, RefreshCw, LogOut, Loader2, ShieldAlert, Plus, Trash2, UserCheck, UserX, Save, X, Settings2, Key, Unplug } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { FolderTree, Cpu, RefreshCw, LogOut, Plus, Trash2, UserCheck, UserX, Save, X, Settings2, Key, Unplug } from 'lucide-react';
+import { Card, CardBody, CardHeader, Row, Col, Button, Input, Spinner, Badge } from 'reactstrap';
 
 interface EndpointTabProps {
   agentId: string;
@@ -43,10 +43,8 @@ const EndpointTab: React.FC<EndpointTabProps> = ({ agentId }) => {
     setLoading(prev => ({ ...prev, [type]: true }));
     try {
       const res = await promise;
-      // Wait for async command queuing if it returns command_id, otherwise data is immediate
       if (res.data?.status === 'queued') {
         showMessage('success', `Command queued: ${res.data.command_id}`);
-        
         let attempts = 0;
         const poll = async () => {
           if (attempts > 30) {
@@ -86,7 +84,6 @@ const EndpointTab: React.FC<EndpointTabProps> = ({ agentId }) => {
     }
   };
 
-  // Fetch functions
   const fetchUsers = () => executeCommand('users', endpoints.agents.endpoint.users.list(agentId), (data) => {
     try { setUsers(typeof data === 'string' ? JSON.parse(data) : (Array.isArray(data) ? data : [])); } catch(e) { console.error(e); }
   });
@@ -104,16 +101,10 @@ const EndpointTab: React.FC<EndpointTabProps> = ({ agentId }) => {
     } catch(e) { console.error(e); }
   });
 
-  // Action functions
   const handleCreateUser = () => {
-    if (!newUser.username || !newUser.password) {
-      showMessage('error', 'Username and password are required');
-      return;
-    }
+    if (!newUser.username || !newUser.password) { showMessage('error', 'Username and password are required'); return; }
     executeCommand('createUser', endpoints.agents.endpoint.users.create(agentId, newUser), () => {
-      setShowCreateUser(false);
-      setNewUser({ username: '', full_name: '', password: '' });
-      fetchUsers();
+      setShowCreateUser(false); setNewUser({ username: '', full_name: '', password: '' }); fetchUsers();
     });
   };
 
@@ -124,29 +115,21 @@ const EndpointTab: React.FC<EndpointTabProps> = ({ agentId }) => {
   };
 
   const handleToggleUser = (username: string, isEnabled: boolean) => {
-    const action = isEnabled 
-      ? endpoints.agents.endpoint.users.disable(agentId, username) 
-      : endpoints.agents.endpoint.users.enable(agentId, username);
+    const action = isEnabled ? endpoints.agents.endpoint.users.disable(agentId, username) : endpoints.agents.endpoint.users.enable(agentId, username);
     executeCommand('toggleUser', action, () => fetchUsers());
   };
 
   const handleChangePassword = (username: string) => {
-    if (!newPassword) {
-      showMessage('error', 'New password is required');
-      return;
-    }
+    if (!newPassword) { showMessage('error', 'New password is required'); return; }
     executeCommand('changePassword', endpoints.agents.endpoint.users.changePassword(agentId, username, { password: newPassword }), () => {
-      setChangePasswordUser(null);
-      setNewPassword('');
-      showMessage('success', `Password changed for ${username}`);
+      setChangePasswordUser(null); setNewPassword(''); showMessage('success', `Password changed for ${username}`);
     });
   };
 
   const handleAddUserToGroup = (groupname: string) => {
     if (!groupUser) return;
     executeCommand('manageGroup', endpoints.agents.endpoint.groups.addUser(agentId, groupname, groupUser), () => {
-      setGroupUser('');
-      showMessage('success', `Added ${groupUser} to ${groupname}`);
+      setGroupUser(''); showMessage('success', `Added ${groupUser} to ${groupname}`);
     });
   };
 
@@ -154,503 +137,274 @@ const EndpointTab: React.FC<EndpointTabProps> = ({ agentId }) => {
     if (!groupUser) return;
     if (confirm(`Remove ${groupUser} from ${groupname}?`)) {
       executeCommand('manageGroup', endpoints.agents.endpoint.groups.removeUser(agentId, groupname, groupUser), () => {
-        setGroupUser('');
-        showMessage('success', `Removed ${groupUser} from ${groupname}`);
+        setGroupUser(''); showMessage('success', `Removed ${groupUser} from ${groupname}`);
       });
     }
   };
 
   const savePasswordPolicy = () => {
     const params = {
-      min_length: parseInt(editPolicy.min_length || '-1'),
-      max_age_days: parseInt(editPolicy.max_age_days || '-1'),
-      min_age_days: parseInt(editPolicy.min_age_days || '-1'),
-      history_length: parseInt(editPolicy.history_length || '-1')
+      min_length: parseInt(editPolicy.min_length || '-1'), max_age_days: parseInt(editPolicy.max_age_days || '-1'),
+      min_age_days: parseInt(editPolicy.min_age_days || '-1'), history_length: parseInt(editPolicy.history_length || '-1')
     };
     executeCommand('savePolicy', endpoints.agents.endpoint.passwordPolicy.set(agentId, params), () => {
-      setIsEditingPolicy(false);
-      fetchPasswordPolicy();
+      setIsEditingPolicy(false); fetchPasswordPolicy();
     });
   };
 
   const handleLogoff = (sessionId: number) => {
-    if (confirm('Are you sure you want to log off this session?')) {
-      executeCommand('logoff', endpoints.agents.endpoint.sessions.logoff(agentId, sessionId));
-    }
+    if (confirm('Are you sure you want to log off this session?')) { executeCommand('logoff', endpoints.agents.endpoint.sessions.logoff(agentId, sessionId)); }
   };
 
   const handleDisconnect = (sessionId: number) => {
-    if (confirm('Are you sure you want to disconnect this session?')) {
-      executeCommand('disconnect', endpoints.agents.endpoint.sessions.disconnect(agentId, sessionId));
-    }
+    if (confirm('Are you sure you want to disconnect this session?')) { executeCommand('disconnect', endpoints.agents.endpoint.sessions.disconnect(agentId, sessionId)); }
   };
 
-  const LoadingSpinner = () => <Loader2 className="w-3.5 h-3.5 animate-spin" />;
-
-  const InputField = ({ label, value, onChange, type="text", placeholder="" }: any) => (
-    <div>
-      <label className="block text-[10px] font-bold text-rn-white/40 uppercase tracking-wider mb-1.5">{label}</label>
-      <input 
-        type={type} 
-        value={value} 
-        onChange={onChange} 
-        placeholder={placeholder}
-        className="w-full bg-rn-black/40 border border-rn-white/10 rounded-xl px-3 py-2 text-sm text-rn-white focus:outline-none focus:border-rn-white/30 transition-all placeholder:text-rn-white/20"
-      />
-    </div>
-  );
-
   return (
-    <div className="space-y-6">
+    <div>
       {message && (
-        <div className={cn(
-          "flex items-center gap-3 px-5 py-3.5 rounded-2xl border text-sm font-medium animate-in fade-in slide-in-from-top-2 duration-300",
-          message.type === 'success'
-            ? 'bg-green-500/10 border-green-500/20 text-green-400'
-            : 'bg-red-500/10 border-red-500/20 text-red-400'
-        )}>
-          <div className={cn(
-            "w-2 h-2 rounded-full shrink-0",
-            message.type === 'success' ? 'bg-green-500' : 'bg-red-500'
-          )} />
+        <div className={`alert alert-${message.type === 'success' ? 'success' : 'danger'} alert-dismissible fade show`} role="alert">
           {message.text}
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <Row>
         {/* User Management */}
-        <div className="bg-rn-black-card border border-rn-white/5 rounded-3xl p-6 transition-all hover:border-rn-white/10 flex flex-col h-[380px]">
-          <div className="flex justify-between items-center mb-5 shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-blue-500/10 flex items-center justify-center">
-                <Users className="w-5 h-5 text-blue-400" />
+        <Col md={6}>
+          <Card>
+            <CardHeader className="align-items-center d-flex">
+              <h4 className="card-title mb-0 flex-grow-1">User Management <Badge color="light" className="text-muted ms-2">{users.length} users</Badge></h4>
+              <div className="flex-shrink-0 d-flex gap-2">
+                <Button color="primary" size="sm" onClick={() => setShowCreateUser(!showCreateUser)}>
+                  <Plus size={14} /> Create
+                </Button>
+                <Button color="light" size="sm" onClick={fetchUsers} disabled={loading['users']}>
+                  {loading['users'] ? <Spinner size="sm" /> : <RefreshCw size={14} />}
+                </Button>
               </div>
-              <div>
-                <h3 className="text-sm font-bold text-rn-white uppercase tracking-wider">User Management</h3>
-                <p className="text-[10px] text-rn-white/30 font-mono mt-0.5">{users.length > 0 ? `${users.length} users` : 'verb: user_list'}</p>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setShowCreateUser(!showCreateUser)}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs font-bold text-blue-400 hover:bg-blue-500/20 transition-all"
-              >
-                <Plus className="w-3.5 h-3.5" /> Create
-              </button>
-              <button
-                onClick={fetchUsers}
-                disabled={loading['users']}
-                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-rn-white/5 border border-rn-white/10 text-xs font-bold text-rn-white/60 hover:text-rn-white hover:bg-rn-white/10 transition-all disabled:opacity-50"
-              >
-                {loading['users'] ? <LoadingSpinner /> : <RefreshCw className="w-3.5 h-3.5" />}
-              </button>
-            </div>
-          </div>
-          
-          {showCreateUser && (
-            <div className="mb-4 p-4 rounded-2xl bg-rn-white/[0.02] border border-rn-white/10 shrink-0">
-              <div className="grid grid-cols-2 gap-3 mb-3">
-                <InputField label="Username" value={newUser.username} onChange={(e: any) => setNewUser({...newUser, username: e.target.value})} />
-                <InputField label="Full Name" value={newUser.full_name} onChange={(e: any) => setNewUser({...newUser, full_name: e.target.value})} />
-                <div className="col-span-2">
-                  <InputField label="Password" type="password" value={newUser.password} onChange={(e: any) => setNewUser({...newUser, password: e.target.value})} />
-                </div>
-              </div>
-              <div className="flex justify-end gap-2">
-                <button onClick={() => setShowCreateUser(false)} className="px-3 py-1.5 text-xs text-rn-white/50 hover:text-rn-white font-bold">Cancel</button>
-                <button onClick={handleCreateUser} disabled={loading['createUser']} className="px-4 py-1.5 bg-blue-500 text-white text-xs font-bold rounded-lg hover:bg-blue-600 disabled:opacity-50 flex items-center gap-2">
-                  {loading['createUser'] && <LoadingSpinner />} Create User
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-1.5">
-            {users.length > 0 ? (
-              users.map((u, i) => (
-                <div key={i} className="flex flex-col px-4 py-3 rounded-xl bg-rn-white/[0.02] border border-rn-white/5 hover:bg-rn-white/[0.04] transition-all group">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <span className="text-sm font-bold text-rn-white">{u.username}</span>
-                      {u.full_name && <span className="text-xs text-rn-white/30 ml-2">{u.full_name}</span>}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {u.is_locked && (
-                        <span className="text-[9px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20 font-bold uppercase tracking-widest">Locked</span>
-                      )}
-                      <span className={cn(
-                        "text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-widest border",
-                        u.is_enabled ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-rn-white/5 text-rn-white/30 border-rn-white/10'
-                      )}>
-                        {u.is_enabled ? 'Active' : 'Disabled'}
-                      </span>
-                    </div>
+            </CardHeader>
+            <CardBody style={{ maxHeight: '350px', overflowY: 'auto' }}>
+              {showCreateUser && (
+                <div className="mb-4 p-3 bg-light rounded">
+                  <Row className="g-3">
+                    <Col sm={6}><Input placeholder="Username" value={newUser.username} onChange={(e) => setNewUser({...newUser, username: e.target.value})} /></Col>
+                    <Col sm={6}><Input placeholder="Full Name" value={newUser.full_name} onChange={(e) => setNewUser({...newUser, full_name: e.target.value})} /></Col>
+                    <Col sm={12}><Input type="password" placeholder="Password" value={newUser.password} onChange={(e) => setNewUser({...newUser, password: e.target.value})} /></Col>
+                  </Row>
+                  <div className="d-flex justify-content-end gap-2 mt-3">
+                    <Button color="link" size="sm" onClick={() => setShowCreateUser(false)}>Cancel</Button>
+                    <Button color="primary" size="sm" onClick={handleCreateUser} disabled={loading['createUser']}>Create</Button>
                   </div>
-                  <div className="flex justify-end gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button 
-                      onClick={() => {
-                        setChangePasswordUser(changePasswordUser === u.username ? null : u.username);
-                        setNewPassword('');
-                      }}
-                      className="p-1.5 rounded bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 transition-all"
-                      title="Change Password"
-                    >
-                      <Key className="w-3.5 h-3.5" />
-                    </button>
-                    <button 
-                      onClick={() => handleToggleUser(u.username, u.is_enabled)}
-                      className="p-1.5 rounded bg-rn-white/5 hover:bg-rn-white/10 text-rn-white/60 hover:text-rn-white transition-all"
-                      title={u.is_enabled ? "Disable User" : "Enable User"}
-                    >
-                      {u.is_enabled ? <UserX className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
-                    </button>
-                    <button 
-                      onClick={() => handleDeleteUser(u.username)}
-                      className="p-1.5 rounded bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-all"
-                      title="Delete User"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  {changePasswordUser === u.username && (
-                    <div className="mt-3 pt-3 border-t border-rn-white/10 flex gap-2">
-                      <input 
-                        type="password"
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        placeholder="New password..."
-                        className="flex-1 bg-rn-black/40 border border-rn-white/10 rounded-lg px-3 py-1.5 text-xs text-rn-white placeholder:text-rn-white/20 focus:outline-none focus:border-rn-white/30"
-                      />
-                      <button onClick={() => handleChangePassword(u.username)} disabled={loading['changePassword']} className="px-3 py-1.5 bg-amber-500/20 text-amber-400 text-xs font-bold rounded-lg hover:bg-amber-500/30 transition-all">
-                        Update
-                      </button>
-                    </div>
-                  )}
                 </div>
-              ))
-            ) : (
-              <div className="h-full flex items-center justify-center text-rn-white/15 text-xs font-bold uppercase tracking-widest border-2 border-dashed border-rn-white/5 rounded-2xl">
-                No users fetched yet
+              )}
+              <div className="list-group">
+                {users.length > 0 ? users.map((u, i) => (
+                  <React.Fragment key={i}>
+                    <div className="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                      <div>
+                        <h6 className="mb-1">{u.username} <span className="text-muted ms-2 fw-normal">{u.full_name}</span></h6>
+                        {u.is_locked && <Badge color="danger" className="me-1">Locked</Badge>}
+                        <Badge color={u.is_enabled ? 'success' : 'secondary'}>{u.is_enabled ? 'Active' : 'Disabled'}</Badge>
+                      </div>
+                      <div>
+                        <Button color="warning" outline size="sm" className="me-1 btn-icon" onClick={() => { setChangePasswordUser(changePasswordUser === u.username ? null : u.username); setNewPassword(''); }}><Key size={14} /></Button>
+                        <Button color="info" outline size="sm" className="me-1 btn-icon" onClick={() => handleToggleUser(u.username, u.is_enabled)}>{u.is_enabled ? <UserX size={14}/> : <UserCheck size={14}/>}</Button>
+                        <Button color="danger" outline size="sm" className="btn-icon" onClick={() => handleDeleteUser(u.username)}><Trash2 size={14}/></Button>
+                      </div>
+                    </div>
+                    {changePasswordUser === u.username && (
+                      <div className="list-group-item bg-light d-flex gap-2 p-2">
+                        <Input bsSize="sm" type="password" placeholder="New Password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+                        <Button size="sm" color="warning" onClick={() => handleChangePassword(u.username)}>Save</Button>
+                      </div>
+                    )}
+                  </React.Fragment>
+                )) : <div className="text-center text-muted py-4">No users fetched yet</div>}
               </div>
-            )}
-          </div>
-        </div>
+            </CardBody>
+          </Card>
+        </Col>
 
         {/* Group Management */}
-        <div className="bg-rn-black-card border border-rn-white/5 rounded-3xl p-6 transition-all hover:border-rn-white/10 flex flex-col h-[380px]">
-          <div className="flex justify-between items-center mb-5 shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-purple-500/10 flex items-center justify-center">
-                <FolderTree className="w-5 h-5 text-purple-400" />
+        <Col md={6}>
+          <Card>
+            <CardHeader className="align-items-center d-flex">
+              <h4 className="card-title mb-0 flex-grow-1">Group Management <Badge color="light" className="text-muted ms-2">{groups.length} groups</Badge></h4>
+              <div className="flex-shrink-0">
+                <Button color="light" size="sm" onClick={fetchGroups} disabled={loading['groups']}>
+                  {loading['groups'] ? <Spinner size="sm" /> : <RefreshCw size={14} />}
+                </Button>
               </div>
-              <div>
-                <h3 className="text-sm font-bold text-rn-white uppercase tracking-wider">Group Management</h3>
-                <p className="text-[10px] text-rn-white/30 font-mono mt-0.5">{groups.length > 0 ? `${groups.length} groups` : 'verb: group_list'}</p>
-              </div>
-            </div>
-            <button
-              onClick={fetchGroups}
-              disabled={loading['groups']}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-rn-white/5 border border-rn-white/10 text-xs font-bold text-rn-white/60 hover:text-rn-white hover:bg-rn-white/10 transition-all disabled:opacity-50"
-            >
-              {loading['groups'] ? <LoadingSpinner /> : <RefreshCw className="w-3.5 h-3.5" />}
-            </button>
-          </div>
-          
-          <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-1.5">
-            {groups.length > 0 ? (
-              groups.map((g, i) => (
-                <div key={i} className="flex flex-col px-4 py-2.5 rounded-xl bg-rn-white/[0.02] border border-rn-white/5 hover:bg-rn-white/[0.04] transition-all">
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                      <div className="w-6 h-6 rounded-lg bg-purple-500/10 flex items-center justify-center">
-                        <FolderTree className="w-3 h-3 text-purple-400/60" />
+            </CardHeader>
+            <CardBody style={{ maxHeight: '350px', overflowY: 'auto' }}>
+              <div className="list-group">
+                {groups.length > 0 ? groups.map((g, i) => (
+                  <div key={i} className="list-group-item flex-column align-items-start">
+                    <div className="d-flex justify-content-between align-items-center w-100 mb-1">
+                      <h6 className="mb-0"><FolderTree size={16} className="me-2 text-primary" />{g.groupname}</h6>
+                      <Button color="light" size="sm" onClick={() => setManageGroup(manageGroup === g.groupname ? null : g.groupname)}>{manageGroup === g.groupname ? 'Cancel' : 'Manage'}</Button>
+                    </div>
+                    {manageGroup === g.groupname && (
+                      <div className="mt-3 d-flex gap-2">
+                        <Input bsSize="sm" placeholder="Username..." value={groupUser} onChange={(e) => setGroupUser(e.target.value)} />
+                        <Button color="primary" size="sm" onClick={() => handleAddUserToGroup(g.groupname)}>Add</Button>
+                        <Button color="danger" size="sm" onClick={() => handleRemoveUserFromGroup(g.groupname)}>Remove</Button>
                       </div>
-                      <span className="text-sm font-bold text-rn-white/90">{g.groupname}</span>
-                    </div>
-                    <button 
-                      onClick={() => {
-                        setManageGroup(manageGroup === g.groupname ? null : g.groupname);
-                        setGroupUser('');
-                      }}
-                      className="px-2 py-1 bg-rn-white/5 hover:bg-rn-white/10 rounded text-xs text-rn-white/60 hover:text-rn-white transition-all font-bold"
-                    >
-                      {manageGroup === g.groupname ? 'Cancel' : 'Manage'}
-                    </button>
+                    )}
                   </div>
-                  
-                  {manageGroup === g.groupname && (
-                    <div className="mt-3 pt-3 border-t border-rn-white/10 flex gap-2">
-                      <input 
-                        type="text"
-                        value={groupUser}
-                        onChange={(e) => setGroupUser(e.target.value)}
-                        placeholder="Enter username..."
-                        className="flex-1 bg-rn-black/40 border border-rn-white/10 rounded-lg px-3 py-1.5 text-xs text-rn-white placeholder:text-rn-white/20 focus:outline-none focus:border-rn-white/30"
-                      />
-                      <button onClick={() => handleAddUserToGroup(g.groupname)} disabled={loading['manageGroup']} className="px-3 py-1.5 bg-purple-500/20 text-purple-400 text-xs font-bold rounded-lg hover:bg-purple-500/30 transition-all">
-                        Add
-                      </button>
-                      <button onClick={() => handleRemoveUserFromGroup(g.groupname)} disabled={loading['manageGroup']} className="px-3 py-1.5 bg-red-500/10 text-red-400 text-xs font-bold rounded-lg hover:bg-red-500/20 transition-all">
-                        Remove
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))
-            ) : (
-              <div className="h-full flex items-center justify-center text-rn-white/15 text-xs font-bold uppercase tracking-widest border-2 border-dashed border-rn-white/5 rounded-2xl">
-                No groups fetched yet
+                )) : <div className="text-center text-muted py-4">No groups fetched yet</div>}
               </div>
-            )}
-          </div>
-        </div>
+            </CardBody>
+          </Card>
+        </Col>
+      </Row>
 
+      <Row>
         {/* Password Policy */}
-        <div className="bg-rn-black-card border border-rn-white/5 rounded-3xl p-6 transition-all hover:border-rn-white/10 flex flex-col">
-          <div className="flex justify-between items-center mb-5 shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-amber-500/10 flex items-center justify-center">
-                <ShieldAlert className="w-5 h-5 text-amber-400" />
+        <Col md={6}>
+          <Card>
+            <CardHeader className="align-items-center d-flex">
+              <h4 className="card-title mb-0 flex-grow-1">Password Policy</h4>
+              <div className="flex-shrink-0 d-flex gap-2">
+                {passwordPolicy && !isEditingPolicy && (
+                  <Button color="warning" outline size="sm" onClick={() => setIsEditingPolicy(true)}><Settings2 size={14} /> Edit</Button>
+                )}
+                {isEditingPolicy && (
+                  <>
+                    <Button color="light" size="sm" onClick={() => { setIsEditingPolicy(false); setEditPolicy(passwordPolicy); }}><X size={14} /></Button>
+                    <Button color="success" size="sm" onClick={savePasswordPolicy} disabled={loading['savePolicy']}>{loading['savePolicy'] ? <Spinner size="sm" /> : <Save size={14} />} Save</Button>
+                  </>
+                )}
+                <Button color="light" size="sm" onClick={fetchPasswordPolicy} disabled={loading['passwordPolicy']}>
+                  {loading['passwordPolicy'] ? <Spinner size="sm" /> : <RefreshCw size={14} />}
+                </Button>
               </div>
-              <div>
-                <h3 className="text-sm font-bold text-rn-white uppercase tracking-wider">Password Policy</h3>
-                <p className="text-[10px] text-rn-white/30 font-mono mt-0.5">verb: password_policy</p>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              {passwordPolicy && !isEditingPolicy && (
-                <button
-                  onClick={() => setIsEditingPolicy(true)}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs font-bold text-amber-400 hover:bg-amber-500/20 transition-all"
-                >
-                  <Settings2 className="w-3.5 h-3.5" /> Edit
-                </button>
-              )}
-              {isEditingPolicy && (
-                <>
-                  <button onClick={() => { setIsEditingPolicy(false); setEditPolicy(passwordPolicy); }} className="px-3 py-2 rounded-xl bg-rn-white/5 text-xs font-bold text-rn-white/50 hover:bg-rn-white/10 hover:text-rn-white">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                  <button onClick={savePasswordPolicy} disabled={loading['savePolicy']} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-green-500/20 text-xs font-bold text-green-400 hover:bg-green-500/30">
-                    {loading['savePolicy'] ? <LoadingSpinner /> : <Save className="w-3.5 h-3.5" />} Save
-                  </button>
-                </>
-              )}
-              <button
-                onClick={fetchPasswordPolicy}
-                disabled={loading['passwordPolicy'] || isEditingPolicy}
-                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-rn-white/5 border border-rn-white/10 text-xs font-bold text-rn-white/60 hover:text-rn-white hover:bg-rn-white/10 transition-all disabled:opacity-50"
-              >
-                {loading['passwordPolicy'] ? <LoadingSpinner /> : <RefreshCw className="w-3.5 h-3.5" />}
-              </button>
-            </div>
-          </div>
-          
-          <div className="flex-1 bg-rn-white/[0.02] border border-rn-white/5 rounded-2xl p-5">
-            {passwordPolicy ? (
-              <div className="grid grid-cols-2 gap-y-6 gap-x-4">
-                <div>
-                  <div className="text-[10px] font-bold text-rn-white/40 uppercase tracking-wider mb-1.5">Min Password Length</div>
-                  {isEditingPolicy ? (
-                    <input type="number" className="w-full bg-rn-black/40 border border-rn-white/10 rounded-lg px-2 py-1 text-sm text-rn-white focus:outline-none focus:border-rn-white/30" 
-                      value={editPolicy.min_length} onChange={e => setEditPolicy({...editPolicy, min_length: e.target.value})} />
-                  ) : (
-                    <div className="text-lg font-bold text-rn-white">{passwordPolicy.min_length} <span className="text-xs text-rn-white/30 font-normal">chars</span></div>
-                  )}
-                </div>
-                <div>
-                  <div className="text-[10px] font-bold text-rn-white/40 uppercase tracking-wider mb-1.5">Max Password Age</div>
-                  {isEditingPolicy ? (
-                    <input type="number" className="w-full bg-rn-black/40 border border-rn-white/10 rounded-lg px-2 py-1 text-sm text-rn-white focus:outline-none focus:border-rn-white/30" 
-                      value={editPolicy.max_age_days} onChange={e => setEditPolicy({...editPolicy, max_age_days: e.target.value})} />
-                  ) : (
-                    <div className="text-lg font-bold text-rn-white">{passwordPolicy.max_age_days === 0 ? 'Never' : passwordPolicy.max_age_days} <span className="text-xs text-rn-white/30 font-normal">days</span></div>
-                  )}
-                </div>
-                <div>
-                  <div className="text-[10px] font-bold text-rn-white/40 uppercase tracking-wider mb-1.5">Min Password Age</div>
-                  {isEditingPolicy ? (
-                    <input type="number" className="w-full bg-rn-black/40 border border-rn-white/10 rounded-lg px-2 py-1 text-sm text-rn-white focus:outline-none focus:border-rn-white/30" 
-                      value={editPolicy.min_age_days} onChange={e => setEditPolicy({...editPolicy, min_age_days: e.target.value})} />
-                  ) : (
-                    <div className="text-lg font-bold text-rn-white">{passwordPolicy.min_age_days} <span className="text-xs text-rn-white/30 font-normal">days</span></div>
-                  )}
-                </div>
-                <div>
-                  <div className="text-[10px] font-bold text-rn-white/40 uppercase tracking-wider mb-1.5">Password History</div>
-                  {isEditingPolicy ? (
-                    <input type="number" className="w-full bg-rn-black/40 border border-rn-white/10 rounded-lg px-2 py-1 text-sm text-rn-white focus:outline-none focus:border-rn-white/30" 
-                      value={editPolicy.history_length} onChange={e => setEditPolicy({...editPolicy, history_length: e.target.value})} />
-                  ) : (
-                    <div className="text-lg font-bold text-rn-white">{passwordPolicy.history_length} <span className="text-xs text-rn-white/30 font-normal">passwords</span></div>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="h-full flex items-center justify-center text-rn-white/15 text-xs font-bold uppercase tracking-widest">
-                No policy fetched yet
-              </div>
-            )}
-          </div>
-        </div>
+            </CardHeader>
+            <CardBody>
+              {passwordPolicy ? (
+                <Row className="g-4">
+                  <Col sm={6}>
+                    <p className="text-muted mb-1 text-uppercase fw-medium fs-11">Min Password Length</p>
+                    {isEditingPolicy ? <Input bsSize="sm" type="number" value={editPolicy.min_length} onChange={e => setEditPolicy({...editPolicy, min_length: e.target.value})} /> : <h5 className="fs-16">{passwordPolicy.min_length} <small className="text-muted fs-12 fw-normal">chars</small></h5>}
+                  </Col>
+                  <Col sm={6}>
+                    <p className="text-muted mb-1 text-uppercase fw-medium fs-11">Max Password Age</p>
+                    {isEditingPolicy ? <Input bsSize="sm" type="number" value={editPolicy.max_age_days} onChange={e => setEditPolicy({...editPolicy, max_age_days: e.target.value})} /> : <h5 className="fs-16">{passwordPolicy.max_age_days === 0 ? 'Never' : passwordPolicy.max_age_days} <small className="text-muted fs-12 fw-normal">days</small></h5>}
+                  </Col>
+                  <Col sm={6}>
+                    <p className="text-muted mb-1 text-uppercase fw-medium fs-11">Min Password Age</p>
+                    {isEditingPolicy ? <Input bsSize="sm" type="number" value={editPolicy.min_age_days} onChange={e => setEditPolicy({...editPolicy, min_age_days: e.target.value})} /> : <h5 className="fs-16">{passwordPolicy.min_age_days} <small className="text-muted fs-12 fw-normal">days</small></h5>}
+                  </Col>
+                  <Col sm={6}>
+                    <p className="text-muted mb-1 text-uppercase fw-medium fs-11">Password History</p>
+                    {isEditingPolicy ? <Input bsSize="sm" type="number" value={editPolicy.history_length} onChange={e => setEditPolicy({...editPolicy, history_length: e.target.value})} /> : <h5 className="fs-16">{passwordPolicy.history_length} <small className="text-muted fs-12 fw-normal">passwords</small></h5>}
+                  </Col>
+                </Row>
+              ) : <div className="text-center text-muted py-4">No policy fetched yet</div>}
+            </CardBody>
+          </Card>
+        </Col>
 
         {/* Session Management */}
-        <div className="bg-rn-black-card border border-rn-white/5 rounded-3xl p-6 transition-all hover:border-rn-white/10 flex flex-col">
-          <div className="flex justify-between items-center mb-5 shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 flex items-center justify-center">
-                <Monitor className="w-5 h-5 text-indigo-400" />
+        <Col md={6}>
+          <Card>
+            <CardHeader className="align-items-center d-flex">
+              <h4 className="card-title mb-0 flex-grow-1">Session Management <Badge color="light" className="text-muted ms-2">{sessions.length} sessions</Badge></h4>
+              <div className="flex-shrink-0">
+                <Button color="light" size="sm" onClick={fetchSessions} disabled={loading['sessions']}>
+                  {loading['sessions'] ? <Spinner size="sm" /> : <RefreshCw size={14} />}
+                </Button>
               </div>
-              <div>
-                <h3 className="text-sm font-bold text-rn-white uppercase tracking-wider">Session Management</h3>
-                <p className="text-[10px] text-rn-white/30 font-mono mt-0.5">{sessions.length > 0 ? `${sessions.length} sessions` : 'verb: session_list'}</p>
-              </div>
-            </div>
-            <button
-              onClick={fetchSessions}
-              disabled={loading['sessions']}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-rn-white/5 border border-rn-white/10 text-xs font-bold text-rn-white/60 hover:text-rn-white hover:bg-rn-white/10 transition-all disabled:opacity-50"
-            >
-              {loading['sessions'] ? <LoadingSpinner /> : <RefreshCw className="w-3.5 h-3.5" />}
-            </button>
-          </div>
-          
-          <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-1.5 min-h-[150px]">
-            {sessions.length > 0 ? (
-              sessions.map((s, i) => (
-                <div key={i} className="flex justify-between items-center px-4 py-2.5 rounded-xl bg-rn-white/[0.02] border border-rn-white/5 hover:bg-rn-white/[0.04] transition-all">
-                  <div>
-                    <div className="text-sm font-bold text-rn-white">
-                      <span className="text-rn-white/40 font-mono text-xs mr-2">#{s.session_id}</span>
-                      {s.username || 'System'}
+            </CardHeader>
+            <CardBody style={{ maxHeight: '350px', overflowY: 'auto' }}>
+              <div className="list-group">
+                {sessions.length > 0 ? sessions.map((s, i) => (
+                  <div key={i} className="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                      <h6 className="mb-1"><span className="text-muted me-2">#{s.session_id}</span>{s.username || 'System'}</h6>
+                      <p className="text-muted mb-0 fs-11">{s.state} &bull; {s.station_name}</p>
                     </div>
-                    <div className="text-[10px] text-rn-white/30 font-mono mt-0.5">{s.state} • {s.station_name}</div>
+                    <div>
+                      <Button color="warning" outline size="sm" className="me-1 btn-icon" onClick={() => handleDisconnect(s.session_id)} title="Disconnect"><Unplug size={14}/></Button>
+                      <Button color="danger" outline size="sm" className="btn-icon" onClick={() => handleLogoff(s.session_id)} title="Logoff"><LogOut size={14}/></Button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleDisconnect(s.session_id)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest text-orange-400/70 border border-orange-500/20 bg-orange-500/5 hover:bg-orange-500/10 hover:text-orange-400 hover:border-orange-500/30 transition-all"
-                    >
-                      <Unplug className="w-3 h-3" />
-                      Disconnect
-                    </button>
-                    <button
-                      onClick={() => handleLogoff(s.session_id)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest text-red-400/70 border border-red-500/20 bg-red-500/5 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30 transition-all"
-                    >
-                      <LogOut className="w-3 h-3" />
-                      Logoff
-                    </button>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="h-full flex items-center justify-center text-rn-white/15 text-xs font-bold uppercase tracking-widest border-2 border-dashed border-rn-white/5 rounded-2xl">
-                No sessions fetched yet
+                )) : <div className="text-center text-muted py-4">No sessions fetched yet</div>}
               </div>
-            )}
-          </div>
-        </div>
+            </CardBody>
+          </Card>
+        </Col>
+      </Row>
 
-        {/* Inventory Collection */}
-        <div className="md:col-span-2 bg-rn-black-card border border-rn-white/5 rounded-3xl p-6 transition-all hover:border-rn-white/10">
-          <div className="flex justify-between items-center mb-5">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 flex items-center justify-center">
-                <Cpu className="w-5 h-5 text-emerald-400" />
+      {/* Inventory Collection */}
+      <Row>
+        <Col xs={12}>
+          <Card>
+            <CardHeader className="align-items-center d-flex">
+              <h4 className="card-title mb-0 flex-grow-1">System Inventory</h4>
+              <div className="flex-shrink-0">
+                <Button color="info" outline size="sm" onClick={() => executeCommand('inventory', endpoints.agents.endpoint.inventory.collect(agentId), (data) => setInventory(typeof data === 'string' ? JSON.parse(data) : data))} disabled={loading['inventory']}>
+                  {loading['inventory'] ? <Spinner size="sm" /> : <><Cpu size={14} className="me-1"/> Collect</>}
+                </Button>
               </div>
-              <div>
-                <h3 className="text-sm font-bold text-rn-white uppercase tracking-wider">System Inventory</h3>
-                <p className="text-[10px] text-rn-white/30 font-mono mt-0.5">verb: inventory_collect</p>
-              </div>
-            </div>
-            <button
-              onClick={() => executeCommand('inventory', endpoints.agents.endpoint.inventory.collect(agentId), (data) => setInventory(typeof data === 'string' ? JSON.parse(data) : data))}
-              disabled={loading['inventory']}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs font-bold text-emerald-400/80 hover:text-emerald-400 hover:bg-emerald-500/15 hover:border-emerald-500/30 transition-all disabled:opacity-50"
-            >
-              {loading['inventory'] ? <LoadingSpinner /> : <Cpu className="w-3.5 h-3.5" />}
-              {loading['inventory'] ? 'Queuing...' : 'Collect'}
-            </button>
-          </div>
-          <p className="text-xs text-rn-white/30 leading-relaxed mb-4">
-            Triggers a deep hardware and software scan on the endpoint. Results include OS info, disk volumes, and network adapters. Data is queued and pushed back asynchronously.
-          </p>
-          
-          {inventory && (
-            <div className="bg-rn-white/[0.02] border border-rn-white/5 rounded-2xl p-5 space-y-6 animate-in fade-in slide-in-from-top-2">
-              {/* OS Info */}
-              <div>
-                <h4 className="text-[10px] font-bold text-rn-white/40 uppercase tracking-wider mb-3">System Information</h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div>
-                    <div className="text-[10px] text-rn-white/30">Architecture</div>
-                    <div className="text-sm font-bold text-rn-white">{inventory.architecture || 'N/A'}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-rn-white/30">Build</div>
-                    <div className="text-sm font-bold text-rn-white">{inventory.build || 'N/A'}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-rn-white/30">Version</div>
-                    <div className="text-sm font-bold text-rn-white">{inventory.version || 'N/A'}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-rn-white/30">Processors</div>
-                    <div className="text-sm font-bold text-rn-white">{inventory.num_processors || 'N/A'}</div>
-                  </div>
-                </div>
-              </div>
+            </CardHeader>
+            <CardBody>
+              <p className="text-muted fs-13 mb-4">Triggers a deep hardware and software scan on the endpoint. Results include OS info, disk volumes, and network adapters.</p>
+              
+              {inventory && (
+                <div className="bg-light p-4 rounded">
+                  <h5 className="fs-14 fw-bold mb-3">System Information</h5>
+                  <Row className="g-3 mb-4">
+                    <Col sm={3}><div className="text-muted fs-12">Architecture</div><div className="fw-medium">{inventory.architecture || 'N/A'}</div></Col>
+                    <Col sm={3}><div className="text-muted fs-12">Build</div><div className="fw-medium">{inventory.build || 'N/A'}</div></Col>
+                    <Col sm={3}><div className="text-muted fs-12">Version</div><div className="fw-medium">{inventory.version || 'N/A'}</div></Col>
+                    <Col sm={3}><div className="text-muted fs-12">Processors</div><div className="fw-medium">{inventory.num_processors || 'N/A'}</div></Col>
+                  </Row>
 
-              {/* Network Adapters */}
-              {inventory.ip_addresses && inventory.ip_addresses.length > 0 && (
-                <div>
-                  <h4 className="text-[10px] font-bold text-rn-white/40 uppercase tracking-wider mb-3">Network Adapters</h4>
-                  <div className="space-y-2">
-                    {inventory.ip_addresses.map((ip: any, i: number) => (
-                      <div key={i} className="flex justify-between items-center px-3 py-2 rounded-xl bg-rn-white/[0.02] border border-rn-white/5">
-                        <span className="text-xs font-medium text-rn-white/70">{ip.adapter}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-bold uppercase tracking-widest">{ip.version}</span>
-                          <span className="text-sm font-mono text-rn-white">{ip.ip}</span>
-                        </div>
+                  {inventory.ip_addresses && inventory.ip_addresses.length > 0 && (
+                    <>
+                      <h5 className="fs-14 fw-bold mb-3 mt-4">Network Adapters</h5>
+                      <div className="d-flex flex-column gap-2 mb-4">
+                        {inventory.ip_addresses.map((ip: any, i: number) => (
+                          <div key={i} className="d-flex justify-content-between border p-2 rounded bg-white">
+                            <span className="fw-medium">{ip.adapter}</span>
+                            <span><Badge color="info" className="me-2">{ip.version}</Badge><span className="font-monospace text-muted">{ip.ip}</span></span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </>
+                  )}
+
+                  {inventory.logical_disks && inventory.logical_disks.length > 0 && (
+                    <>
+                      <h5 className="fs-14 fw-bold mb-3 mt-4">Logical Disks</h5>
+                      <Row className="g-3">
+                        {inventory.logical_disks.map((disk: any, i: number) => (
+                          <Col md={6} key={i}>
+                            <div className="border p-3 rounded bg-white">
+                              <div className="d-flex justify-content-between mb-2">
+                                <span className="fw-bold">{disk.drive}</span>
+                                <Badge color="secondary">{disk.type}</Badge>
+                              </div>
+                              <div className="d-flex justify-content-between text-muted fs-12 mb-1">
+                                <span>Free: {(disk.free_bytes / (1024 * 1024 * 1024)).toFixed(1)} GB</span>
+                                <span>Total: {(disk.total_bytes / (1024 * 1024 * 1024)).toFixed(1)} GB</span>
+                              </div>
+                              <div className="progress progress-sm">
+                                <div className="progress-bar bg-success" style={{ width: `${((disk.total_bytes - disk.free_bytes) / disk.total_bytes) * 100}%` }}></div>
+                              </div>
+                            </div>
+                          </Col>
+                        ))}
+                      </Row>
+                    </>
+                  )}
                 </div>
               )}
-
-              {/* Logical Disks */}
-              {inventory.logical_disks && inventory.logical_disks.length > 0 && (
-                <div>
-                  <h4 className="text-[10px] font-bold text-rn-white/40 uppercase tracking-wider mb-3">Logical Disks</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {inventory.logical_disks.map((disk: any, i: number) => (
-                      <div key={i} className="px-4 py-3 rounded-xl bg-rn-white/[0.02] border border-rn-white/5">
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="text-sm font-bold text-rn-white">{disk.drive}</span>
-                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-rn-white/10 text-rn-white/60 font-bold uppercase tracking-widest">{disk.type}</span>
-                        </div>
-                        <div className="flex justify-between text-xs text-rn-white/50 mb-1">
-                          <span>Free: {(disk.free_bytes / (1024 * 1024 * 1024)).toFixed(1)} GB</span>
-                          <span>Total: {(disk.total_bytes / (1024 * 1024 * 1024)).toFixed(1)} GB</span>
-                        </div>
-                        <div className="w-full h-1.5 bg-rn-white/5 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-emerald-400 rounded-full" 
-                            style={{ width: `${((disk.total_bytes - disk.free_bytes) / disk.total_bytes) * 100}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+            </CardBody>
+          </Card>
+        </Col>
+      </Row>
     </div>
   );
 };
