@@ -15,7 +15,9 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock,
-  ExternalLink
+  ExternalLink,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { endpoints } from '../api/endpoints';
 import { cn } from '../lib/utils';
@@ -23,11 +25,12 @@ import { WebPolicyCard } from '../components/policies/WebPolicyCard';
 import { SoftwarePolicyCard } from '../components/policies/SoftwarePolicyCard';
 import { AntivirusScanCard } from '../components/policies/AntivirusScanCard';
 import { ConfigPushCard } from '../components/policies/ConfigPushCard';
+import EndpointTab from '../components/EndpointTab';
 
 export const AgentDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'control' | 'policies' | 'history' | 'status'>('control');
+  const [activeTab, setActiveTab] = useState<'control' | 'policies' | 'endpoint' | 'history' | 'status'>('control');
 
   // Queries
   const { data: agent, isLoading: agentLoading } = useQuery({
@@ -49,6 +52,8 @@ export const AgentDetail: React.FC = () => {
   });
 
   const [lastCommand, setLastCommand] = useState<{ verb: string, time: string } | null>(null);
+  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
+  const toggleRow = (id: string) => setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }));
 
   // Mutation for sending commands
   const commandMutation = useMutation({
@@ -153,6 +158,7 @@ export const AgentDetail: React.FC = () => {
         {[
           { id: 'control', label: 'Module Control', icon: Zap },
           { id: 'policies', label: 'Security Policies', icon: Shield },
+          { id: 'endpoint', label: 'Endpoint Management', icon: Terminal },
           { id: 'history', label: 'Command History', icon: Clock },
           { id: 'status', label: 'Status Reports', icon: Activity },
         ].map(tab => (
@@ -201,6 +207,12 @@ export const AgentDetail: React.FC = () => {
                 {!agent.online && <p className="text-[10px] text-rn-orange mt-4 font-bold">Offline: Command Buffer Only</p>}
               </button>
             ))}
+          </div>
+        )}
+
+        {activeTab === 'endpoint' && (
+          <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+            <EndpointTab agentId={id!} />
           </div>
         )}
 
@@ -280,53 +292,70 @@ export const AgentDetail: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-rn-white/5">
                 {history?.commands.map((cmd: any) => (
-                  <tr key={cmd.command_id} className="hover:bg-rn-white/[0.02] transition-colors">
-                    <td className="px-6 py-4">
-                      <span className="text-[10px] font-mono text-rn-white/40">{cmd.command_id.split('-').pop()}</span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <Terminal className="w-3.5 h-3.5 text-rn-orange/60" />
-                        <span className="text-sm font-bold text-rn-white">{cmd.verb}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <pre className="text-[10px] text-rn-white/40 overflow-hidden text-ellipsis whitespace-nowrap max-w-[200px]">
-                        {JSON.stringify(cmd.params)}
-                      </pre>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        {cmd.status === 'acked' ? (
-                          <>
-                            <CheckCircle2 className="w-4 h-4 text-green-500" />
-                            <span className="text-xs text-green-500 font-bold uppercase">{cmd.ack_status || 'Acknowledged'}</span>
-                          </>
-                        ) : cmd.status === 'failed' ? (
-                          <>
-                            <AlertTriangle className="w-4 h-4 text-rn-orange" />
-                            <span className="text-xs text-rn-orange font-bold uppercase">Failed</span>
-                          </>
-                        ) : (
-                          <>
-                            <RefreshCw className="w-3.5 h-3.5 text-rn-white/20 animate-spin" />
-                            <span className="text-xs text-rn-white/40 font-bold uppercase">Pending</span>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      {cmd.result_payload ? (
-                        <div className="group relative">
-                          <pre className="text-[10px] text-rn-white/60 bg-rn-white/5 p-2 rounded-lg max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap font-mono border border-rn-white/5 cursor-help hover:border-rn-white/20 transition-all">
-                            {cmd.result_payload}
-                          </pre>
-                          <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-50 bg-rn-black-card border border-rn-white/10 p-4 rounded-2xl shadow-2xl min-w-[300px] max-w-[500px] animate-in fade-in zoom-in-95 duration-200">
+                  <React.Fragment key={cmd.command_id}>
+                    <tr 
+                      className="hover:bg-rn-white/[0.02] transition-colors cursor-pointer group"
+                      onClick={() => toggleRow(cmd.command_id)}
+                    >
+                      <td className="px-6 py-4">
+                        <span className="text-[10px] font-mono text-rn-white/40">{cmd.command_id.split('-').pop()}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <Terminal className="w-3.5 h-3.5 text-rn-orange/60" />
+                          <span className="text-sm font-bold text-rn-white">{cmd.verb}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <pre className="text-[10px] text-rn-white/40 overflow-hidden text-ellipsis whitespace-nowrap max-w-[200px]">
+                          {JSON.stringify(cmd.params)}
+                        </pre>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          {cmd.status === 'acked' ? (
+                            <>
+                              <CheckCircle2 className="w-4 h-4 text-green-500" />
+                              <span className="text-xs text-green-500 font-bold uppercase">{cmd.ack_status || 'Acknowledged'}</span>
+                            </>
+                          ) : cmd.status === 'failed' ? (
+                            <>
+                              <AlertTriangle className="w-4 h-4 text-rn-orange" />
+                              <span className="text-xs text-rn-orange font-bold uppercase">Failed</span>
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 text-rn-white/20 animate-spin" />
+                              <span className="text-xs text-rn-white/40 font-bold uppercase">Pending</span>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-[10px] text-rn-white/40 italic">
+                          {cmd.result_payload ? 'Click to view details' : 'No output'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-rn-white/40">{cmd.created_at}</span>
+                          {cmd.result_payload && (
+                            <div className="text-rn-white/20 group-hover:text-rn-white/60 transition-colors">
+                              {expandedRows[cmd.command_id] ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    {expandedRows[cmd.command_id] && cmd.result_payload && (
+                      <tr className="bg-rn-black/40">
+                        <td colSpan={6} className="px-6 py-4">
+                          <div className="border border-rn-white/5 rounded-2xl p-4 bg-rn-white/[0.02]">
                             <div className="flex items-center justify-between mb-2 pb-2 border-b border-rn-white/5">
-                              <span className="text-[10px] font-bold text-rn-orange uppercase tracking-wider">Command Output</span>
+                              <span className="text-[10px] font-bold text-rn-orange uppercase tracking-wider">Command Output Payload</span>
                               <span className="text-[10px] text-rn-white/20 font-mono">{cmd.command_id}</span>
                             </div>
-                            <pre className="text-[11px] text-rn-white/80 font-mono whitespace-pre-wrap break-all max-h-[300px] overflow-y-auto">
+                            <pre className="text-[11px] text-rn-white/80 font-mono whitespace-pre-wrap break-all custom-scrollbar overflow-y-auto max-h-[500px]">
                               {(() => {
                                 try {
                                   return JSON.stringify(JSON.parse(cmd.result_payload), null, 2);
@@ -336,15 +365,10 @@ export const AgentDetail: React.FC = () => {
                               })()}
                             </pre>
                           </div>
-                        </div>
-                      ) : (
-                        <span className="text-[10px] text-rn-white/10 italic">No output</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="text-xs text-rn-white/40">{cmd.created_at}</span>
-                    </td>
-                  </tr>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>

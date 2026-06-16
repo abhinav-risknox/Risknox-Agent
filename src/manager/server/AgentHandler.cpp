@@ -276,7 +276,7 @@ void AgentHandler::handleRegistration(SSL* ssl, const std::string& clientAddr,
     if (!db_.getLicense(request.agentId).has_value()) {
         LicenseRecord lr;
         lr.agentId = request.agentId;
-        lr.licenseKey = "TRIAL-" + request.agentId.substr(0, 8);
+        lr.licenseKey = "TRIAL-" + request.agentId;
         lr.licenseType = "TRIAL";
         
         // Use current time and +7 days

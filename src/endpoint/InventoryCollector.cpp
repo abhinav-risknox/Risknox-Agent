@@ -97,6 +97,7 @@ static nlohmann::json collectIPs() {
 
 nlohmann::json InventoryCollector::collectFullInventory() {
     OSInfoCollector osCollector;
+    osCollector.initialize();
     nlohmann::json inv = osCollector.collect();
     
     inv["logical_disks"] = collectDisks();

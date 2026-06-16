@@ -918,7 +918,8 @@ std::optional<ModuleCommandRecord> PostgresClient::getModuleCommandByCommandId(
 
     const char* paramValues[1] = { commandId.c_str() };
     PGresult* res = PQexecParams(conn_,
-        "SELECT id, agent_id, command_id, verb, params::text, status, created_at::text "
+        "SELECT id, agent_id, command_id, verb, params::text, status, "
+        "COALESCE(ack_status, ''), COALESCE(result_payload, ''), created_at::text "
         "FROM module_commands WHERE command_id = $1",
         1, nullptr, paramValues, nullptr, nullptr, 0);
 
@@ -934,7 +935,9 @@ std::optional<ModuleCommandRecord> PostgresClient::getModuleCommandByCommandId(
     c.verb      = PQgetvalue(res, 0, 3);
     c.params    = PQgetvalue(res, 0, 4);
     c.status    = PQgetvalue(res, 0, 5);
-    c.createdAt = PQgetisnull(res, 0, 6) ? "" : PQgetvalue(res, 0, 6);
+    c.ackStatus = PQgetvalue(res, 0, 6);
+    c.resultPayload = PQgetvalue(res, 0, 7);
+    c.createdAt = PQgetisnull(res, 0, 8) ? "" : PQgetvalue(res, 0, 8);
 
     PQclear(res);
     return c;

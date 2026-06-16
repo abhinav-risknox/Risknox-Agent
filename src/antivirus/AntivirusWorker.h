@@ -6,6 +6,7 @@
 
 #include "notification/ThreatNotifier.h"
 #include <string>
+#include <vector>
 #include <nlohmann/json.hpp>
 
 namespace ResolutePulse {
@@ -27,6 +28,12 @@ public:
     // If notifier is set, shows a threat popup when a threat is found.
     void runScan(const std::string& path,
                  class PipeServer& pipe,
+                 ThreatNotifier* notifier = nullptr,
+                 const std::string& quarantineDir = "");
+
+    // Run a scan on multiple paths. Emits JSON events to `pipe`.
+    void runScan(const std::vector<std::string>& paths,
+                 PipeServer& pipe,
                  ThreatNotifier* notifier = nullptr,
                  const std::string& quarantineDir = "");
 

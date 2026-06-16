@@ -8,6 +8,10 @@ set(CMAKE_C_STANDARD 11)
 # Use static linking for easier deployment
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libgcc -static-libstdc++")
 
+# Workaround: GCC 15 + MinGW + -Wa,-mbig-obj emits strong symbols for
+# inline standard-library functions, causing "multiple definition" link errors.
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--allow-multiple-definition")
+
 # Fix for MinGW "too many sections" error with debug builds of large header-only libraries
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     add_compile_options(-Wa,-mbig-obj)

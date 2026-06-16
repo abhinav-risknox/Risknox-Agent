@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 // WorkerManager.h - Manages spawning, monitoring, and communicating with
 // worker child processes (rp-softblock.exe, rp-webblock.exe, etc.)
@@ -35,6 +35,13 @@ public:
     //                    on-demand and removed from registry when it exits.
     bool spawnWorker(const std::string& exe,
                      const std::string& pipeName,
+                     bool persistent = false);
+
+    // Overload that passes extra CLI arguments to the worker process.
+    // Used to pass unique pipe names: --pipe rp-antivirus-42
+    bool spawnWorker(const std::string& exe,
+                     const std::string& pipeName,
+                     const std::string& extraArgs,
                      bool persistent = false);
 
     // Send a JSON command to a worker and wait for a response.
@@ -79,7 +86,7 @@ private:
     void watchdogLoop();
 
     // Spawn the process and return its HANDLE (or INVALID_HANDLE_VALUE on fail)
-    HANDLE spawnProcess(const std::string& exe);
+    HANDLE spawnProcess(const std::string& exe, const std::string& extraArgs = "");
 };
 
 } // namespace ResolutePulse

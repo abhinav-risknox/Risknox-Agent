@@ -25,6 +25,35 @@ export const endpoints = {
       api.post(`/agents/${id}/module-command`, { verb, params }),
     sendPolicy: (id: string, type: string, data: any) => 
       api.post(`/agents/${id}/policy`, { policy_type: type, policy_data: data }),
+    
+    // Endpoint Management Native Commands
+    endpoint: {
+      users: {
+        list: (id: string) => api.get(`/agents/${id}/endpoint/users`),
+        create: (id: string, params: any) => api.post(`/agents/${id}/endpoint/users`, params),
+        delete: (id: string, username: string) => api.delete(`/agents/${id}/endpoint/users/${username}`),
+        enable: (id: string, username: string) => api.post(`/agents/${id}/endpoint/users/${username}/enable`),
+        disable: (id: string, username: string) => api.post(`/agents/${id}/endpoint/users/${username}/disable`),
+        changePassword: (id: string, username: string, params: any) => api.post(`/agents/${id}/endpoint/users/${username}/password`, params),
+      },
+      groups: {
+        list: (id: string) => api.get(`/agents/${id}/endpoint/groups`),
+        addUser: (id: string, groupname: string, username: string) => api.post(`/agents/${id}/endpoint/groups/${groupname}/users/${username}`),
+        removeUser: (id: string, groupname: string, username: string) => api.delete(`/agents/${id}/endpoint/groups/${groupname}/users/${username}`),
+      },
+      sessions: {
+        list: (id: string) => api.get(`/agents/${id}/endpoint/sessions`),
+        logoff: (id: string, sessionId: number) => api.post(`/agents/${id}/endpoint/sessions/${sessionId}/logoff`),
+        disconnect: (id: string, sessionId: number) => api.post(`/agents/${id}/endpoint/sessions/${sessionId}/disconnect`),
+      },
+      inventory: {
+        collect: (id: string) => api.get(`/agents/${id}/endpoint/inventory`),
+      },
+      passwordPolicy: {
+        get: (id: string) => api.get(`/agents/${id}/endpoint/password-policy`),
+        set: (id: string, params: any) => api.post(`/agents/${id}/endpoint/password-policy`, params),
+      }
+    }
   },
   
   commands: {

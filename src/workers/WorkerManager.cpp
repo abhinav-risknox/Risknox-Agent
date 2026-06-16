@@ -108,12 +108,15 @@ WorkerManager::~WorkerManager() {
 // Process spawning
 // ─────────────────────────────────────────────────────────────────────────────
 
-HANDLE WorkerManager::spawnProcess(const std::string& exe) {
+HANDLE WorkerManager::spawnProcess(const std::string& exe, const std::string& extraArgs) {
     // Resolve path relative to the directory of the current executable
     std::filesystem::path agentDir = getAgentDir();
     std::filesystem::path exePath  = agentDir / exe;
 
     std::string cmdLine = "\"" + exePath.string() + "\"";
+    if (!extraArgs.empty()) {
+        cmdLine += " " + extraArgs;
+    }
 
     STARTUPINFOA si = {};
     si.cb = sizeof(si);
@@ -153,6 +156,26 @@ bool WorkerManager::spawnWorker(const std::string& exe,
     std::lock_guard<std::mutex> lk(mutex_);
 
     HANDLE h = spawnProcess(exe);
+    if (h == INVALID_HANDLE_VALUE) return false;
+
+    WorkerEntry entry;
+    entry.hProcess   = h;
+    entry.exe        = exe;
+    entry.pipeName   = pipeName;
+    entry.persistent = persistent;
+    entry.startedAt  = std::chrono::steady_clock::now();
+
+    workers_[pipeName] = std::move(entry);
+    return true;
+}
+
+bool WorkerManager::spawnWorker(const std::string& exe,
+                                 const std::string& pipeName,
+                                 const std::string& extraArgs,
+                                 bool persistent) {
+    std::lock_guard<std::mutex> lk(mutex_);
+
+    HANDLE h = spawnProcess(exe, extraArgs);
     if (h == INVALID_HANDLE_VALUE) return false;
 
     WorkerEntry entry;

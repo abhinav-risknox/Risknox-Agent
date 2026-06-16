@@ -60,7 +60,7 @@ private:
     void handleGetModuleCommands(const httplib::Request& req, httplib::Response& res);
 
     // ── Endpoint Management endpoints ──
-    void handleEndpointCommand(const httplib::Request& req, httplib::Response& res, const std::string& verb);
+    void handleEndpointCommand(const httplib::Request& req, httplib::Response& res, const std::string& verb, nlohmann::json extraParams = nlohmann::json::object());
 
     // ── Policy command endpoints ──
     void handlePostPolicyCommand(const httplib::Request& req, httplib::Response& res);

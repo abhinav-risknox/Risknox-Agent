@@ -328,6 +328,27 @@ void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe,
     }
 }
 
+void AntivirusWorker::runScan(const std::vector<std::string>& paths,
+                              PipeServer& pipe,
+                              ThreatNotifier* notifier,
+                              const std::string& quarantineDir) {
+    if (paths.empty()) {
+        pipe.sendJson({ {"type","error"}, {"message","no paths to scan"} });
+        return;
+    }
+    if (paths.size() == 1) {
+        runScan(paths[0], pipe, notifier, quarantineDir);
+        return;
+    }
+
+    // Multi-path: build a space-separated list of quoted paths.
+    // clamscan natively supports multiple path arguments.
+    // We scan each path individually to get per-file results.
+    for (const auto& p : paths) {
+        runScan(p, pipe, notifier, quarantineDir);
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // updateDefinitions - run freshclam to refresh virus signatures
 // ─────────────────────────────────────────────────────────────────────────────
@@ -481,8 +502,16 @@ nlohmann::json AntivirusWorker::getDatabaseInfo() const {
 // rp-antivirus.exe  - standalone entry point
 // ─────────────────────────────────────────────────────────────────────────────
 
-int main() {
+int main(int argc, char* argv[]) {
     using namespace ResolutePulse;
+
+    // Parse --pipe argument (unique pipe name from WorkerManager)
+    std::string pipeName = "rp-antivirus";  // backward-compatible default
+    for (int i = 1; i < argc; i++) {
+        if (std::string(argv[i]) == "--pipe" && i + 1 < argc) {
+            pipeName = argv[++i];
+        }
+    }
 
     // Resolve clamav dir relative to this executable
     char selfPath[MAX_PATH] = {};
@@ -520,7 +549,7 @@ int main() {
 
     // One-shot: open pipe, receive command, run scan, exit
     PipeServer pipe;
-    if (!pipe.listen("rp-antivirus")) {
+    if (!pipe.listen(pipeName)) {
         return 1;
     }
 
@@ -568,8 +597,18 @@ int main() {
         });
     } else {
         // quick_scan or full_scan — pass notifier so threats show a popup
+        // Support both single "path" and multi-path "paths" array
+        std::vector<std::string> scanPaths;
+        if (cmd.contains("paths") && cmd["paths"].is_array()) {
+            for (const auto& p : cmd["paths"]) {
+                if (p.is_string()) scanPaths.push_back(p.get<std::string>());
+            }
+        }
+        if (scanPaths.empty()) {
+            scanPaths.push_back(path);  // fallback to single "path"
+        }
         ThreatNotifier* notifierPtr = notificationsEnabled ? &notifier : nullptr;
-        worker.runScan(path, pipe, notifierPtr, quarantineDir);
+        worker.runScan(scanPaths, pipe, notifierPtr, quarantineDir);
     }
 
     pipe.close();

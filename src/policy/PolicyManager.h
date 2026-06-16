@@ -5,8 +5,13 @@
 
 #include <nlohmann/json.hpp>
 #include <string>
+#include <vector>
 #include <functional>
 #include <thread>
+#include <mutex>
+#include <atomic>
+#include <algorithm>
+#include <filesystem>
 
 namespace ResolutePulse {
 
@@ -78,21 +83,45 @@ public:
             }).detach();
             result = true;
         } else if (policyType == "antivirus") {
-            // On-demand worker: run on a background thread so the management
-            // loop is never blocked (AV scans can take several minutes).
-            auto wm = workerManager_;
-            auto cb = statusCallback_;
-            std::thread([wm, policyData, cb]() {
-                wm->spawnWorker("rp-antivirus.exe", "rp-antivirus", /*persistent=*/false);
-                wm->streamEvents("rp-antivirus", policyData,
-                    [cb](const nlohmann::json& event) {
-                        std::string type = event.value("type", "");
-                        LOG_INFO("PolicyManager [rp-antivirus]: {}", event.dump());
-                        if (cb && (type == "complete" || type == "threat")) {
-                            cb("av_scan", event);
-                        }
-                    });
-            }).detach();
+            std::string action = policyData.value("action", "quick_scan");
+
+            // Non-scan actions (update_definitions, database_info) run
+            // immediately on their own unique pipe — no serialization needed.
+            if (action != "quick_scan" && action != "full_scan") {
+                auto wm = workerManager_;
+                auto cb = statusCallback_;
+                int id = avPipeCounter_.fetch_add(1);
+                std::string pipeName = "rp-antivirus-" + std::to_string(id);
+                std::thread([wm, policyData, cb, pipeName]() {
+                    wm->spawnWorker("rp-antivirus.exe", pipeName,
+                                    "--pipe " + pipeName, /*persistent=*/false);
+                    wm->streamEvents(pipeName, policyData,
+                        [cb](const nlohmann::json& event) {
+                            LOG_INFO("PolicyManager [rp-antivirus]: {}", event.dump());
+                            std::string type = event.value("type", "");
+                            if (cb && type == "complete") cb("av_scan", event);
+                        });
+                }).detach();
+            } else {
+                // Scan actions: serialize through avMutex_ for natural batching.
+                // If a scan is already running, paths accumulate in avPendingPaths_
+                // and are picked up when the current worker finishes.
+                {
+                    std::lock_guard<std::mutex> lk(avMutex_);
+                    std::string path = policyData.value("path", "");
+                    if (!path.empty()) avPendingPaths_.push_back(path);
+
+                    if (!avScanRunning_) {
+                        avScanRunning_ = true;
+                        auto wm = workerManager_;
+                        auto cb = statusCallback_;
+                        auto* self = this;
+                        std::thread([self, wm, cb]() {
+                            self->runAvScanLoop(wm, cb);
+                        }).detach();
+                    }
+                }
+            }
             result = true;
         } else if (policyType == "status_request") {
             sendStatusReport();
@@ -162,8 +191,75 @@ private:
         return std::string(buf);
     }
 
+    // Drain pending AV scan paths in a loop.  Runs on a detached thread.
+    // When no more paths remain, sets avScanRunning_ = false and returns.
+    void runAvScanLoop(WorkerManager* wm, StatusReportCallback cb) {
+        while (true) {
+            // Drain pending paths under lock
+            std::vector<std::string> paths;
+            {
+                std::lock_guard<std::mutex> lk(avMutex_);
+                paths.swap(avPendingPaths_);
+                if (paths.empty()) {
+                    avScanRunning_ = false;
+                    return;  // nothing left to scan
+                }
+            }
+
+            // Deduplicate
+            std::sort(paths.begin(), paths.end());
+            paths.erase(std::unique(paths.begin(), paths.end()), paths.end());
+
+            // Filter out files that vanished since queuing
+            paths.erase(
+                std::remove_if(paths.begin(), paths.end(),
+                    [](const std::string& p) {
+                        return !std::filesystem::exists(p);
+                    }),
+                paths.end());
+
+            if (paths.empty()) continue;  // all vanished, check for more
+
+            // Unique pipe name for this invocation
+            int id = avPipeCounter_.fetch_add(1);
+            std::string pipeName = "rp-antivirus-" + std::to_string(id);
+
+            // Build scan command with all paths
+            nlohmann::json cmd;
+            cmd["action"] = "quick_scan";
+            if (paths.size() == 1) {
+                cmd["path"] = paths[0];
+            } else {
+                cmd["paths"] = paths;
+            }
+
+            LOG_INFO("PolicyManager: AV scan starting ({} file(s)) pipe={}",
+                     paths.size(), pipeName);
+
+            wm->spawnWorker("rp-antivirus.exe", pipeName,
+                            "--pipe " + pipeName, /*persistent=*/false);
+            wm->streamEvents(pipeName, cmd,
+                [cb](const nlohmann::json& event) {
+                    std::string type = event.value("type", "");
+                    LOG_INFO("PolicyManager [rp-antivirus]: {}", event.dump());
+                    if (cb && (type == "complete" || type == "threat")) {
+                        cb("av_scan", event);
+                    }
+                });
+
+            // Loop back to check if more paths arrived while scanning
+        }
+    }
+
     WorkerManager* workerManager_ = nullptr;
     StatusReportCallback statusCallback_;
+
+    // AV scan serialization: only one rp-antivirus.exe runs at a time.
+    // New paths arriving during a scan accumulate and are batched naturally.
+    std::mutex avMutex_;
+    bool avScanRunning_ = false;
+    std::vector<std::string> avPendingPaths_;
+    std::atomic<int> avPipeCounter_{0};
 };
 
 } // namespace ResolutePulse

@@ -134,13 +134,15 @@ The agent uses a **multi-process architecture** (inspired by Wazuh) with Named P
 
 ### C++ Dependencies (vendored / system)
 
-| Library | Purpose |
-|---|---|
-| [nlohmann-json](https://github.com/nlohmann/json) | JSON parsing |
-| [cpp-httplib](https://github.com/yhirose/cpp-httplib) | HTTP client/server (REST API) |
-| [spdlog](https://github.com/gabime/spdlog) | Structured logging |
-| [SQLite3](https://sqlite.org) | Local event buffer + FIM database |
-| [OpenSSL](https://openssl.org) | TLS/mTLS, certificates, hashing |
+All header-only libraries are vendored in `thirdparty/` and tracked in git — no package manager is needed.
+
+| Library | Version | Location | Purpose |
+|---|---|---|---|
+| [nlohmann-json](https://github.com/nlohmann/json) | 3.11.3 | `thirdparty/nlohmann/` | JSON parsing |
+| [cpp-httplib](https://github.com/yhirose/cpp-httplib) | 0.18.7 | `thirdparty/httplib/` | HTTP client/server (REST API) |
+| [spdlog](https://github.com/gabime/spdlog) | 1.15.3 | `thirdparty/spdlog/` | Structured logging (header-only, bundled fmt) |
+| [SQLite3](https://sqlite.org) | — | `thirdparty/sqlite3/` | Local event buffer + FIM database |
+| [OpenSSL](https://openssl.org) | ≥ 3.0 | System | TLS/mTLS, certificates, hashing |
 
 ### Windows APIs
 
@@ -214,7 +216,11 @@ Agent/
 ├── scripts/                      # EC2 bootstrap, cert gen, ClamAV updater
 ├── deploy/                       # Deployment scripts
 ├── vendor/clamav/                # Bundled ClamAV runtime
-├── thirdparty/                   # Header-only C++ libs (spdlog, sqlite3, etc.)
+├── thirdparty/                   # Vendored header-only C++ libs
+│   ├── nlohmann/                 #   nlohmann/json v3.11.3
+│   ├── spdlog/                   #   spdlog v1.15.3 (+ bundled fmt)
+│   ├── httplib/                  #   cpp-httplib v0.18.7
+│   └── sqlite3/                  #   SQLite3 (amalgamation)
 ├── libs/                         # Additional libraries
 ├── data-prepper/                 # Data Prepper pipeline configs
 ├── fluent-bit.conf               # Fluent Bit configuration
@@ -238,10 +244,14 @@ Agent/
 
 ### Agent Build (Windows)
 
-- **MinGW-w64** (GCC 12+) — e.g. `C:\MinGW`
+- **MinGW-w64** (GCC 12+, tested with GCC 15.2) — e.g. `C:\MinGW`
 - **CMake** ≥ 3.20
 - **MSYS2 / mingw64 OpenSSL** — installed at `C:\msys64\mingw64` (provides `libssl`, `libcrypto`)
 - **PostgreSQL 18** (optional — only needed for building the Manager on Windows)
+
+> **GCC 15 Note:** The build includes `-Wl,--allow-multiple-definition` to work around a
+> GCC 15 + MinGW + `-Wa,-mbig-obj` regression where inline standard library functions
+> are emitted with strong linkage, causing duplicate symbol errors at link time.
 
 ### Server Infrastructure (Docker)
 
@@ -262,8 +272,9 @@ Agent/
 
 ### Agent (Windows — MinGW)
 
-> **Note:** All C++ dependencies (nlohmann-json, spdlog, cpp-httplib, SQLite3) are vendored
-> in `thirdparty/` — no package manager is needed. Only OpenSSL must be present on the system.
+> **Note:** All C++ header-only dependencies (nlohmann-json, spdlog, cpp-httplib, SQLite3)
+> are vendored in `thirdparty/` and tracked in git — no package manager is needed.
+> Only OpenSSL must be installed on the system.
 
 #### Debug Build
 

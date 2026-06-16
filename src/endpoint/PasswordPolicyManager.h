@@ -7,10 +7,10 @@ namespace ResolutePulse {
 namespace Endpoint {
 
 struct PasswordPolicy {
-    int minLength;
-    int maxAgeDays;
-    int minAgeDays;
-    int historyLength;
+    int minLength = 0;
+    int maxAgeDays = 0;
+    int minAgeDays = 0;
+    int historyLength = 0;
     // Complexity isn't directly in USER_MODALS_INFO_0, but let's define it
 };
 

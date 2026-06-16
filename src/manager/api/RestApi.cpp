@@ -142,6 +142,60 @@ void RestApi::registerRoutes() {
         if (!authenticate(req, res)) return;
         handleEndpointCommand(req, res, "password_policy_set");
     });
+    
+    // Additional User Routes
+    httpServer_->Post(R"(/api/agents/([^/]+)/endpoint/users)", [this](const Req& req, Res& res) {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleEndpointCommand(req, res, "user_create");
+    });
+    httpServer_->Delete(R"(/api/agents/([^/]+)/endpoint/users/([^/]+))", [this](const Req& req, Res& res) {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleEndpointCommand(req, res, "user_delete", {{"username", req.matches[2]}});
+    });
+    httpServer_->Post(R"(/api/agents/([^/]+)/endpoint/users/([^/]+)/enable)", [this](const Req& req, Res& res) {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleEndpointCommand(req, res, "user_enable", {{"username", req.matches[2]}});
+    });
+    httpServer_->Post(R"(/api/agents/([^/]+)/endpoint/users/([^/]+)/disable)", [this](const Req& req, Res& res) {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleEndpointCommand(req, res, "user_disable", {{"username", req.matches[2]}});
+    });
+    httpServer_->Post(R"(/api/agents/([^/]+)/endpoint/users/([^/]+)/password)", [this](const Req& req, Res& res) {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleEndpointCommand(req, res, "user_password_change", {{"username", req.matches[2]}});
+    });
+
+    // Additional Group Routes
+    httpServer_->Post(R"(/api/agents/([^/]+)/endpoint/groups/([^/]+)/users/([^/]+))", [this](const Req& req, Res& res) {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleEndpointCommand(req, res, "group_add_user", {{"groupname", req.matches[2]}, {"username", req.matches[3]}});
+    });
+    httpServer_->Delete(R"(/api/agents/([^/]+)/endpoint/groups/([^/]+)/users/([^/]+))", [this](const Req& req, Res& res) {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleEndpointCommand(req, res, "group_remove_user", {{"groupname", req.matches[2]}, {"username", req.matches[3]}});
+    });
+
+    // Additional Session Routes
+    httpServer_->Post(R"(/api/agents/([^/]+)/endpoint/sessions/([^/]+)/logoff)", [this](const Req& req, Res& res) {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        int sessionId = std::stoi(std::string(req.matches[2]));
+        handleEndpointCommand(req, res, "session_logoff", {{"session_id", sessionId}});
+    });
+    httpServer_->Post(R"(/api/agents/([^/]+)/endpoint/sessions/([^/]+)/disconnect)", [this](const Req& req, Res& res) {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        int sessionId = std::stoi(std::string(req.matches[2]));
+        handleEndpointCommand(req, res, "session_disconnect", {{"session_id", sessionId}});
+    });
+
 
     // ── Unified command lookup ──
     httpServer_->Get(R"(/api/commands/([^/]+))", [this](const Req& req, Res& res) {
@@ -437,13 +491,18 @@ void RestApi::handleGetModuleCommands(const httplib::Request& req, httplib::Resp
     res.set_content(resp.dump(), "application/json");
 }
 
-void RestApi::handleEndpointCommand(const httplib::Request& req, httplib::Response& res, const std::string& verb) {
+void RestApi::handleEndpointCommand(const httplib::Request& req, httplib::Response& res, const std::string& verb, nlohmann::json extraParams) {
     try {
         std::string agentId = req.matches[1];
         nlohmann::json params = nlohmann::json::object();
         
         if (req.method == "POST" && !req.body.empty()) {
             params = nlohmann::json::parse(req.body);
+        }
+        
+        // Merge extra parameters (like path variables)
+        for (auto& el : extraParams.items()) {
+            params[el.key()] = el.value();
         }
 
         // Generate a unique commandId
@@ -582,6 +641,12 @@ void RestApi::handleGetCommandById(const httplib::Request& req, httplib::Respons
         j["verb"]           = mcmd->verb;
         j["params"]         = nlohmann::json::parse(mcmd->params, nullptr, false);
         j["status"]         = mcmd->status;
+        j["ack_status"]     = mcmd->ackStatus;
+        if (!mcmd->resultPayload.empty()) {
+            j["result_payload"] = nlohmann::json::parse(mcmd->resultPayload, nullptr, false);
+        } else {
+            j["result_payload"] = nullptr;
+        }
         j["created_at"]     = mcmd->createdAt;
         res.set_content(j.dump(), "application/json");
         return;

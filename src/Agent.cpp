@@ -274,8 +274,6 @@ bool Agent::initialize(const std::string& configPath) {
                 // ── New-file AV trigger ───────────────────────────────────────
                 // Trigger on Created OR Modified (browsers rename .crdownload → final file,
                 // which USN Journal reports as Modified, not Created).
-                // MotW check is deferred to the debounce loop so Zone.Identifier has
-                // time to be written by the browser before we check it.
                 if (dlCfg.enabled &&
                     (fimEvent.changeType == FimChangeType::Created ||
                      fimEvent.changeType == FimChangeType::Modified)) {
@@ -284,6 +282,19 @@ bool Agent::initialize(const std::string& configPath) {
                     std::string lowerPath = fimEvent.path;
                     std::transform(lowerPath.begin(), lowerPath.end(),
                                    lowerPath.begin(), ::tolower);
+
+                    // Skip known transient browser artifacts — these are
+                    // renamed or deleted when the real download finishes
+                    auto endsWith = [](const std::string& s, const std::string& suffix) {
+                        return s.size() >= suffix.size() &&
+                               s.compare(s.size() - suffix.size(), suffix.size(), suffix) == 0;
+                    };
+                    if (endsWith(lowerPath, ".crdownload") ||
+                        endsWith(lowerPath, ".partial") ||
+                        endsWith(lowerPath, ".tmp")) {
+                        return;
+                    }
+
                     bool inDownloads = lowerPath.find("\\downloads\\") != std::string::npos;
 
                     if (inDownloads) {
@@ -301,11 +312,29 @@ bool Agent::initialize(const std::string& configPath) {
                         }
 
                         if (extOk) {
-                            // Queue for debounce — MotW check happens there after 5s
-                            // so Zone.Identifier is guaranteed to exist by then
-                            LOG_INFO("Download detected, queuing for scan: {}", fimEvent.path);
-                            std::lock_guard<std::mutex> lock(avScanQueueMutex_);
-                            avScanQueue_.push_back(fimEvent.path);
+                            // Skip files that no longer exist (race with browser rename)
+                            if (!std::filesystem::exists(fimEvent.path)) {
+                                LOG_DEBUG("Skipping vanished file: {}", fimEvent.path);
+                                return;
+                            }
+
+                            // MotW check (immediate — browser writes Zone.Identifier at rename time)
+                            if (dlCfg.motw_only) {
+                                auto motw = checkMotw(fimEvent.path);
+                                if (!motw.hasMotw) {
+                                    LOG_INFO("Skipping (no MotW): {}", fimEvent.path);
+                                    return;
+                                }
+                                LOG_INFO("MotW confirmed (Zone {}): {}", motw.zoneId, fimEvent.path);
+                            }
+
+                            LOG_INFO("Download detected, requesting scan: {}", fimEvent.path);
+                            if (policyManager_) {
+                                nlohmann::json policy;
+                                policy["action"] = "quick_scan";
+                                policy["path"]   = fimEvent.path;
+                                policyManager_->handlePolicyUpdate("antivirus", policy);
+                            }
                         }
                     }
                 }
@@ -612,15 +641,13 @@ int Agent::run() {
         LOG_INFO("FIM monitoring started");
     }
 
-    // Start download-scan debounce thread if enabled
+    // Download scan: no debounce thread needed — scans are dispatched
+    // immediately from the FIM callback and serialized in PolicyManager.
     {
         const auto& dlCfg2 = ConfigManager::instance().getDownloadScanConfig();
         if (dlCfg2.enabled && ConfigManager::instance().getAntivirusConfig().enabled) {
-            avScanDebounceStop_ = false;
-            int debounceSeconds = dlCfg2.debounce_seconds;
-            avScanDebounceThread_ = std::thread(&Agent::avScanDebounceLoop, this, debounceSeconds);
-            LOG_INFO("Download scan watcher started (debounce={}s, motw_only={})",
-                     debounceSeconds, dlCfg2.motw_only);
+            LOG_INFO("Download scan watcher active (immediate, motw_only={})",
+                     dlCfg2.motw_only);
         }
     }
     
@@ -772,12 +799,6 @@ void Agent::stop() {
     if (usbMonitor_) {
         usbMonitor_->stop();
     }
-
-    // Stop download-scan debounce thread
-    avScanDebounceStop_ = true;
-    if (avScanDebounceThread_.joinable()) {
-        avScanDebounceThread_.join();
-    }
 }
 
 bool Agent::shouldStop() const {
@@ -794,56 +815,6 @@ bool Agent::shouldStop() const {
     return false;
 }
 
-void Agent::avScanDebounceLoop(int debounceSeconds) {
-    LOG_DEBUG("AV scan debounce loop started ({}s)", debounceSeconds);
-
-    while (!avScanDebounceStop_.load()) {
-        std::this_thread::sleep_for(std::chrono::seconds(debounceSeconds));
-
-        if (avScanDebounceStop_.load()) break;
-
-        std::vector<std::string> filesToScan;
-        {
-            std::lock_guard<std::mutex> lock(avScanQueueMutex_);
-            filesToScan.swap(avScanQueue_);
-        }
-
-        if (filesToScan.empty()) continue;
-
-        const auto& dlCfg = ConfigManager::instance().getDownloadScanConfig();
-        LOG_INFO("AV debounce fired: checking {} file(s)", filesToScan.size());
-
-        // Deduplicate paths
-        std::sort(filesToScan.begin(), filesToScan.end());
-        filesToScan.erase(std::unique(filesToScan.begin(), filesToScan.end()),
-                          filesToScan.end());
-
-        // Scan each file individually via rp-antivirus.exe
-        for (const auto& filePath : filesToScan) {
-            if (avScanDebounceStop_.load()) break;
-
-            // MotW check here — Zone.Identifier is now written by browser after 5s debounce
-            if (dlCfg.motw_only) {
-                auto motw = checkMotw(filePath);
-                if (!motw.hasMotw) {
-                    LOG_INFO("Skipping (no MotW): {}", filePath);
-                    continue;
-                }
-                LOG_INFO("MotW confirmed (Zone {}): {}", motw.zoneId, filePath);
-            }
-
-            LOG_INFO("Scanning downloaded file: {}", filePath);
-            nlohmann::json policy;
-            policy["action"] = "quick_scan";
-            policy["path"]   = filePath;
-            if (policyManager_) {
-                policyManager_->handlePolicyUpdate("antivirus", policy);
-            }
-        }
-    }
-
-    LOG_DEBUG("AV scan debounce loop stopped");
-}
 
 void Agent::sysInfoLoop() {
     LOG_DEBUG("System info collection thread started");

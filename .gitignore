@@ -86,12 +86,17 @@ logs/
 events.json
 config.json
 status.json
-fluent-bit.conf
 
 # ==========================
 # Third-party (vendored)
 # ==========================
-thirdparty/
+# Header-only libraries in thirdparty/ ARE tracked (nlohmann, spdlog, httplib, sqlite3).
+# Only ignore build artifacts that may appear inside thirdparty/.
+thirdparty/**/CMakeFiles/
+thirdparty/**/build/
+thirdparty/**/*.o
+thirdparty/**/*.a
+
 # ClamAV binaries & virus databases (~210 MB) - store in artifact storage, not Git
 vendor/clamav/
 !vendor/
@@ -127,4 +132,3 @@ ehthumbs.db
 filebeat-logs/
 fluent-bit/
 fluent-bit-scripts/
-docker-compose.yml

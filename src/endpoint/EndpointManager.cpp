@@ -33,33 +33,71 @@ bool EndpointManager::handleCommand(const std::string& verb, const nlohmann::jso
             errorMsg = "username and password are required";
             return false;
         }
-        return UserManager::createUser(username, password, fullName, errorMsg);
+        if (UserManager::createUser(username, password, fullName, errorMsg)) {
+            result = {{"success", true}, {"message", "User created successfully"}};
+            return true;
+        }
+        return false;
     } else if (verb == "user_delete") {
         std::string username = params.value("username", "");
-        return UserManager::deleteUser(username, errorMsg);
+        if (username.empty()) { errorMsg = "username is required"; return false; }
+        if (UserManager::deleteUser(username, errorMsg)) {
+            result = {{"success", true}, {"message", "User deleted successfully"}};
+            return true;
+        }
+        return false;
     } else if (verb == "user_enable") {
         std::string username = params.value("username", "");
-        return UserManager::enableUser(username, errorMsg);
+        if (username.empty()) { errorMsg = "username is required"; return false; }
+        if (UserManager::enableUser(username, errorMsg)) {
+            result = {{"success", true}, {"message", "User enabled successfully"}};
+            return true;
+        }
+        return false;
     } else if (verb == "user_disable") {
         std::string username = params.value("username", "");
-        return UserManager::disableUser(username, errorMsg);
+        if (username.empty()) { errorMsg = "username is required"; return false; }
+        if (UserManager::disableUser(username, errorMsg)) {
+            result = {{"success", true}, {"message", "User disabled successfully"}};
+            return true;
+        }
+        return false;
     } else if (verb == "user_password_change") {
         std::string username = params.value("username", "");
         std::string password = params.value("password", "");
-        return UserManager::changePassword(username, password, errorMsg);
+        if (username.empty() || password.empty()) { errorMsg = "username and password are required"; return false; }
+        if (UserManager::changePassword(username, password, errorMsg)) {
+            result = {{"success", true}, {"message", "Password changed successfully"}};
+            return true;
+        }
+        return false;
     } else if (verb == "group_list") {
         auto groups = UserManager::listGroups(errorMsg);
         if (!errorMsg.empty()) return false;
-        result = groups;
+        nlohmann::json arr = nlohmann::json::array();
+        for (const auto& g : groups) {
+            arr.push_back({{"groupname", g}});
+        }
+        result = arr;
         return true;
     } else if (verb == "group_add_user") {
         std::string username = params.value("username", "");
         std::string groupname = params.value("groupname", "");
-        return UserManager::addUserToGroup(username, groupname, errorMsg);
+        if (username.empty() || groupname.empty()) { errorMsg = "username and groupname are required"; return false; }
+        if (UserManager::addUserToGroup(username, groupname, errorMsg)) {
+            result = {{"success", true}, {"message", "User added to group successfully"}};
+            return true;
+        }
+        return false;
     } else if (verb == "group_remove_user") {
         std::string username = params.value("username", "");
         std::string groupname = params.value("groupname", "");
-        return UserManager::removeUserFromGroup(username, groupname, errorMsg);
+        if (username.empty() || groupname.empty()) { errorMsg = "username and groupname are required"; return false; }
+        if (UserManager::removeUserFromGroup(username, groupname, errorMsg)) {
+            result = {{"success", true}, {"message", "User removed from group successfully"}};
+            return true;
+        }
+        return false;
     } else if (verb == "password_policy_get") {
         PasswordPolicy policy;
         if (PasswordPolicyManager::getPolicy(policy, errorMsg)) {
@@ -78,7 +116,11 @@ bool EndpointManager::handleCommand(const std::string& verb, const nlohmann::jso
         policy.maxAgeDays = params.value("max_age_days", -1);
         policy.minAgeDays = params.value("min_age_days", -1);
         policy.historyLength = params.value("history_length", -1);
-        return PasswordPolicyManager::setPolicy(policy, errorMsg);
+        if (PasswordPolicyManager::setPolicy(policy, errorMsg)) {
+            result = {{"success", true}, {"message", "Password policy set successfully"}};
+            return true;
+        }
+        return false;
     } else if (verb == "session_list") {
         auto sessions = SessionManager::listSessions(errorMsg);
         if (!errorMsg.empty()) return false;
@@ -95,10 +137,20 @@ bool EndpointManager::handleCommand(const std::string& verb, const nlohmann::jso
         return true;
     } else if (verb == "session_logoff") {
         int sessionId = params.value("session_id", -1);
-        return SessionManager::logoffSession(sessionId, errorMsg);
+        if (sessionId == -1) { errorMsg = "session_id is required"; return false; }
+        if (SessionManager::logoffSession(sessionId, errorMsg)) {
+            result = {{"success", true}, {"message", "Session logged off successfully"}};
+            return true;
+        }
+        return false;
     } else if (verb == "session_disconnect") {
         int sessionId = params.value("session_id", -1);
-        return SessionManager::disconnectSession(sessionId, errorMsg);
+        if (sessionId == -1) { errorMsg = "session_id is required"; return false; }
+        if (SessionManager::disconnectSession(sessionId, errorMsg)) {
+            result = {{"success", true}, {"message", "Session disconnected successfully"}};
+            return true;
+        }
+        return false;
     } else if (verb == "inventory_collect") {
         result = InventoryCollector::collectFullInventory();
         return true;
