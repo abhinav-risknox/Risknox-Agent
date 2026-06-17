@@ -31,7 +31,9 @@ export const StatCard: React.FC<StatCardProps> = ({
         <div className="d-flex align-items-end justify-content-between mt-4">
           <div>
             <h4 className="fs-22 fw-semibold ff-secondary mb-4">
-              <span className="counter-value">{value}</span>
+              <span className="counter-value">
+                {typeof value === 'number' ? value.toLocaleString() : value}
+              </span>
             </h4>
             <span className={`badge ${trendUp ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger'} me-1`}>
               <i className={`${trendUp ? 'ri-arrow-up-line' : 'ri-arrow-down-line'} align-middle`}></i> {trend || '0%'}

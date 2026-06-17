@@ -7,7 +7,7 @@ import withRouter from "../../components/common/withRouter";
 // Import Data
 import navdata from "../LayoutMenuData";
 //i18n
-import { withTranslation } from "react-i18next";
+
 
 const HorizontalLayout = (props) => {
     const [isMoreMenu, setIsMoreMenu] = useState(false);
@@ -134,7 +134,7 @@ const HorizontalLayout = (props) => {
                                         data-bs-toggle="collapse"
                                     >
                                         <i className={item.icon}></i>{" "}
-                                        <span data-key="t-apps">{props.t(item.label)}</span>
+                                        <span data-key="t-apps">{((v)=>v)(item.label)}</span>
                                     </Link>
                                     <Collapse
                                         className={
@@ -194,7 +194,7 @@ const HorizontalLayout = (props) => {
                                                                         to={subItem.link ? subItem.link : "/#"}
                                                                         className="nav-link"
                                                                     >
-                                                                        {props.t(subItem.label)}
+                                                                        {((v)=>v)(subItem.label)}
                                                                     </Link>
                                                                 </li>
                                                             ) : (
@@ -206,7 +206,7 @@ const HorizontalLayout = (props) => {
                                                                         data-bs-toggle="collapse"
                                                                     >
                                                                         {" "}
-                                                                        {props.t(subItem.label)}
+                                                                        {((v)=>v)(subItem.label)}
                                                                     </Link>
                                                                     <Collapse
                                                                         className="menu-dropdown"
@@ -229,7 +229,7 @@ const HorizontalLayout = (props) => {
                                                                                                         }
                                                                                                         className="nav-link"
                                                                                                     >
-                                                                                                        {props.t(
+                                                                                                        {((v)=>v)(
                                                                                                             subChildItem.label
                                                                                                         )}
                                                                                                     </Link>
@@ -243,7 +243,7 @@ const HorizontalLayout = (props) => {
                                                                                                         data-bs-toggle="collapse"
                                                                                                     >
                                                                                                         {" "}
-                                                                                                        {props.t(
+                                                                                                        {((v)=>v)(
                                                                                                             subChildItem.label
                                                                                                         )}
                                                                                                     </Link>
@@ -277,7 +277,7 @@ const HorizontalLayout = (props) => {
                                                                                                                                 }
                                                                                                                                 className="nav-link"
                                                                                                                             >
-                                                                                                                                {props.t(
+                                                                                                                                {((v)=>v)(
                                                                                                                                     subSubChildItem.label
                                                                                                                                 )}
                                                                                                                             </Link>
@@ -308,13 +308,13 @@ const HorizontalLayout = (props) => {
                                         to={item.link ? item.link : "/#"}
                                     >
                                         <i className={item.icon}></i>{" "}
-                                        <span>{props.t(item.label)}</span>
+                                        <span>{((v)=>v)(item.label)}</span>
                                     </Link>
                                 </li>
                             )
                         ) : (
                             <li className="menu-title">
-                                <span data-key="t-menu">{props.t(item.label)}</span>
+                                <span data-key="t-menu">{((v)=>v)(item.label)}</span>
                             </li>
                         )}
                     </React.Fragment>
@@ -330,4 +330,4 @@ HorizontalLayout.propTypes = {
     t: PropTypes.any,
 };
 
-export default withRouter(withTranslation()(HorizontalLayout));
+export default withRouter(HorizontalLayout);

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock } from 'lucide-react';
+
 import { endpoints } from '../api/endpoints';
+import { Container, Row, Col, Card, CardBody, Input, Label, Button, Form, Alert, Spinner } from 'reactstrap';
 
 const login = async (username: string, password: string) => {
   return endpoints.login({ username, password }).then(res => res.data);
@@ -32,78 +33,99 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden" style={{ background: "radial-gradient(circle, #150605 0%, #0b0101 100%)" }}>
-      {/* Animated background elements */}
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-rn-orange/5 rounded-full blur-[120px] animate-pulse" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-rn-orange/5 rounded-full blur-[120px] animate-pulse delay-700" />
-
-      <div className="container mx-auto px-4 z-10">
-        <div className="flex items-center justify-center">
-          {/* Right: Login Form */}
-          <div className="w-full max-w-md animate-in fade-in zoom-in duration-1000">
-            <div className="bg-[#150605]/90 border border-rn-orange/10 rounded-3xl p-8 lg:p-10 shadow-2xl backdrop-blur-xl">
-              <div className="text-center mb-10">
-                <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-rn-orange/10 text-rn-orange mb-6 border border-rn-orange/20">
-                  <Lock className="w-8 h-8" />
-                </div>
-                <h1 className="text-3xl font-display font-bold text-rn-white mb-2">🔐 Secure Login</h1>
-                <p className="text-[#a88a7a] text-sm">Access your Risknox Dashboard</p>
-              </div>
-
-              {error && (
-                <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-xl text-sm mb-6 animate-in shake duration-300">
-                  {error}
-                </div>
-              )}
-
-              <form onSubmit={handleLogin} className="space-y-6">
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-rn-white/40 uppercase tracking-widest ml-1">Username</label>
-                  <input
-                    type="text"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    className="w-full bg-[#110404] border border-[#3d2b2a] rounded-xl px-4 py-3 text-rn-white focus:outline-none focus:border-rn-orange/50 transition-all placeholder:text-rn-white/10"
-                    placeholder="Enter your username"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between ml-1">
-                    <label className="text-xs font-bold text-rn-white/40 uppercase tracking-widest">Password</label>
-                    <a href="#" className="text-xs font-bold text-rn-orange hover:underline">Forgot password?</a>
-                  </div>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-[#110404] border border-[#3d2b2a] rounded-xl px-4 py-3 text-rn-white focus:outline-none focus:border-rn-orange/50 transition-all placeholder:text-rn-white/10"
-                    placeholder="Enter your password"
-                    required
-                  />
-                </div>
-
-                <div className="flex items-center gap-2 ml-1">
-                  <input type="checkbox" id="remember" className="rounded border-rn-white/10 bg-rn-white/5 text-rn-orange focus:ring-rn-orange" />
-                  <label htmlFor="remember" className="text-xs text-rn-white/40 font-medium cursor-pointer">Remember me</label>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full bg-[#d45d00] hover:bg-[#b04d00] text-white font-bold py-4 rounded-xl shadow-lg shadow-rn-orange/20 transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center gap-2"
-                >
-                  {isLoading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : "Sign In"}
-                </button>
-              </form>
-            </div>
-            
-            <p className="text-center mt-8 text-rn-white/20 text-xs">
-              © 2026 Risknox.ai. All rights reserved.
-            </p>
-          </div>
+    <div className="auth-page-wrapper pt-5">
+      <div className="auth-one-bg-position auth-one-bg" id="auth-particles">
+        <div className="bg-overlay"></div>
+        <div className="shape">
+          <svg xmlns="http://www.w3.org/2000/svg" version="1.1" xmlnsXlink="http://www.w3.org/1999/xlink" viewBox="0 0 1440 120">
+            <path d="M 0,36 C 144,53.6 432,123.2 720,124 C 1008,124.8 1296,56.8 1440,40L1440 140L0 140z"></path>
+          </svg>
         </div>
+      </div>
+
+      <div className="auth-page-content">
+        <Container>
+          <Row>
+            <Col lg={12}>
+              <div className="text-center mt-sm-5 mb-4 text-white-50">
+                <div>
+                  <h1 className="text-white mb-2">RiskNoX</h1>
+                </div>
+                <p className="mt-3 fs-15 fw-medium">Pulse Security Platform</p>
+              </div>
+            </Col>
+          </Row>
+
+          <Row className="justify-content-center">
+            <Col md={8} lg={6} xl={5}>
+              <Card className="mt-4">
+                <CardBody className="p-4">
+                  <div className="text-center mt-2">
+                    <h5 className="text-primary">Welcome Back !</h5>
+                    <p className="text-muted">Sign in to continue to Risknox Manager.</p>
+                  </div>
+                  
+                  {error && (
+                    <Alert color="danger" className="border-0 mb-4 animate-in fade-in">
+                      {error}
+                    </Alert>
+                  )}
+
+                  <div className="p-2 mt-4">
+                    <Form onSubmit={handleLogin}>
+                      <div className="mb-3">
+                        <Label htmlFor="username" className="form-label">Username</Label>
+                        <Input
+                          type="text"
+                          className="form-control"
+                          id="username"
+                          placeholder="Enter username"
+                          value={username}
+                          onChange={(e) => setUsername(e.target.value)}
+                          required
+                        />
+                      </div>
+
+                      <div className="mb-3">
+                        <div className="float-end">
+                          <a href="#" className="text-muted">Forgot password?</a>
+                        </div>
+                        <Label className="form-label" htmlFor="password-input">Password</Label>
+                        <div className="position-relative auth-pass-inputgroup mb-3">
+                          <Input
+                            type="password"
+                            className="form-control pe-5 password-input"
+                            placeholder="Enter password"
+                            id="password-input"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div className="form-check">
+                        <Input className="form-check-input" type="checkbox" value="" id="auth-remember-check" />
+                        <Label className="form-check-label" htmlFor="auth-remember-check">Remember me</Label>
+                      </div>
+
+                      <div className="mt-4">
+                        <Button color="success" className="w-100" type="submit" disabled={isLoading}>
+                          {isLoading ? <Spinner size="sm" className="me-2" /> : null}
+                          Sign In
+                        </Button>
+                      </div>
+                    </Form>
+                  </div>
+                </CardBody>
+              </Card>
+
+              <div className="mt-4 text-center">
+                <p className="mb-0 text-muted">© {new Date().getFullYear()} Risknox.ai. All rights reserved.</p>
+              </div>
+            </Col>
+          </Row>
+        </Container>
       </div>
     </div>
   );

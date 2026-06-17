@@ -6,7 +6,7 @@ import { Collapse } from 'reactstrap';
 // Import Data
 import navdata from "../LayoutMenuData";
 //i18n
-import { withTranslation } from "react-i18next";
+
 import { useSelector } from "react-redux";
 import { createSelector } from 'reselect';
 
@@ -145,7 +145,7 @@ const {
                     <React.Fragment key={key}>
                         {/* Main Header */}
                         {item['isHeader'] ?
-                            <li className="menu-title"><span data-key="t-menu">{props.t(item.label)} </span></li>
+                            <li className="menu-title"><span data-key="t-menu">{((v)=>v)(item.label)} </span></li>
                             : (
                                 (item.subItems ? (
                                     <li className="nav-item">
@@ -156,7 +156,7 @@ const {
                                             data-bs-toggle="collapse"
                                         >
                                             <i className={item.icon}></i>
-                                            <span data-key="t-apps">{props.t(item.label)}</span>
+                                            <span data-key="t-apps">{((v)=>v)(item.label)}</span>
                                             {item.badgeName ?
                                                 <span className={"badge badge-pill bg-" + item.badgeColor} data-key="t-new">{item.badgeName}</span>
                                                 : null}
@@ -175,7 +175,7 @@ const {
                                                                     to={subItem.link ? subItem.link : "/#"}
                                                                     className="nav-link"
                                                                 >
-                                                                    {props.t(subItem.label)}
+                                                                    {((v)=>v)(subItem.label)}
                                                                     {subItem.badgeName ?
                                                                         <span className={"badge badge-pill bg-" + subItem.badgeColor} data-key="t-new">{subItem.badgeName}</span>
                                                                         : null}
@@ -188,7 +188,7 @@ const {
                                                                     className="nav-link"
                                                                     to="/#"
                                                                     data-bs-toggle="collapse"
-                                                                > {props.t(subItem.label)}
+                                                                > {((v)=>v)(subItem.label)}
                                                                     {subItem.badgeName ?
                                                                         <span className={"badge badge-pill bg-" + subItem.badgeColor} data-key="t-new">{subItem.badgeName}</span>
                                                                         : null}
@@ -204,18 +204,18 @@ const {
                                                                                             <Link
                                                                                                 to={childItem.link ? childItem.link : "/#"}
                                                                                                 className="nav-link">
-                                                                                                {props.t(childItem.label)}
+                                                                                                {((v)=>v)(childItem.label)}
                                                                                             </Link>
                                                                                         </li>
                                                                                         : <li className="nav-item">
                                                                                             <Link to="/#" className="nav-link" onClick={childItem.click} data-bs-toggle="collapse">
-                                                                                                {props.t(childItem.label)}
+                                                                                                {((v)=>v)(childItem.label)}
                                                                                             </Link>
                                                                                             <Collapse className="menu-dropdown" isOpen={childItem.stateVariables} id="sidebaremailTemplates">
                                                                                                 <ul className="nav nav-sm flex-column">
                                                                                                     {childItem.childItems.map((subChildItem, key) => (
                                                                                                         <li className="nav-item" key={key}>
-                                                                                                            <Link to={subChildItem.link} className="nav-link" data-key="t-basic-action">{props.t(subChildItem.label)} </Link>
+                                                                                                            <Link to={subChildItem.link} className="nav-link" data-key="t-basic-action">{((v)=>v)(subChildItem.label)} </Link>
                                                                                                         </li>
                                                                                                     ))}
                                                                                                 </ul>
@@ -241,7 +241,7 @@ const {
                                         <Link
                                             className="nav-link menu-link"
                                             to={item.link ? item.link : "/#"}>
-                                            <i className={item.icon}></i> <span>{props.t(item.label)}</span>
+                                            <i className={item.icon}></i> <span>{((v)=>v)(item.label)}</span>
                                             {item.badgeName ?
                                                 <span className={"badge badge-pill bg-" + item.badgeColor} data-key="t-new">{item.badgeName}</span>
                                                 : null}
@@ -262,4 +262,4 @@ VerticalLayout.propTypes = {
     t: PropTypes.any,
 };
 
-export default withRouter(withTranslation()(VerticalLayout));
+export default withRouter(VerticalLayout);

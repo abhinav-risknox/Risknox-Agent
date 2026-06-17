@@ -5,7 +5,7 @@ import PropTypes from "prop-types";
 import { Collapse, Container } from 'reactstrap';
 import logoSm from "../../assets/images/logo-sm.png";
 //i18n
-import { withTranslation } from "react-i18next";
+
 
 // Import Data
 import navdata from "../LayoutMenuData";
@@ -192,7 +192,7 @@ const TwoColumnLayout = (props) => {
                                                                         to={subItem.link ? subItem.link : "/#"}
                                                                         className="nav-link"
                                                                     >
-                                                                        {props.t(subItem.label)}
+                                                                        {((v)=>v)(subItem.label)}
                                                                         {subItem.badgeName ?
                                                                             <span className={"badge badge-pill bg-" + subItem.badgeColor} data-key="t-new">{subItem.badgeName}</span>
                                                                             : null}
@@ -205,7 +205,7 @@ const TwoColumnLayout = (props) => {
                                                                         className="nav-link"
                                                                         to="/#"
                                                                         data-bs-toggle="collapse"
-                                                                    > {props.t(subItem.label)}
+                                                                    > {((v)=>v)(subItem.label)}
                                                                         {subItem.badgeName ?
                                                                             <span className={"badge badge-pill bg-" + subItem.badgeColor} data-key="t-new">{subItem.badgeName}</span>
                                                                             : null}
@@ -220,7 +220,7 @@ const TwoColumnLayout = (props) => {
                                                                                             to={childItem.link ? childItem.link : "/#"}
                                                                                             onClick={childItem.click}
                                                                                             className="nav-link" >
-                                                                                            {props.t(childItem.label)}
+                                                                                            {((v)=>v)(childItem.label)}
 
                                                                                         </Link>
                                                                                         <Collapse className="menu-dropdown" isOpen={childItem.stateVariables} id={item.id}>
@@ -232,7 +232,7 @@ const TwoColumnLayout = (props) => {
                                                                                                             <Link
                                                                                                                 to={childItem.link ? childItem.link : "/#"}
                                                                                                                 className="nav-link">
-                                                                                                                {props.t(childItem.label)}
+                                                                                                                {((v)=>v)(childItem.label)}
                                                                                                             </Link>
                                                                                                         </li>
                                                                                                     ))
@@ -280,4 +280,4 @@ TwoColumnLayout.propTypes = {
 };
 
 
-export default withRouter(withTranslation()(TwoColumnLayout));
+export default withRouter(TwoColumnLayout);

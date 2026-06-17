@@ -21,12 +21,12 @@ export const initialState = {
   layoutModeType: layoutModeTypes.DARKMODE,
   layoutWidthType: layoutWidthTypes.FLUID,
   layoutPositionType: layoutPositionTypes.FIXED,
-  topbarThemeType: topbarThemeTypes.LIGHT,
+  topbarThemeType: topbarThemeTypes.DARK,
   leftsidbarSizeType: leftsidbarSizeTypes.DEFAULT,
   leftSidebarViewType: leftSidebarViewTypes.DEFAULT,
   leftSidebarImageType: leftSidebarImageTypes.NONE,
   preloader: preloaderTypes.DISABLE,
-  backgroundImageType: backgroundImageTypes.IMG3,
+  backgroundImageType: backgroundImageTypes.NONE,
   sidebarVisibilitytype: sidebarVisibilitytypes.SHOW
 };
 

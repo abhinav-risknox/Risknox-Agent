@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { LayoutGrid, Plus, Trash2, Cpu, RefreshCw } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { endpoints } from '../../api/endpoints';
+import { Card, CardBody, CardHeader, Input, Button, InputGroup, Form } from 'reactstrap';
 
 interface SoftwarePolicyCardProps {
   agentId: string;
@@ -35,79 +35,90 @@ export const SoftwarePolicyCard: React.FC<SoftwarePolicyCardProps> = ({ agentId,
   };
 
   return (
-    <div className="bg-rn-black-card border border-rn-white/5 rounded-3xl p-6 h-full flex flex-col">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-500">
-            <LayoutGrid className="w-5 h-5" />
+    <Card className="h-100 mb-0">
+      <CardHeader className="d-flex align-items-center border-0 pt-4 pb-0 px-4">
+        <div className="d-flex align-items-center gap-3">
+          <div className="avatar-sm flex-shrink-0">
+            <div className="avatar-title bg-primary-subtle text-primary rounded fs-18">
+              <i className="ri-layout-grid-line fs-20"></i>
+            </div>
           </div>
           <div>
-            <h3 className="text-lg font-display font-bold text-rn-white">Software Blocking</h3>
-            <p className="text-xs text-rn-white/40">Process termination and registry restriction</p>
+            <h6 className="fs-15 fw-bold mb-1">Software Blocking</h6>
+            <p className="text-muted fs-12 mb-0">Process termination and registry restriction</p>
           </div>
         </div>
-      </div>
-
-      <form onSubmit={handleAdd} className="space-y-3 mb-6">
-        <input 
-          type="text" 
-          value={appName}
-          onChange={(e) => setAppName(e.target.value)}
-          placeholder="App Display Name (Optional)"
-          className="w-full bg-rn-black border border-rn-white/10 rounded-xl py-2 px-4 text-sm focus:outline-none focus:ring-1 focus:ring-rn-orange/50 transition-all"
-          disabled={!online || policyMutation.isPending}
-        />
-        <div className="flex gap-2">
-          <input 
+      </CardHeader>
+      
+      <CardBody className="p-4 d-flex flex-column">
+        <Form onSubmit={handleAdd} className="mb-4">
+          <Input 
             type="text" 
-            value={appExe}
-            onChange={(e) => setAppExe(e.target.value)}
-            placeholder="Executable name (e.g. chrome.exe)"
-            className="flex-1 bg-rn-black border border-rn-white/10 rounded-xl py-2 px-4 text-sm focus:outline-none focus:ring-1 focus:ring-rn-orange/50 transition-all"
+            value={appName}
+            onChange={(e) => setAppName(e.target.value)}
+            placeholder="App Display Name (Optional)"
+            className="mb-2"
             disabled={!online || policyMutation.isPending}
-            required
           />
-          <button 
-            type="submit"
-            disabled={!online || policyMutation.isPending || !appExe}
-            className="p-2.5 rounded-xl bg-rn-orange hover:bg-rn-orange-dim text-white transition-all disabled:opacity-50"
-          >
-            {policyMutation.isPending ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
-          </button>
-        </div>
-      </form>
+          <InputGroup>
+            <Input 
+              type="text" 
+              value={appExe}
+              onChange={(e) => setAppExe(e.target.value)}
+              placeholder="Executable name (e.g. chrome.exe)"
+              disabled={!online || policyMutation.isPending}
+              required
+            />
+            <Button 
+              color="primary" 
+              type="submit"
+              disabled={!online || policyMutation.isPending || !appExe}
+              className="d-flex align-items-center justify-content-center"
+              style={{ width: '46px' }}
+            >
+              {policyMutation.isPending ? <i className="ri-refresh-line icon-spin fs-16"></i> : <i className="ri-add-line fs-16"></i>}
+            </Button>
+          </InputGroup>
+        </Form>
 
-      <div className="flex-1 overflow-y-auto space-y-2 min-h-[200px]">
-        {blockedApps.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-rn-white/10 italic text-sm">
-            No applications blocked
-          </div>
-        ) : (
-          blockedApps.map((item, idx) => (
-            <div key={idx} className="flex items-center justify-between p-3 rounded-2xl bg-rn-white/[0.02] border border-rn-white/5 group hover:border-rn-white/10 transition-all">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-rn-white/5 flex items-center justify-center text-rn-white/20 group-hover:text-purple-400 transition-colors">
-                  <Cpu className="w-4 h-4" />
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-rn-white/80">{item.name || item.executable}</p>
-                  <div className="flex items-center gap-2">
-                    <p className="text-[10px] text-rn-white/20 font-mono">{item.executable}</p>
-                    <span className="text-[10px] text-rn-orange font-bold uppercase tracking-tighter">Kills: {item.kills}</span>
-                  </div>
-                </div>
-              </div>
-              <button 
-                onClick={() => handleRemove(item.executable)}
-                disabled={!online || policyMutation.isPending}
-                className="p-2 text-rn-white/20 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all opacity-0 group-hover:opacity-100 disabled:opacity-0"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+        <div className="flex-grow-1 overflow-auto pe-2" style={{ minHeight: '200px' }}>
+          {(!blockedApps || blockedApps.length === 0) ? (
+            <div className="h-100 d-flex flex-column items-center justify-content-center text-muted fst-italic fs-13 text-center">
+              No applications blocked
             </div>
-          ))
-        )}
-      </div>
-    </div>
+          ) : (
+            <div className="d-flex flex-column gap-2">
+              {blockedApps.map((item, idx) => (
+                <div key={idx} className="d-flex align-items-center justify-content-between p-3 border rounded bg-light hover-shadow transition-all">
+                  <div className="d-flex align-items-center gap-3">
+                    <div className="avatar-xs flex-shrink-0">
+                      <div className="avatar-title bg-white border text-secondary rounded">
+                        <i className="ri-cpu-line fs-14"></i>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="fs-13 fw-bold text-body mb-1">{item.name || item.executable}</p>
+                      <div className="d-flex align-items-center gap-2">
+                        <p className="fs-11 text-muted font-monospace mb-0">{item.executable}</p>
+                        <span className="badge bg-warning-subtle text-warning text-uppercase tracking-tighter fs-10">Kills: {item.kills}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <Button 
+                    color="ghost-danger" 
+                    size="sm"
+                    className="btn-icon"
+                    onClick={() => handleRemove(item.executable)}
+                    disabled={!online || policyMutation.isPending}
+                  >
+                    <i className="ri-delete-bin-line fs-16"></i>
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </CardBody>
+    </Card>
   );
 };

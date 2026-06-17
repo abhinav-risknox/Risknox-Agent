@@ -1,7 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Poppins:wght@300;400;500;600&display=swap');
 
-
-@theme {
+:root {
   --color-rn-orange: #FF5B00;
   --color-rn-black: #1E1E1F;
   --color-rn-white: #FFFFFF;
@@ -27,22 +26,21 @@
   --radius-sm: calc(0.5rem - 4px);
 }
 
-@layer base {
-  * {
-    @apply border-rn-white/10;
-  }
-  body {
-    @apply bg-rn-black text-rn-white font-sans;
-  }
-  h1, h2, h3, h4, h5, h6 {
-    @apply font-display;
-  }
+
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
 }
 
 .glass-panel {
-  @apply bg-rn-black-card/80 backdrop-blur-md border border-rn-white/10;
+  background-color: rgba(36, 36, 37, 0.8);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .rn-gradient-text {
-  @apply bg-clip-text text-transparent bg-gradient-to-r from-rn-orange to-orange-400;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  background-image: linear-gradient(to right, var(--color-rn-orange), #fb923c);
 }

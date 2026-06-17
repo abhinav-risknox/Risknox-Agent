@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { endpoints } from '../api/endpoints';
-import { FolderTree, Cpu, RefreshCw, LogOut, Plus, Trash2, UserCheck, UserX, Save, X, Settings2, Key, Unplug } from 'lucide-react';
 import { Card, CardBody, CardHeader, Row, Col, Button, Input, Spinner, Badge } from 'reactstrap';
 
 interface EndpointTabProps {
@@ -176,10 +175,10 @@ const EndpointTab: React.FC<EndpointTabProps> = ({ agentId }) => {
               <h4 className="card-title mb-0 flex-grow-1">User Management <Badge color="light" className="text-muted ms-2">{users.length} users</Badge></h4>
               <div className="flex-shrink-0 d-flex gap-2">
                 <Button color="primary" size="sm" onClick={() => setShowCreateUser(!showCreateUser)}>
-                  <Plus size={14} /> Create
+                  <i className="ri-add-line fs-14 me-1"></i> Create
                 </Button>
                 <Button color="light" size="sm" onClick={fetchUsers} disabled={loading['users']}>
-                  {loading['users'] ? <Spinner size="sm" /> : <RefreshCw size={14} />}
+                  {loading['users'] ? <Spinner size="sm" /> : <i className="ri-refresh-line fs-14"></i>}
                 </Button>
               </div>
             </CardHeader>
@@ -200,16 +199,18 @@ const EndpointTab: React.FC<EndpointTabProps> = ({ agentId }) => {
               <div className="list-group">
                 {users.length > 0 ? users.map((u, i) => (
                   <React.Fragment key={i}>
-                    <div className="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                      <div>
-                        <h6 className="mb-1">{u.username} <span className="text-muted ms-2 fw-normal">{u.full_name}</span></h6>
-                        {u.is_locked && <Badge color="danger" className="me-1">Locked</Badge>}
-                        <Badge color={u.is_enabled ? 'success' : 'secondary'}>{u.is_enabled ? 'Active' : 'Disabled'}</Badge>
+                    <div className="list-group-item list-group-item-action d-flex justify-content-between align-items-start">
+                      <div className="flex-grow-1 pe-3">
+                        <h6 className="mb-1 text-break">{u.username} <span className="text-muted ms-2 fw-normal fs-12">{u.full_name}</span></h6>
+                        <div className="d-flex flex-wrap gap-1 mt-2">
+                          {u.is_locked && <Badge color="danger">Locked</Badge>}
+                          <Badge color={u.is_enabled ? 'success' : 'warning'} className="text-uppercase">{u.is_enabled ? 'Active' : 'Disabled'}</Badge>
+                        </div>
                       </div>
-                      <div>
-                        <Button color="warning" outline size="sm" className="me-1 btn-icon" onClick={() => { setChangePasswordUser(changePasswordUser === u.username ? null : u.username); setNewPassword(''); }}><Key size={14} /></Button>
-                        <Button color="info" outline size="sm" className="me-1 btn-icon" onClick={() => handleToggleUser(u.username, u.is_enabled)}>{u.is_enabled ? <UserX size={14}/> : <UserCheck size={14}/>}</Button>
-                        <Button color="danger" outline size="sm" className="btn-icon" onClick={() => handleDeleteUser(u.username)}><Trash2 size={14}/></Button>
+                      <div className="flex-shrink-0 d-flex gap-1">
+                        <Button color="warning" outline size="sm" className="btn-icon" onClick={() => { setChangePasswordUser(changePasswordUser === u.username ? null : u.username); setNewPassword(''); }}><i className="ri-key-2-line fs-14"></i></Button>
+                        <Button color="info" outline size="sm" className="btn-icon" onClick={() => handleToggleUser(u.username, u.is_enabled)}>{u.is_enabled ? <i className="ri-user-unfollow-line fs-14"></i> : <i className="ri-user-follow-line fs-14"></i>}</Button>
+                        <Button color="danger" outline size="sm" className="btn-icon" onClick={() => handleDeleteUser(u.username)}><i className="ri-delete-bin-line fs-14"></i></Button>
                       </div>
                     </div>
                     {changePasswordUser === u.username && (
@@ -232,7 +233,7 @@ const EndpointTab: React.FC<EndpointTabProps> = ({ agentId }) => {
               <h4 className="card-title mb-0 flex-grow-1">Group Management <Badge color="light" className="text-muted ms-2">{groups.length} groups</Badge></h4>
               <div className="flex-shrink-0">
                 <Button color="light" size="sm" onClick={fetchGroups} disabled={loading['groups']}>
-                  {loading['groups'] ? <Spinner size="sm" /> : <RefreshCw size={14} />}
+                  {loading['groups'] ? <Spinner size="sm" /> : <i className="ri-refresh-line fs-14"></i>}
                 </Button>
               </div>
             </CardHeader>
@@ -241,7 +242,7 @@ const EndpointTab: React.FC<EndpointTabProps> = ({ agentId }) => {
                 {groups.length > 0 ? groups.map((g, i) => (
                   <div key={i} className="list-group-item flex-column align-items-start">
                     <div className="d-flex justify-content-between align-items-center w-100 mb-1">
-                      <h6 className="mb-0"><FolderTree size={16} className="me-2 text-primary" />{g.groupname}</h6>
+                      <h6 className="mb-0"><i className="ri-node-tree fs-16 me-2 text-primary"></i>{g.groupname}</h6>
                       <Button color="light" size="sm" onClick={() => setManageGroup(manageGroup === g.groupname ? null : g.groupname)}>{manageGroup === g.groupname ? 'Cancel' : 'Manage'}</Button>
                     </div>
                     {manageGroup === g.groupname && (
@@ -267,16 +268,16 @@ const EndpointTab: React.FC<EndpointTabProps> = ({ agentId }) => {
               <h4 className="card-title mb-0 flex-grow-1">Password Policy</h4>
               <div className="flex-shrink-0 d-flex gap-2">
                 {passwordPolicy && !isEditingPolicy && (
-                  <Button color="warning" outline size="sm" onClick={() => setIsEditingPolicy(true)}><Settings2 size={14} /> Edit</Button>
+                  <Button color="warning" outline size="sm" onClick={() => setIsEditingPolicy(true)}><i className="ri-settings-3-line fs-14 me-1"></i> Edit</Button>
                 )}
                 {isEditingPolicy && (
                   <>
-                    <Button color="light" size="sm" onClick={() => { setIsEditingPolicy(false); setEditPolicy(passwordPolicy); }}><X size={14} /></Button>
-                    <Button color="success" size="sm" onClick={savePasswordPolicy} disabled={loading['savePolicy']}>{loading['savePolicy'] ? <Spinner size="sm" /> : <Save size={14} />} Save</Button>
+                    <Button color="light" size="sm" onClick={() => { setIsEditingPolicy(false); setEditPolicy(passwordPolicy); }}><i className="ri-close-line fs-14"></i></Button>
+                    <Button color="success" size="sm" onClick={savePasswordPolicy} disabled={loading['savePolicy']}>{loading['savePolicy'] ? <Spinner size="sm" /> : <i className="ri-save-line fs-14 me-1"></i>} Save</Button>
                   </>
                 )}
                 <Button color="light" size="sm" onClick={fetchPasswordPolicy} disabled={loading['passwordPolicy']}>
-                  {loading['passwordPolicy'] ? <Spinner size="sm" /> : <RefreshCw size={14} />}
+                  {loading['passwordPolicy'] ? <Spinner size="sm" /> : <i className="ri-refresh-line fs-14"></i>}
                 </Button>
               </div>
             </CardHeader>
@@ -312,7 +313,7 @@ const EndpointTab: React.FC<EndpointTabProps> = ({ agentId }) => {
               <h4 className="card-title mb-0 flex-grow-1">Session Management <Badge color="light" className="text-muted ms-2">{sessions.length} sessions</Badge></h4>
               <div className="flex-shrink-0">
                 <Button color="light" size="sm" onClick={fetchSessions} disabled={loading['sessions']}>
-                  {loading['sessions'] ? <Spinner size="sm" /> : <RefreshCw size={14} />}
+                  {loading['sessions'] ? <Spinner size="sm" /> : <i className="ri-refresh-line fs-14"></i>}
                 </Button>
               </div>
             </CardHeader>
@@ -325,8 +326,8 @@ const EndpointTab: React.FC<EndpointTabProps> = ({ agentId }) => {
                       <p className="text-muted mb-0 fs-11">{s.state} &bull; {s.station_name}</p>
                     </div>
                     <div>
-                      <Button color="warning" outline size="sm" className="me-1 btn-icon" onClick={() => handleDisconnect(s.session_id)} title="Disconnect"><Unplug size={14}/></Button>
-                      <Button color="danger" outline size="sm" className="btn-icon" onClick={() => handleLogoff(s.session_id)} title="Logoff"><LogOut size={14}/></Button>
+                      <Button color="warning" outline size="sm" className="me-1 btn-icon" onClick={() => handleDisconnect(s.session_id)} title="Disconnect"><i className="ri-plug-line fs-14"></i></Button>
+                      <Button color="danger" outline size="sm" className="btn-icon" onClick={() => handleLogoff(s.session_id)} title="Logoff"><i className="ri-logout-box-r-line fs-14"></i></Button>
                     </div>
                   </div>
                 )) : <div className="text-center text-muted py-4">No sessions fetched yet</div>}
@@ -344,7 +345,7 @@ const EndpointTab: React.FC<EndpointTabProps> = ({ agentId }) => {
               <h4 className="card-title mb-0 flex-grow-1">System Inventory</h4>
               <div className="flex-shrink-0">
                 <Button color="info" outline size="sm" onClick={() => executeCommand('inventory', endpoints.agents.endpoint.inventory.collect(agentId), (data) => setInventory(typeof data === 'string' ? JSON.parse(data) : data))} disabled={loading['inventory']}>
-                  {loading['inventory'] ? <Spinner size="sm" /> : <><Cpu size={14} className="me-1"/> Collect</>}
+                  {loading['inventory'] ? <Spinner size="sm" /> : <><i className="ri-cpu-line fs-14 me-1"></i> Collect</>}
                 </Button>
               </div>
             </CardHeader>
@@ -352,7 +353,7 @@ const EndpointTab: React.FC<EndpointTabProps> = ({ agentId }) => {
               <p className="text-muted fs-13 mb-4">Triggers a deep hardware and software scan on the endpoint. Results include OS info, disk volumes, and network adapters.</p>
               
               {inventory && (
-                <div className="bg-light p-4 rounded">
+                <div className="bg-light-subtle p-4 rounded">
                   <h5 className="fs-14 fw-bold mb-3">System Information</h5>
                   <Row className="g-3 mb-4">
                     <Col sm={3}><div className="text-muted fs-12">Architecture</div><div className="fw-medium">{inventory.architecture || 'N/A'}</div></Col>
@@ -366,7 +367,7 @@ const EndpointTab: React.FC<EndpointTabProps> = ({ agentId }) => {
                       <h5 className="fs-14 fw-bold mb-3 mt-4">Network Adapters</h5>
                       <div className="d-flex flex-column gap-2 mb-4">
                         {inventory.ip_addresses.map((ip: any, i: number) => (
-                          <div key={i} className="d-flex justify-content-between border p-2 rounded bg-white">
+                          <div key={i} className="d-flex justify-content-between border p-2 rounded">
                             <span className="fw-medium">{ip.adapter}</span>
                             <span><Badge color="info" className="me-2">{ip.version}</Badge><span className="font-monospace text-muted">{ip.ip}</span></span>
                           </div>
@@ -381,7 +382,7 @@ const EndpointTab: React.FC<EndpointTabProps> = ({ agentId }) => {
                       <Row className="g-3">
                         {inventory.logical_disks.map((disk: any, i: number) => (
                           <Col md={6} key={i}>
-                            <div className="border p-3 rounded bg-white">
+                            <div className="border p-3 rounded">
                               <div className="d-flex justify-content-between mb-2">
                                 <span className="fw-bold">{disk.drive}</span>
                                 <Badge color="secondary">{disk.type}</Badge>
