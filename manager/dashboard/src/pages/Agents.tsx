@@ -89,7 +89,7 @@ export const Agents: React.FC = () => {
                             <td>
                               <div className="d-flex align-items-center gap-2">
                                 <div 
-                                  className={`rounded-circle ${agent.online ? 'bg-success' : 'bg-secondary'}`} 
+                                  className={`rounded-circle ${agent.online ? 'bg-success pulse-success' : 'bg-secondary'}`} 
                                   style={{ width: '8px', height: '8px', boxShadow: agent.online ? '0 0 10px rgba(34,197,94,0.5)' : 'none' }} 
                                 />
                                 <span className={`fs-12 fw-semibold text-uppercase ${agent.online ? 'text-success' : 'text-muted'}`}>
@@ -100,7 +100,7 @@ export const Agents: React.FC = () => {
                             <td>
                               <div className="d-flex align-items-center gap-3">
                                 <div className="avatar-sm flex-shrink-0">
-                                  <div className="avatar-title bg-light text-primary rounded-3 fs-18">
+                                  <div className="avatar-title bg-primary-subtle text-primary rounded-3 fs-18">
                                     <i className="ri-shield-star-line fs-20"></i>
                                   </div>
                                 </div>
@@ -125,7 +125,7 @@ export const Agents: React.FC = () => {
                               <div className="d-flex align-items-center justify-content-end gap-2">
                                 <Link 
                                   to={`/agents/${agent.agent_id}`}
-                                  className="btn btn-sm btn-soft-secondary btn-icon"
+                                  className="btn btn-sm btn-soft-primary btn-icon"
                                   title="Open Control Panel"
                                 >
                                   <i className="ri-external-link-line fs-14"></i>

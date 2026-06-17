@@ -16,10 +16,10 @@ export const StatCard: React.FC<StatCardProps> = ({
   iconClass, 
   trend, 
   trendUp,
-  color = 'warning' 
+  color = 'primary' 
 }) => {
   return (
-    <Card className="card-animate">
+    <Card className="card-animate overflow-hidden" style={{ borderLeft: `3px solid var(--vz-${color})` }}>
       <CardBody>
         <div className="d-flex align-items-center">
           <div className="flex-grow-1 overflow-hidden">

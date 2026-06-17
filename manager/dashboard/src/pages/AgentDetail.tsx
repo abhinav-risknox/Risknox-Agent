@@ -140,7 +140,7 @@ export const AgentDetail: React.FC = () => {
 
         <Card>
           <CardBody className="p-0">
-            <Nav tabs className="nav-tabs-custom nav-success px-4 pt-3 border-bottom-0">
+            <Nav tabs className="nav-tabs-custom nav-primary px-4 pt-3 border-bottom-0">
               <NavItem>
                 <NavLink
                   className={classnames({ active: activeTab === 'control' }, 'd-flex align-items-center gap-2 fw-semibold py-3 cursor-pointer')}

@@ -91,7 +91,7 @@ export const Dashboard: React.FC = () => {
               <CardHeader className="align-items-center d-flex">
                 <h4 className="card-title mb-0 flex-grow-1">Connected Agents</h4>
                 <div className="flex-shrink-0">
-                  <Link to="/agents" className="text-muted text-decoration-underline">
+                  <Link to="/agents" className="text-primary fw-semibold">
                     View All <i className="ri-arrow-right-up-line"></i>
                   </Link>
                 </div>
@@ -145,7 +145,7 @@ export const Dashboard: React.FC = () => {
                             <td>
                               {agent.online ? (
                                 <span className="badge bg-success-subtle text-success">
-                                  <i className="ri-checkbox-blank-circle-fill fs-10 align-middle me-1"></i> Online
+                                  <i className="ri-checkbox-blank-circle-fill fs-10 align-middle me-1 pulse-success"></i> Online
                                 </span>
                               ) : (
                                 <span className="badge bg-danger-subtle text-danger">
@@ -190,7 +190,7 @@ export const Dashboard: React.FC = () => {
                           <a className="accordion-button p-2 shadow-none" href="#">
                             <div className="d-flex align-items-center">
                               <div className="flex-shrink-0 avatar-xs">
-                                <div className="avatar-title bg-light text-primary rounded-circle">
+                                <div className="avatar-title bg-primary-subtle text-primary rounded-circle">
                                   <i className="ri-terminal-box-line"></i>
                                 </div>
                               </div>

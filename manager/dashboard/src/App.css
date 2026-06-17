@@ -1,1 +1,52 @@
 
+/* ===============================
+   RiskNoX Custom Theme Overrides
+   Orange (#FF5B00) + Dark Gray
+   =============================== */
+
+/* Pulsing green dot for online status */
+.pulse-success {
+  animation: pulse-green 2s ease-in-out infinite;
+}
+
+@keyframes pulse-green {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Orange focus ring on form inputs */
+.form-control:focus,
+.form-select:focus {
+  border-color: rgba(255, 91, 0, 0.5) !important;
+  box-shadow: 0 0 0 0.25rem rgba(255, 91, 0, 0.15) !important;
+}
+
+/* Card hover lift effect (matching original StatCard hover) */
+.card-animate {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.card-animate:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+/* Agent row hover — orange tint on icon */
+.table tbody tr:hover .avatar-title {
+  transition: all 0.2s ease;
+}
+
+/* Orange glow on primary buttons */
+.btn-primary {
+  box-shadow: 0 4px 12px rgba(255, 91, 0, 0.2);
+}
+.btn-primary:hover {
+  box-shadow: 0 6px 16px rgba(255, 91, 0, 0.3);
+}
+
+/* Smooth link transitions */
+a.text-primary {
+  transition: opacity 0.15s ease;
+}
+a.text-primary:hover {
+  opacity: 0.85;
+}
