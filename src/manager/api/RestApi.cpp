@@ -79,6 +79,12 @@ void RestApi::registerRoutes() {
         handleGetAgent(req, res);
     });
 
+    httpServer_->Delete(R"(/api/agents/([^/]+))", [this](const Req& req, Res& res) {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleDeleteAgent(req, res);
+    });
+
     httpServer_->Get(R"(/api/agents/([^/]+)/status)", [this](const Req& req, Res& res) {
         addCorsHeaders(res);
         if (!authenticate(req, res)) return;
@@ -164,6 +170,11 @@ void RestApi::registerRoutes() {
         if (!authenticate(req, res)) return;
         handleEndpointCommand(req, res, "user_disable", {{"username", req.matches[2]}});
     });
+    httpServer_->Post(R"(/api/agents/([^/]+)/endpoint/users/([^/]+)/unlock)", [this](const Req& req, Res& res) {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleEndpointCommand(req, res, "user_unlock", {{"username", req.matches[2]}});
+    });
     httpServer_->Post(R"(/api/agents/([^/]+)/endpoint/users/([^/]+)/password)", [this](const Req& req, Res& res) {
         addCorsHeaders(res);
         if (!authenticate(req, res)) return;
@@ -194,6 +205,11 @@ void RestApi::registerRoutes() {
         if (!authenticate(req, res)) return;
         int sessionId = std::stoi(std::string(req.matches[2]));
         handleEndpointCommand(req, res, "session_disconnect", {{"session_id", sessionId}});
+    });
+    httpServer_->Post(R"(/api/agents/([^/]+)/endpoint/workstation/lock)", [this](const Req& req, Res& res) {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleEndpointCommand(req, res, "workstation_lock");
     });
 
 
@@ -383,6 +399,25 @@ void RestApi::handleGetAgent(const httplib::Request& req, httplib::Response& res
     }
 
     res.set_content(j.dump(), "application/json");
+}
+
+void RestApi::handleDeleteAgent(const httplib::Request& req, httplib::Response& res) {
+    std::string agentId = req.matches[1];
+    
+    // First check if agent exists
+    if (!db_.agentExists(agentId)) {
+        res.status = 404;
+        res.set_content(R"({"error":"Agent not found"})", "application/json");
+        return;
+    }
+
+    // Remove from database
+    if (db_.removeAgent(agentId)) {
+        res.set_content(R"({"success":true,"message":"Agent removed successfully"})", "application/json");
+    } else {
+        res.status = 500;
+        res.set_content(R"({"error":"Failed to remove agent from database"})", "application/json");
+    }
 }
 
 void RestApi::handleGetAgentStatus(const httplib::Request& req, httplib::Response& res) {

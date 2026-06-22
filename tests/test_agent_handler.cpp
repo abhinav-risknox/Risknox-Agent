@@ -1,4 +1,4 @@
-﻿// =============================================================================
+// =============================================================================
 // test_agent_handler.cpp - Tests for AgentHandler message processing
 //
 // Uses:
@@ -144,8 +144,14 @@ extern "C" {
         return (char*)res->rows[r][c].c_str();
     }
     int PQgetisnull(const PGresult* res, int r, int c) {
-        if (!res || r >= (int)res->rows.size() || c >= (int)res->rows[r].size()) return 1;
+        if (!res || r >= (int)res->rows.size() || c >= (int)res->rows[r].size()) {
+            return 1;
+        }
         return 0;
+    }
+
+    char* PQcmdTuples(PGresult* res) {
+        return (char*)"1";
     }
 }
 

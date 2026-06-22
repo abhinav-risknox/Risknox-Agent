@@ -30,17 +30,41 @@ windows-events-pipeline:
         with_keys: ["data"]
         delete_when: '/source_type == "winevent"'
 
-    # 3. Standardize field names to ECS
+    # 3. Standardize field names to ECS (Aligned with Sigma)
     - rename_keys:
         entries:
           - from_key: "winlog/EventID"
-            to_key: "event/code"
+            to_key: "event/id"
           - from_key: "winlog/Computer"
-            to_key: "host/name"
+            to_key: "host/computer"
           - from_key: "winlog/Channel"
-            to_key: "winlog/channel"
+            to_key: "event/channel"
           - from_key: "winlog/Provider/Name"
-            to_key: "winlog/provider_name"
+            to_key: "event/provider"
+          - from_key: "winlog/EventData/CommandLine"
+            to_key: "process/cmdline"
+          - from_key: "winlog/EventData/Image"
+            to_key: "process/path"
+          - from_key: "winlog/EventData/ParentImage"
+            to_key: "parent_process/path"
+          - from_key: "winlog/EventData/ParentCommandLine"
+            to_key: "parent_process/cmdline"
+          - from_key: "winlog/EventData/ProcessId"
+            to_key: "process/pid"
+          - from_key: "winlog/EventData/TargetFilename"
+            to_key: "file/path"
+          - from_key: "winlog/EventData/TargetObject"
+            to_key: "registry/key"
+          - from_key: "winlog/EventData/Details"
+            to_key: "registry/value_data"
+          - from_key: "winlog/EventData/SubjectUserName"
+            to_key: "user/name"
+          - from_key: "winlog/EventData/TargetUserName"
+            to_key: "target_user/name"
+          - from_key: "winlog/EventData/SourceIp"
+            to_key: "network/src_ip"
+          - from_key: "winlog/EventData/DestinationIp"
+            to_key: "network/dst_ip"
 
     # 4. Ensure channel is lowercase for index routing
     - lowercase_string:

@@ -189,6 +189,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     ole32
     oleaut32
     wtsapi32
+    wbemuuid
+    userenv
 )
 
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
@@ -549,7 +551,7 @@ target_include_directories(rp-softblock PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
 )
 target_compile_definitions(rp-softblock PRIVATE ${WORKER_COMPILE_DEFS})
-target_link_libraries(rp-softblock PRIVATE ws2_32 advapi32)
+target_link_libraries(rp-softblock PRIVATE ws2_32 advapi32 ole32 oleaut32 wbemuuid)
 install(TARGETS rp-softblock DESTINATION bin)
 strip_target(rp-softblock)
 
@@ -567,7 +569,7 @@ target_include_directories(rp-webblock PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
 )
 target_compile_definitions(rp-webblock PRIVATE ${WORKER_COMPILE_DEFS})
-target_link_libraries(rp-webblock PRIVATE ws2_32 advapi32)
+target_link_libraries(rp-webblock PRIVATE ws2_32 advapi32 ole32 oleaut32 wbemuuid)
 install(TARGETS rp-webblock DESTINATION bin)
 strip_target(rp-webblock)
 
@@ -585,7 +587,7 @@ target_include_directories(rp-patch PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
 )
 target_compile_definitions(rp-patch PRIVATE ${WORKER_COMPILE_DEFS})
-target_link_libraries(rp-patch PRIVATE ws2_32 advapi32 ole32 oleaut32)
+target_link_libraries(rp-patch PRIVATE ws2_32 advapi32 ole32 oleaut32 wbemuuid)
 install(TARGETS rp-patch DESTINATION bin)
 strip_target(rp-patch)
 

@@ -122,6 +122,13 @@ bool UserManager::enableUser(const std::string& username, std::string& errorMsg)
     return ok;
 }
 
+bool UserManager::unlockUser(const std::string& username, std::string& errorMsg) {
+    bool ok = modifyUserFlags(username, 0, UF_LOCKOUT, errorMsg);
+    if (ok) LOG_INFO("UserManager: Unlocked user {}", username);
+    else LOG_ERROR("UserManager: Failed to unlock user {}: {}", username, errorMsg);
+    return ok;
+}
+
 bool UserManager::changePassword(const std::string& username, const std::string& newPassword, std::string& errorMsg) {
     std::wstring wUsername = utf8_to_wstring(username);
     std::wstring wPassword = utf8_to_wstring(newPassword);

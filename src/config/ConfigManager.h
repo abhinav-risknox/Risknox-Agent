@@ -161,6 +161,12 @@ private:
     AntivirusConfigData avConfig_;
     UsbScanConfigData usbScanConfig_;
     DownloadScanConfigData downloadScanConfig_;
+
+    // Hardware fingerprint helpers for deterministic agent ID generation
+#ifdef _WIN32
+    static std::string getSmbiosUuid();
+    static std::string getMachineGuid();
+#endif
 };
 
 } // namespace ResolutePulse

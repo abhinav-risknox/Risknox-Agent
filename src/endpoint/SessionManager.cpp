@@ -3,8 +3,10 @@
 
 #include <windows.h>
 #include <wtsapi32.h>
+#include <userenv.h>
 
 #pragma comment(lib, "wtsapi32.lib")
+#pragma comment(lib, "userenv.lib")
 
 namespace ResolutePulse {
 namespace Endpoint {
@@ -89,5 +91,82 @@ bool SessionManager::disconnectSession(int sessionId, std::string& errorMsg) {
     return false;
 }
 
+bool SessionManager::lockWorkstation(std::string& errorMsg) {
+    // The agent runs as a Windows service in session 0.
+    // LockWorkStation() only works in the interactive session.
+    // We use CreateProcessAsUser to launch the lock command in the
+    // active console session.
+
+    DWORD sessionId = WTSGetActiveConsoleSessionId();
+    if (sessionId == 0xFFFFFFFF) {
+        errorMsg = "No active console session found";
+        LOG_ERROR("SessionManager: {}", errorMsg);
+        return false;
+    }
+
+    HANDLE hToken = NULL;
+    if (!WTSQueryUserToken(sessionId, &hToken)) {
+        errorMsg = "Failed to query user token for session " + std::to_string(sessionId) +
+                   ". Error code: " + std::to_string(GetLastError());
+        LOG_ERROR("SessionManager: {}", errorMsg);
+        return false;
+    }
+
+    HANDLE hDupToken = NULL;
+    if (!DuplicateTokenEx(hToken, MAXIMUM_ALLOWED, NULL, SecurityIdentification, TokenPrimary, &hDupToken)) {
+        DWORD err = GetLastError();
+        CloseHandle(hToken);
+        errorMsg = "Failed to duplicate token. Error code: " + std::to_string(err);
+        LOG_ERROR("SessionManager: {}", errorMsg);
+        return false;
+    }
+    CloseHandle(hToken);
+
+    LPVOID pEnv = NULL;
+    CreateEnvironmentBlock(&pEnv, hDupToken, FALSE);
+
+    STARTUPINFOW si = {};
+    si.cb = sizeof(si);
+    si.lpDesktop = (LPWSTR)L"winsta0\\default";
+    PROCESS_INFORMATION pi = {};
+
+    // Launch rundll32 to call LockWorkStation in the user's session
+    wchar_t cmdLine[] = L"rundll32.exe user32.dll,LockWorkStation";
+
+    BOOL ok = CreateProcessAsUserW(
+        hDupToken,
+        NULL,
+        cmdLine,
+        NULL, NULL,
+        FALSE,
+        CREATE_UNICODE_ENVIRONMENT | CREATE_NO_WINDOW,
+        pEnv,
+        NULL,
+        &si, &pi
+    );
+
+    DWORD lastErr = GetLastError();
+
+    if (pEnv) DestroyEnvironmentBlock(pEnv);
+    CloseHandle(hDupToken);
+
+    if (ok) {
+        // Wait briefly for the process to finish
+        WaitForSingleObject(pi.hProcess, 5000);
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
+        LOG_INFO("SessionManager: Workstation locked successfully (session {})", sessionId);
+        return true;
+    }
+
+    if (pi.hProcess) CloseHandle(pi.hProcess);
+    if (pi.hThread) CloseHandle(pi.hThread);
+
+    errorMsg = "Failed to launch lock process. Error code: " + std::to_string(lastErr);
+    LOG_ERROR("SessionManager: {}", errorMsg);
+    return false;
+}
+
 } // namespace Endpoint
 } // namespace ResolutePulse
+

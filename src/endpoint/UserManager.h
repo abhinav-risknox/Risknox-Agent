@@ -23,6 +23,7 @@ public:
     static bool deleteUser(const std::string& username, std::string& errorMsg);
     static bool disableUser(const std::string& username, std::string& errorMsg);
     static bool enableUser(const std::string& username, std::string& errorMsg);
+    static bool unlockUser(const std::string& username, std::string& errorMsg);
     static bool changePassword(const std::string& username, const std::string& newPassword, std::string& errorMsg);
     
     static std::vector<UserInfo> listUsers(std::string& errorMsg);

@@ -159,6 +159,21 @@ const EndpointTab: React.FC<EndpointTabProps> = ({ agentId }) => {
     if (confirm('Are you sure you want to disconnect this session?')) { executeCommand('disconnect', endpoints.agents.endpoint.sessions.disconnect(agentId, sessionId)); }
   };
 
+  const handleUnlockUser = (username: string) => {
+    executeCommand('unlockUser', endpoints.agents.endpoint.users.unlock(agentId, username), () => {
+      showMessage('success', `User ${username} unlocked`);
+      fetchUsers();
+    });
+  };
+
+  const handleLockWorkstation = () => {
+    if (confirm('Are you sure you want to remotely lock the workstation?')) {
+      executeCommand('lockWorkstation', endpoints.agents.endpoint.sessions.lockWorkstation(agentId), () => {
+        showMessage('success', 'Workstation locked successfully');
+      });
+    }
+  };
+
   return (
     <div>
       {message && (
@@ -208,6 +223,9 @@ const EndpointTab: React.FC<EndpointTabProps> = ({ agentId }) => {
                         </div>
                       </div>
                       <div className="flex-shrink-0 d-flex gap-1">
+                        {u.is_locked && (
+                          <Button color="success" outline size="sm" className="btn-icon" onClick={() => handleUnlockUser(u.username)} title="Unlock"><i className="ri-lock-unlock-line fs-14"></i></Button>
+                        )}
                         <Button color="warning" outline size="sm" className="btn-icon" onClick={() => { setChangePasswordUser(changePasswordUser === u.username ? null : u.username); setNewPassword(''); }}><i className="ri-key-2-line fs-14"></i></Button>
                         <Button color="info" outline size="sm" className="btn-icon" onClick={() => handleToggleUser(u.username, u.is_enabled)}>{u.is_enabled ? <i className="ri-user-unfollow-line fs-14"></i> : <i className="ri-user-follow-line fs-14"></i>}</Button>
                         <Button color="danger" outline size="sm" className="btn-icon" onClick={() => handleDeleteUser(u.username)}><i className="ri-delete-bin-line fs-14"></i></Button>
@@ -311,7 +329,10 @@ const EndpointTab: React.FC<EndpointTabProps> = ({ agentId }) => {
           <Card>
             <CardHeader className="align-items-center d-flex">
               <h4 className="card-title mb-0 flex-grow-1">Session Management <Badge color="light" className="text-muted ms-2">{sessions.length} sessions</Badge></h4>
-              <div className="flex-shrink-0">
+              <div className="flex-shrink-0 d-flex gap-2">
+                <Button color="warning" size="sm" outline onClick={handleLockWorkstation} disabled={loading['lockWorkstation']} title="Lock Workstation">
+                  {loading['lockWorkstation'] ? <Spinner size="sm" /> : <i className="ri-lock-2-line fs-14 me-1"></i>} Lock Workstation
+                </Button>
                 <Button color="light" size="sm" onClick={fetchSessions} disabled={loading['sessions']}>
                   {loading['sessions'] ? <Spinner size="sm" /> : <i className="ri-refresh-line fs-14"></i>}
                 </Button>
@@ -354,22 +375,28 @@ const EndpointTab: React.FC<EndpointTabProps> = ({ agentId }) => {
               
               {inventory && (
                 <div className="bg-light-subtle p-4 rounded">
-                  <h5 className="fs-14 fw-bold mb-3">System Information</h5>
+                  <h5 className="fs-14 fw-bold mb-3">Hardware & OS</h5>
                   <Row className="g-3 mb-4">
-                    <Col sm={3}><div className="text-muted fs-12">Architecture</div><div className="fw-medium">{inventory.architecture || 'N/A'}</div></Col>
-                    <Col sm={3}><div className="text-muted fs-12">Build</div><div className="fw-medium">{inventory.build || 'N/A'}</div></Col>
-                    <Col sm={3}><div className="text-muted fs-12">Version</div><div className="fw-medium">{inventory.version || 'N/A'}</div></Col>
-                    <Col sm={3}><div className="text-muted fs-12">Processors</div><div className="fw-medium">{inventory.num_processors || 'N/A'}</div></Col>
+                    <Col sm={4}><div className="text-muted fs-12">OS</div><div className="fw-medium">{inventory.os || 'N/A'}</div></Col>
+                    <Col sm={4}><div className="text-muted fs-12">CPU</div><div className="fw-medium">{inventory.cpu?.name || 'N/A'} <span className="text-muted fs-12">({inventory.cpu?.cores} cores, {inventory.cpu?.max_speed_mhz} MHz)</span></div></Col>
+                    <Col sm={4}><div className="text-muted fs-12">Memory</div><div className="fw-medium">{inventory.memory?.total_gb ? `${inventory.memory.total_gb} GB` : 'N/A'} <span className="text-muted fs-12">({inventory.memory?.slot_count} slots)</span></div></Col>
                   </Row>
 
-                  {inventory.ip_addresses && inventory.ip_addresses.length > 0 && (
+                  {inventory.network_adapters && inventory.network_adapters.length > 0 && (
                     <>
                       <h5 className="fs-14 fw-bold mb-3 mt-4">Network Adapters</h5>
                       <div className="d-flex flex-column gap-2 mb-4">
-                        {inventory.ip_addresses.map((ip: any, i: number) => (
+                        {inventory.network_adapters.map((adapter: any, i: number) => (
                           <div key={i} className="d-flex justify-content-between border p-2 rounded">
-                            <span className="fw-medium">{ip.adapter}</span>
-                            <span><Badge color="info" className="me-2">{ip.version}</Badge><span className="font-monospace text-muted">{ip.ip}</span></span>
+                            <div>
+                              <div className="fw-medium">{adapter.friendly_name || adapter.adapter}</div>
+                              <div className="text-muted fs-12">MAC: {adapter.mac_address || 'N/A'}</div>
+                            </div>
+                            <div className="text-end">
+                              {adapter.ip_addresses && adapter.ip_addresses.map((ip: any, j: number) => (
+                                <div key={j}><Badge color="info" className="me-2">{ip.version}</Badge><span className="font-monospace text-muted">{ip.ip}</span></div>
+                              ))}
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -379,7 +406,7 @@ const EndpointTab: React.FC<EndpointTabProps> = ({ agentId }) => {
                   {inventory.logical_disks && inventory.logical_disks.length > 0 && (
                     <>
                       <h5 className="fs-14 fw-bold mb-3 mt-4">Logical Disks</h5>
-                      <Row className="g-3">
+                      <Row className="g-3 mb-4">
                         {inventory.logical_disks.map((disk: any, i: number) => (
                           <Col md={6} key={i}>
                             <div className="border p-3 rounded">
@@ -398,6 +425,52 @@ const EndpointTab: React.FC<EndpointTabProps> = ({ agentId }) => {
                           </Col>
                         ))}
                       </Row>
+                    </>
+                  )}
+
+                  {inventory.software && inventory.software.length > 0 && (
+                    <>
+                      <h5 className="fs-14 fw-bold mb-3 mt-4">Installed Software <Badge color="light" className="text-muted">{inventory.software.length}</Badge></h5>
+                      <div className="border rounded" style={{ maxHeight: '250px', overflowY: 'auto' }}>
+                        <table className="table table-sm table-hover mb-0">
+                          <thead className="sticky-top">
+                            <tr><th>Name</th><th>Version</th><th>Publisher</th><th>Install Date</th></tr>
+                          </thead>
+                          <tbody>
+                            {inventory.software.map((s: any, i: number) => (
+                              <tr key={i}>
+                                <td className="fw-medium">{s.name}</td>
+                                <td>{s.version || '-'}</td>
+                                <td>{s.publisher || '-'}</td>
+                                <td>{s.install_date || '-'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  )}
+
+                  {inventory.services && inventory.services.length > 0 && (
+                    <>
+                      <h5 className="fs-14 fw-bold mb-3 mt-4">Running Services <Badge color="light" className="text-muted">{inventory.services.length}</Badge></h5>
+                      <div className="border rounded" style={{ maxHeight: '250px', overflowY: 'auto' }}>
+                        <table className="table table-sm table-hover mb-0">
+                          <thead className="sticky-top">
+                            <tr><th>Service Name</th><th>Display Name</th><th>Status</th><th>Startup Mode</th></tr>
+                          </thead>
+                          <tbody>
+                            {inventory.services.map((s: any, i: number) => (
+                              <tr key={i}>
+                                <td><code>{s.name}</code></td>
+                                <td className="fw-medium">{s.display_name || '-'}</td>
+                                <td><Badge color={s.state === 'Running' ? 'success' : s.state === 'Stopped' ? 'secondary' : 'warning'}>{s.state}</Badge></td>
+                                <td>{s.start_mode || '-'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </>
                   )}
                 </div>

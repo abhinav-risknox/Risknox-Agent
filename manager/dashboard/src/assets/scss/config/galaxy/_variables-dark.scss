@@ -112,14 +112,14 @@ $topbar-search-color-dark: $white;
 $page-title-border-dark: $border-color-dark;
 $page-title-box-shadow-dark: 0 1px 2px rgba(0, 0, 0, 0.15);
 
-// Topbar - dark - ORANGE THEME
-$dark-header-bg-dark: #FF5B00; // ✅ Blaze Orange header option
-$dark-header-border-dark: #FF5B00;
+// Topbar - dark
+$dark-header-bg-dark: #12141a; // ✅ Dark header option
+$dark-header-border-dark: #12141a;
 $dark-header-item-color-dark: rgba($white, .95);
-$dark-header-item-bg-dark: #FF8E4D; // ✅ Lighter orange
-$dark-header-item-sub-color-dark: #FFB380; // ✅ Even lighter orange
-$dark-topbar-user-bg-dark: #CC4900; // ✅ Darker orange
-$dark-topbar-search-bg-dark: rgba($white, .10);
+$dark-header-item-bg-dark: lighten(#12141a, 8%); // ✅ Lighter gray
+$dark-header-item-sub-color-dark: rgba($white, .75); // ✅ Even lighter gray
+$dark-topbar-user-bg-dark: darken(#12141a, 2%); // ✅ Darker gray
+$dark-topbar-search-bg-dark: rgba($white, .05);
 $dark-topbar-search-color-dark: $white;
 
 //two column

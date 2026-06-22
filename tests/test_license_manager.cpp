@@ -1,4 +1,4 @@
-﻿// =============================================================================
+// =============================================================================
 // test_license_manager.cpp - Unit tests for LicenseManager
 //
 // Uses mock libpq stubs - no database needed.
@@ -133,9 +133,14 @@ extern "C" {
         return (char*)res->rows[tup_num][field_num].c_str();
     }
     int PQgetisnull(const PGresult* res, int tup_num, int field_num) {
-        if (!res || tup_num >= (int)res->rows.size() || field_num >= (int)res->rows[tup_num].size())
+        if (!res || tup_num >= (int)res->rows.size() || field_num >= (int)res->rows[tup_num].size()) {
             return 1;
-        return 0;
+        }
+        return 0; 
+    }
+
+    char* PQcmdTuples(PGresult* res) {
+        return (char*)"1";
     }
 }
 

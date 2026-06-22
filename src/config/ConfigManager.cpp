@@ -2,6 +2,12 @@
 #include "utils/Logger.h"
 #include <fstream>
 
+#ifdef _WIN32
+#include <windows.h>
+#include <Wbemidl.h>
+#include <functional>
+#endif
+
 namespace ResolutePulse {
 
 ConfigManager& ConfigManager::instance() {
@@ -55,16 +61,38 @@ bool ConfigManager::load(const std::string& configPath) {
                     compName = buffer;
                 }
                 
-                // Generate a random suffix
-                srand(static_cast<unsigned int>(time(nullptr)));
-                int randomSuffix = rand() % 1000000;
+                // Generate a deterministic suffix from hardware identifiers
+                // so the same machine always produces the same agent ID,
+                // even after uninstall/reinstall.
+                std::string machineFingerprint;
                 
-                agentId_ = compName + "-" + std::to_string(randomSuffix);
+                // Primary: SMBIOS UUID (hardware-rooted, survives OS reinstall)
+                machineFingerprint = getSmbiosUuid();
                 
-                // Ensure directory exists
+                // Fallback: Windows MachineGuid (survives agent uninstall)
+                if (machineFingerprint.empty()) {
+                    LOG_WARN("SMBIOS UUID unavailable, falling back to MachineGuid");
+                    machineFingerprint = getMachineGuid();
+                }
+                
+                if (!machineFingerprint.empty()) {
+                    // Hash the fingerprint to a short numeric suffix
+                    std::hash<std::string> hasher;
+                    size_t hashVal = hasher(machineFingerprint);
+                    // Take lower 5 digits for a compact, readable suffix
+                    int suffix = static_cast<int>(hashVal % 100000);
+                    agentId_ = compName + "-" + std::to_string(suffix);
+                    LOG_INFO("Generated deterministic agent ID from hardware fingerprint");
+                } else {
+                    // Last resort: random suffix (should rarely happen)
+                    LOG_WARN("No hardware fingerprint available, using random suffix");
+                    srand(static_cast<unsigned int>(time(nullptr)));
+                    int randomSuffix = rand() % 100000;
+                    agentId_ = compName + "-" + std::to_string(randomSuffix);
+                }
+                
+                // Cache the generated ID for faster startup next time
                 std::filesystem::create_directories(idFile.parent_path());
-                
-                // Save it
                 std::ofstream f(idFile);
                 f << agentId_;
             }
@@ -281,5 +309,136 @@ bool ConfigManager::shouldCollectEvent(const std::string& channel, int eventId) 
     // Check if eventId is in the allowed set
     return it->second.count(eventId) > 0;
 }
+
+#ifdef _WIN32
+std::string ConfigManager::getSmbiosUuid() {
+    // Query WMI for the SMBIOS UUID (Win32_ComputerSystemProduct.UUID)
+    // This is burned into the motherboard firmware and survives OS reinstalls.
+    // Uses raw COM/BSTR calls for MinGW compatibility (no _bstr_t / comdef.h).
+    std::string uuid;
+
+    HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    bool needUninit = SUCCEEDED(hr);
+    // S_FALSE means COM was already initialized — that's fine, just don't uninit.
+    if (FAILED(hr) && hr != RPC_E_CHANGED_MODE) {
+        LOG_WARN("getSmbiosUuid: CoInitializeEx failed: 0x{:08X}", static_cast<unsigned>(hr));
+        return "";
+    }
+
+    hr = CoInitializeSecurity(nullptr, -1, nullptr, nullptr,
+                              RPC_C_AUTHN_LEVEL_DEFAULT,
+                              RPC_C_IMP_LEVEL_IMPERSONATE,
+                              nullptr, EOAC_NONE, nullptr);
+    // RPC_E_TOO_LATE is harmless — security was already set by a prior call.
+    if (FAILED(hr) && hr != RPC_E_TOO_LATE) {
+        LOG_WARN("getSmbiosUuid: CoInitializeSecurity failed: 0x{:08X}", static_cast<unsigned>(hr));
+        if (needUninit) CoUninitialize();
+        return "";
+    }
+
+    IWbemLocator* pLoc = nullptr;
+    hr = CoCreateInstance(CLSID_WbemLocator, nullptr, CLSCTX_INPROC_SERVER,
+                          IID_IWbemLocator, reinterpret_cast<void**>(&pLoc));
+    if (FAILED(hr)) {
+        LOG_WARN("getSmbiosUuid: CoCreateInstance failed: 0x{:08X}", static_cast<unsigned>(hr));
+        if (needUninit) CoUninitialize();
+        return "";
+    }
+
+    IWbemServices* pSvc = nullptr;
+    BSTR bstrNamespace = SysAllocString(L"ROOT\\CIMV2");
+    hr = pLoc->ConnectServer(bstrNamespace, nullptr, nullptr,
+                              nullptr, 0, nullptr, nullptr, &pSvc);
+    SysFreeString(bstrNamespace);
+    if (FAILED(hr)) {
+        LOG_WARN("getSmbiosUuid: ConnectServer failed: 0x{:08X}", static_cast<unsigned>(hr));
+        pLoc->Release();
+        if (needUninit) CoUninitialize();
+        return "";
+    }
+
+    hr = CoSetProxyBlanket(pSvc, RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE, nullptr,
+                            RPC_C_AUTHN_LEVEL_CALL, RPC_C_IMP_LEVEL_IMPERSONATE,
+                            nullptr, EOAC_NONE);
+
+    IEnumWbemClassObject* pEnum = nullptr;
+    BSTR bstrWql   = SysAllocString(L"WQL");
+    BSTR bstrQuery = SysAllocString(L"SELECT UUID FROM Win32_ComputerSystemProduct");
+    hr = pSvc->ExecQuery(bstrWql, bstrQuery,
+                          WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
+                          nullptr, &pEnum);
+    SysFreeString(bstrWql);
+    SysFreeString(bstrQuery);
+
+    if (SUCCEEDED(hr) && pEnum) {
+        IWbemClassObject* pObj = nullptr;
+        ULONG uReturn = 0;
+        if (pEnum->Next(WBEM_INFINITE, 1, &pObj, &uReturn) == S_OK && uReturn == 1) {
+            VARIANT vtProp;
+            VariantInit(&vtProp);
+            if (SUCCEEDED(pObj->Get(L"UUID", 0, &vtProp, nullptr, nullptr))) {
+                if (vtProp.vt == VT_BSTR && vtProp.bstrVal) {
+                    // Convert wide BSTR to narrow std::string
+                    int wlen = SysStringLen(vtProp.bstrVal);
+                    int needed = WideCharToMultiByte(CP_UTF8, 0, vtProp.bstrVal, wlen, nullptr, 0, nullptr, nullptr);
+                    if (needed > 0) {
+                        uuid.resize(needed);
+                        WideCharToMultiByte(CP_UTF8, 0, vtProp.bstrVal, wlen, &uuid[0], needed, nullptr, nullptr);
+                    }
+                }
+                VariantClear(&vtProp);
+            }
+            pObj->Release();
+        }
+        pEnum->Release();
+    }
+
+    pSvc->Release();
+    pLoc->Release();
+    if (needUninit) CoUninitialize();
+
+    // Reject known-bad UUIDs (all zeros, all Fs, or "Not Settable")
+    if (!uuid.empty()) {
+        std::string upper = uuid;
+        for (auto& c : upper) c = static_cast<char>(toupper(c));
+        if (upper == "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF" ||
+            upper == "00000000-0000-0000-0000-000000000000" ||
+            upper.find("NOT") != std::string::npos) {
+            LOG_WARN("SMBIOS UUID is invalid/default: {}", uuid);
+            return "";
+        }
+    }
+
+    return uuid;
+}
+
+std::string ConfigManager::getMachineGuid() {
+    // Read the Windows MachineGuid from the registry.
+    // This is generated during OS installation and persists across
+    // software uninstalls — only changes on a full OS reinstall.
+    HKEY hKey;
+    LONG result = RegOpenKeyExA(HKEY_LOCAL_MACHINE,
+                                 "SOFTWARE\\Microsoft\\Cryptography",
+                                 0, KEY_READ | KEY_WOW64_64KEY, &hKey);
+    if (result != ERROR_SUCCESS) {
+        LOG_WARN("getMachineGuid: RegOpenKeyEx failed: {}", result);
+        return "";
+    }
+
+    char buffer[256] = {};
+    DWORD bufSize = sizeof(buffer);
+    DWORD type = 0;
+    result = RegQueryValueExA(hKey, "MachineGuid", nullptr, &type,
+                               reinterpret_cast<LPBYTE>(buffer), &bufSize);
+    RegCloseKey(hKey);
+
+    if (result != ERROR_SUCCESS || type != REG_SZ) {
+        LOG_WARN("getMachineGuid: RegQueryValueEx failed: {}", result);
+        return "";
+    }
+
+    return std::string(buffer);
+}
+#endif
 
 } // namespace ResolutePulse

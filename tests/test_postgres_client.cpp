@@ -132,6 +132,10 @@ extern "C" {
         }
         return 0; // Simple mock: all provided values are NOT null
     }
+
+    char* PQcmdTuples(PGresult* res) {
+        return (char*)"1";
+    }
 }
 
 // ─────────────────────────────────────────────────────────────

@@ -207,6 +207,63 @@ bool PostgresClient::agentExists(const std::string& agentId) {
     return exists;
 }
 
+bool PostgresClient::removeAgent(const std::string& agentId) {
+    std::lock_guard<std::recursive_mutex> lock(dbMutex_);
+    if (!isConnected() && !reconnect()) return false;
+
+    // Begin transaction
+    PGresult* resBegin = PQexec(conn_, "BEGIN");
+    if (PQresultStatus(resBegin) != PGRES_COMMAND_OK) {
+        lastError_ = "Failed to begin transaction: " + std::string(PQerrorMessage(conn_));
+        LOG_ERROR("{}", lastError_);
+        PQclear(resBegin);
+        return false;
+    }
+    PQclear(resBegin);
+
+    const char* paramValues[1] = { agentId.c_str() };
+
+    // The database tables might have ON DELETE CASCADE or not. 
+    // We execute a direct DELETE on agents table. If foreign keys prevent this, 
+    // we would need to manually delete from dependent tables here. 
+    // For now, assume CASCADE or manual cleanup if needed.
+    PGresult* res = PQexecParams(conn_,
+        "DELETE FROM agents WHERE agent_id = $1",
+        1, nullptr, paramValues, nullptr, nullptr, 0);
+
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        lastError_ = "Failed to delete agent " + agentId + ": " + std::string(PQerrorMessage(conn_));
+        LOG_ERROR("{}", lastError_);
+        PQclear(res);
+        PQexec(conn_, "ROLLBACK");
+        return false;
+    }
+    
+    // Check if any row was actually deleted
+    int rowsDeleted = atoi(PQcmdTuples(res));
+    PQclear(res);
+
+    if (rowsDeleted == 0) {
+        LOG_WARN("Agent {} not found for deletion", agentId);
+        PQexec(conn_, "ROLLBACK");
+        return false;
+    }
+
+    // Commit
+    PGresult* resCommit = PQexec(conn_, "COMMIT");
+    if (PQresultStatus(resCommit) != PGRES_COMMAND_OK) {
+        lastError_ = "Failed to commit deletion for agent " + agentId + ": " + std::string(PQerrorMessage(conn_));
+        LOG_ERROR("{}", lastError_);
+        PQclear(resCommit);
+        PQexec(conn_, "ROLLBACK");
+        return false;
+    }
+    PQclear(resCommit);
+
+    LOG_INFO("Successfully removed agent {}", agentId);
+    return true;
+}
+
 // ─────────────────────────────────────────────────────────────
 // Certificate Operations
 // ─────────────────────────────────────────────────────────────

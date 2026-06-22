@@ -20,6 +20,7 @@ export const endpoints = {
   agents: {
     list: () => api.get<{ agents: Agent[], count: number }>('/agents'),
     get: (id: string) => api.get<Agent>(`/agents/${id}`),
+    delete: (id: string) => api.delete(`/agents/${id}`),
     status: (id: string) => api.get(`/agents/${id}/status`),
     sendModuleCommand: (id: string, verb: string, params: any = {}) => 
       api.post(`/agents/${id}/module-command`, { verb, params }),
@@ -34,6 +35,7 @@ export const endpoints = {
         delete: (id: string, username: string) => api.delete(`/agents/${id}/endpoint/users/${username}`),
         enable: (id: string, username: string) => api.post(`/agents/${id}/endpoint/users/${username}/enable`),
         disable: (id: string, username: string) => api.post(`/agents/${id}/endpoint/users/${username}/disable`),
+        unlock: (id: string, username: string) => api.post(`/agents/${id}/endpoint/users/${username}/unlock`),
         changePassword: (id: string, username: string, params: any) => api.post(`/agents/${id}/endpoint/users/${username}/password`, params),
       },
       groups: {
@@ -45,6 +47,7 @@ export const endpoints = {
         list: (id: string) => api.get(`/agents/${id}/endpoint/sessions`),
         logoff: (id: string, sessionId: number) => api.post(`/agents/${id}/endpoint/sessions/${sessionId}/logoff`),
         disconnect: (id: string, sessionId: number) => api.post(`/agents/${id}/endpoint/sessions/${sessionId}/disconnect`),
+        lockWorkstation: (id: string) => api.post(`/agents/${id}/endpoint/sessions/lock_workstation`),
       },
       inventory: {
         collect: (id: string) => api.get(`/agents/${id}/endpoint/inventory`),

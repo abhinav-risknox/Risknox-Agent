@@ -124,6 +124,9 @@ public:
     // Check if agent exists
     bool agentExists(const std::string& agentId);
 
+    // Remove an agent
+    bool removeAgent(const std::string& agentId);
+
     // ── Certificate operations ──
 
     // Insert a new certificate record

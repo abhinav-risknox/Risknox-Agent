@@ -5,7 +5,7 @@ services:
     container_name: opensearch
     environment:
       - discovery.type=single-node
-      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+      - OPENSEARCH_JAVA_OPTS=-Xms2048m -Xmx2048m
       - OPENSEARCH_INITIAL_ADMIN_PASSWORD=Opensearch@123
       - plugins.security.disabled=true
     ulimits:
@@ -15,6 +15,11 @@ services:
     ports:
       - 9200:9200
       - 9600:9600
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9200/_cluster/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
     networks:
       - risknox-net
 
@@ -113,6 +118,18 @@ services:
       manager:
         condition: service_healthy
     restart: unless-stopped
+
+  sigma-loader:
+    build:
+      context: ./sigma-loader
+    container_name: sigma-loader
+    volumes:
+      - ./sigma-loader/sigma/rules/sigma:/etc/sigma/rules/sigma
+    networks:
+      - risknox-net
+    depends_on:
+      opensearch:
+        condition: service_healthy
 
 networks:
   risknox-net:

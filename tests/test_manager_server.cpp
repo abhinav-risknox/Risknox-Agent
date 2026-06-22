@@ -1,4 +1,4 @@
-﻿// =============================================================================
+// =============================================================================
 // test_manager_server.cpp - Integration tests for ManagerServer + AgentHandler
 //
 // Uses:
@@ -223,6 +223,10 @@ extern "C" {
             return 1;
         }
         return 0;
+    }
+
+    char* PQcmdTuples(PGresult* res) {
+        return (char*)"1";
     }
 }
 

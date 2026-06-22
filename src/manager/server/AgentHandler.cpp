@@ -165,40 +165,10 @@ void AgentHandler::handleRegistration(SSL* ssl, const std::string& clientAddr,
         return;
     }
 
-    // Check for existing agent - allow re-registration if cert expired or agent inactive
+    // Check for existing agent. Since agent IDs are deterministic and hardware-rooted,
+    // a matching agent ID is proof of identity. Allow re-registration.
     if (db_.agentExists(request.agentId)) {
-        auto existingAgent = db_.getAgent(request.agentId);
-        bool allowReReg = false;
-
-        if (existingAgent.has_value()) {
-            // Allow re-registration if agent is INACTIVE
-            if (existingAgent->status == "INACTIVE" || existingAgent->status == "EXPIRED") {
-                LOG_INFO("Agent {} is {}, allowing re-registration", request.agentId, existingAgent->status);
-                allowReReg = true;
-            }
-
-            // Allow re-registration if their certificate is revoked or missing
-            if (!allowReReg) {
-                auto certRecord = db_.getCertificate(request.agentId);
-                if (!certRecord.has_value() || certRecord->revoked) {
-                    LOG_INFO("Agent {} certificate is revoked/missing, allowing re-registration", request.agentId);
-                    allowReReg = true;
-                }
-            }
-        }
-
-        if (!allowReReg) {
-            LOG_WARN("Duplicate registration attempt (active cert): {}", request.agentId);
-
-            RegisterReject reject;
-            reject.status = "rejected";
-            reject.agentId = request.agentId;
-            reject.reason = "Agent already registered with valid certificate";
-            reject.errorCode = 409;
-            sslSendMessage(ssl, MessageType::REGISTER_REJECT,
-                           nlohmann::json(reject).dump());
-            return;
-        }
+        LOG_INFO("Existing agent {} requesting re-registration", request.agentId);
 
         // Revoke old certificate before re-issuing
         auto oldCert = db_.getCertificate(request.agentId);

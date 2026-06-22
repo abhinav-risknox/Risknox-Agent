@@ -1,12 +1,24 @@
 import React from 'react';
 import { useAgents } from '../hooks/useAgents';
 import { Link } from 'react-router-dom';
-import { Container, Row, Col, Card, CardHeader, CardBody, Table, Input, Button, Spinner, InputGroup, InputGroupText } from 'reactstrap';
+import { Container, Row, Col, Card, CardHeader, CardBody, Table, Input, Button, Spinner, InputGroup, InputGroupText, UncontrolledDropdown, DropdownToggle, DropdownMenu, DropdownItem } from 'reactstrap';
+import { endpoints } from '../api/endpoints';
 
 export const Agents: React.FC = () => {
   const { data, isLoading, isFetching, refetch, isError } = useAgents();
 
   document.title = "Agent Fleet | RiskNoX Manager";
+
+  const handleDeleteAgent = async (id: string) => {
+    if (confirm(`Are you sure you want to completely remove agent ${id}? This action cannot be undone.`)) {
+      try {
+        await endpoints.agents.delete(id);
+        refetch();
+      } catch (err: any) {
+        alert(err.response?.data?.error || 'Failed to delete agent');
+      }
+    }
+  };
 
   return (
     <div className="page-content">
@@ -130,9 +142,16 @@ export const Agents: React.FC = () => {
                                 >
                                   <i className="ri-external-link-line fs-14"></i>
                                 </Link>
-                                <Button color="light" size="sm" className="btn-icon text-muted">
-                                  <i className="ri-more-2-fill fs-14"></i>
-                                </Button>
+                                <UncontrolledDropdown>
+                                  <DropdownToggle color="light" size="sm" className="btn-icon text-muted" tag="button">
+                                    <i className="ri-more-2-fill fs-14"></i>
+                                  </DropdownToggle>
+                                  <DropdownMenu className="dropdown-menu-end">
+                                    <DropdownItem onClick={() => handleDeleteAgent(agent.agent_id)} className="text-danger">
+                                      <i className="ri-delete-bin-line fs-14 me-2"></i> Delete Agent
+                                    </DropdownItem>
+                                  </DropdownMenu>
+                                </UncontrolledDropdown>
                               </div>
                             </td>
                           </tr>

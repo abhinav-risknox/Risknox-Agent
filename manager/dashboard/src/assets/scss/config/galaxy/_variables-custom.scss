@@ -97,14 +97,14 @@ $topbar-search-color: #495057;
 $page-title-box-shadow: 0 1px 2px rgba(56, 65, 74, 0.15);
 $page-title-border: none;
 
-// Topbar - dark - ORANGE THEME
-$dark-header-bg: #FF5B00;
-$dark-header-border: #FF5B00;
+// Topbar - dark
+$dark-header-bg: #1a1d29;
+$dark-header-border: #1a1d29;
 $dark-header-item-color: rgba($white, .95);
-$dark-header-item-bg: lighten(#FF5B00, 8%);
+$dark-header-item-bg: lighten(#1a1d29, 8%);
 $dark-header-item-sub-color: rgba($white, .75);
-$dark-topbar-user-bg: darken(#FF5B00, 10%);
-$dark-topbar-search-bg: rgba($white, .10);
+$dark-topbar-user-bg: darken(#1a1d29, 5%);
+$dark-topbar-search-bg: rgba($white, .05);
 $dark-topbar-search-color: $white;
 
 // Horizontal Menu

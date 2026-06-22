@@ -62,6 +62,14 @@ bool EndpointManager::handleCommand(const std::string& verb, const nlohmann::jso
             return true;
         }
         return false;
+    } else if (verb == "user_unlock") {
+        std::string username = params.value("username", "");
+        if (username.empty()) { errorMsg = "username is required"; return false; }
+        if (UserManager::unlockUser(username, errorMsg)) {
+            result = {{"success", true}, {"message", "User unlocked successfully"}};
+            return true;
+        }
+        return false;
     } else if (verb == "user_password_change") {
         std::string username = params.value("username", "");
         std::string password = params.value("password", "");
@@ -148,6 +156,12 @@ bool EndpointManager::handleCommand(const std::string& verb, const nlohmann::jso
         if (sessionId == -1) { errorMsg = "session_id is required"; return false; }
         if (SessionManager::disconnectSession(sessionId, errorMsg)) {
             result = {{"success", true}, {"message", "Session disconnected successfully"}};
+            return true;
+        }
+        return false;
+    } else if (verb == "workstation_lock") {
+        if (SessionManager::lockWorkstation(errorMsg)) {
+            result = {{"success", true}, {"message", "Workstation locked successfully"}};
             return true;
         }
         return false;
