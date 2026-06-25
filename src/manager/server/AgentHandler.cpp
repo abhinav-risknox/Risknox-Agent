@@ -183,6 +183,23 @@ void AgentHandler::handleRegistration(SSL* ssl, const std::string& clientAddr,
         LOG_INFO("Agent {} re-registered successfully", request.agentId);
     } else {
 
+    // ── Check agent limit before allowing new registration ──
+    int currentCount = db_.getTotalAgentCount();
+    int maxAllowed = db_.getMaxAgentLimit();
+    if (currentCount >= maxAllowed) {
+        LOG_WARN("Agent limit reached ({}/{}). Rejecting new registration: {}",
+                 currentCount, maxAllowed, request.agentId);
+
+        RegisterReject reject;
+        reject.status = "rejected";
+        reject.agentId = request.agentId;
+        reject.reason = "Agent limit reached. Maximum " + std::to_string(maxAllowed) + " agents allowed.";
+        reject.errorCode = 403;
+        sslSendMessage(ssl, MessageType::REGISTER_REJECT,
+                       nlohmann::json(reject).dump());
+        return;
+    }
+
     // Insert agent record
     AgentRecord agent;
     agent.agentId      = request.agentId;

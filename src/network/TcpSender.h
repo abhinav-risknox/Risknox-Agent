@@ -27,9 +27,11 @@ public:
     // Initialize the sender and connect to Fluent Bit
     // @param host - Fluent Bit hostname/IP
     // @param port - Fluent Bit TCP port
+    // @param agentId - The agent ID to include in telemetry
     // @param tlsEnabled - Whether to use TLS (default: false for backward compatibility)
     // @param caCertPath - Path to CA certificate for verifying Fluent Bit's server cert
     bool initialize(const std::string& host, int port,
+                    const std::string& agentId,
                     bool tlsEnabled = false,
                     const std::string& caCertPath = "");
     
@@ -75,6 +77,7 @@ private:
     
     std::string host_;
     int port_ = 0;
+    std::string agentId_;
     
     // TLS configuration
     bool tlsEnabled_ = false;

@@ -151,9 +151,9 @@ bool UserManager::changePassword(const std::string& username, const std::string&
 
 std::vector<UserInfo> UserManager::listUsers(std::string& errorMsg) {
     std::vector<UserInfo> users;
-    LPUSER_INFO_1 pBuf = NULL;
-    LPUSER_INFO_1 pTmpBuf;
-    DWORD dwLevel = 1;
+    LPUSER_INFO_2 pBuf = NULL;
+    LPUSER_INFO_2 pTmpBuf;
+    DWORD dwLevel = 2;
     DWORD dwPrefMaxLen = MAX_PREFERRED_LENGTH;
     DWORD dwEntriesRead = 0;
     DWORD dwTotalEntries = 0;
@@ -168,12 +168,14 @@ std::vector<UserInfo> UserManager::listUsers(std::string& errorMsg) {
             if ((pTmpBuf = pBuf) != NULL) {
                 for (DWORD i = 0; i < dwEntriesRead; i++) {
                     UserInfo u;
-                    if (pTmpBuf->usri1_name != NULL) u.username = wstring_to_utf8(pTmpBuf->usri1_name);
-                    if (pTmpBuf->usri1_comment != NULL) u.fullName = wstring_to_utf8(pTmpBuf->usri1_comment);
-                    u.isEnabled = ((pTmpBuf->usri1_flags & UF_ACCOUNTDISABLE) == 0);
-                    u.isLocked = ((pTmpBuf->usri1_flags & UF_LOCKOUT) != 0);
-                    u.passwordRequired = ((pTmpBuf->usri1_flags & UF_PASSWD_NOTREQD) == 0);
-                    u.passwordExpires = ((pTmpBuf->usri1_flags & UF_DONT_EXPIRE_PASSWD) == 0);
+                    if (pTmpBuf->usri2_name != NULL) u.username = wstring_to_utf8(pTmpBuf->usri2_name);
+                    if (pTmpBuf->usri2_full_name != NULL) u.fullName = wstring_to_utf8(pTmpBuf->usri2_full_name);
+                    else if (pTmpBuf->usri2_comment != NULL) u.fullName = wstring_to_utf8(pTmpBuf->usri2_comment);
+                    u.isEnabled = ((pTmpBuf->usri2_flags & UF_ACCOUNTDISABLE) == 0);
+                    u.isLocked = ((pTmpBuf->usri2_flags & UF_LOCKOUT) != 0);
+                    u.passwordRequired = ((pTmpBuf->usri2_flags & UF_PASSWD_NOTREQD) == 0);
+                    u.passwordExpires = ((pTmpBuf->usri2_flags & UF_DONT_EXPIRE_PASSWD) == 0);
+                    u.lastLogon = pTmpBuf->usri2_last_logon;
                     users.push_back(u);
                     pTmpBuf++;
                 }

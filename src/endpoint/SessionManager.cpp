@@ -60,6 +60,29 @@ std::vector<SessionInfo> SessionManager::listSessions(std::string& errorMsg) {
                 }
             }
             
+            // Get session timing info
+            WTSINFO* pWtsInfo = NULL;
+            if (WTSQuerySessionInformationW(WTS_CURRENT_SERVER_HANDLE, info.sessionId, WTSSessionInfo, (LPWSTR*)&pWtsInfo, &bytes)) {
+                if (pWtsInfo) {
+                    // Convert LARGE_INTEGER file times to UNIX epoch
+                    auto filetimeToEpoch = [](const LARGE_INTEGER& li) -> uint64_t {
+                        if (li.QuadPart == 0) return 0;
+                        return (li.QuadPart - 116444736000000000ULL) / 10000000ULL;
+                    };
+                    info.logonTime = filetimeToEpoch(pWtsInfo->LogonTime);
+                    uint64_t current = filetimeToEpoch(pWtsInfo->CurrentTime);
+                    uint64_t lastInput = filetimeToEpoch(pWtsInfo->LastInputTime);
+                    info.idleTime = (current > lastInput) ? (current - lastInput) : 0;
+                    WTSFreeMemory(pWtsInfo);
+                } else {
+                    info.logonTime = 0;
+                    info.idleTime = 0;
+                }
+            } else {
+                info.logonTime = 0;
+                info.idleTime = 0;
+            }
+            
             sessions.push_back(info);
         }
         WTSFreeMemory(pSessionInfo);

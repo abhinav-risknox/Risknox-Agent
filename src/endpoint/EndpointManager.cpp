@@ -20,7 +20,8 @@ bool EndpointManager::handleCommand(const std::string& verb, const nlohmann::jso
                 {"is_enabled", u.isEnabled},
                 {"is_locked", u.isLocked},
                 {"password_required", u.passwordRequired},
-                {"password_expires", u.passwordExpires}
+                {"password_expires", u.passwordExpires},
+                {"last_logon", u.lastLogon}
             });
         }
         result = arr;
@@ -138,7 +139,9 @@ bool EndpointManager::handleCommand(const std::string& verb, const nlohmann::jso
                 {"session_id", s.sessionId},
                 {"station_name", s.stationName},
                 {"username", s.username},
-                {"state", s.stateName}
+                {"state", s.stateName},
+                {"logon_time", s.logonTime},
+                {"idle_time", s.idleTime}
             });
         }
         result = arr;

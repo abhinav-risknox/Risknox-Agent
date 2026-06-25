@@ -183,6 +183,89 @@ This document provides a production-grade specification for the ResolutePulse Ma
   }
   ```
 
+### `GET /api/commands/module`
+**Description:** Retrieve a list of dispatched module commands.
+**Auth Required:** Yes
+
+#### Request
+- **Query Parameters:**
+  - `agent_id` (string, optional): Filter by a specific agent.
+  - `limit` (integer, optional): Number of commands to return (default: 50).
+  - `offset` (integer, optional): Pagination offset (default: 0).
+
+#### Response
+- **Status `200 OK`:**
+  ```json
+  {
+    "count": 10,
+    "commands": [
+      {
+        "command_id": "DESKTOP-ABC1234-diagnostics-1686900000-abcd1234",
+        "agent_id": "DESKTOP-ABC1234",
+        "verb": "diagnostics",
+        "status": "queued",
+        "initiated_by": "admin"
+      }
+    ]
+  }
+  ```
+
+### `POST /api/agents/{agent_id}/policy`
+**Description:** Push a new policy update configuration to an agent.
+**Auth Required:** Yes
+
+#### Request
+- **Path Parameters:**
+  - `agent_id` (string): Unique identifier for the agent.
+- **Body (`application/json`):**
+  ```json
+  {
+    "policy_type": "antivirus",
+    "policy_data": { 
+      "action": "quick_scan"
+    }
+  }
+  ```
+
+#### Response
+- **Status `200 OK`:**
+  ```json
+  {
+    "command_id": "DESKTOP-ABC1234-antivirus-1686900000-abcd1234",
+    "agent_id": "DESKTOP-ABC1234",
+    "policy_type": "antivirus",
+    "status": "queued",
+    "initiated_by": "admin"
+  }
+  ```
+
+### `GET /api/commands/policy`
+**Description:** Retrieve a list of pushed policy commands.
+**Auth Required:** Yes
+
+#### Request
+- **Query Parameters:**
+  - `agent_id` (string, optional): Filter by a specific agent.
+  - `limit` (integer, optional): Number of commands to return (default: 50).
+  - `offset` (integer, optional): Pagination offset (default: 0).
+
+#### Response
+- **Status `200 OK`:**
+  ```json
+  {
+    "count": 5,
+    "commands": [
+      {
+        "command_id": "DESKTOP-ABC1234-antivirus-1686900000-abcd1234",
+        "agent_id": "DESKTOP-ABC1234",
+        "policy_type": "antivirus",
+        "status": "queued",
+        "initiated_by": "admin"
+      }
+    ]
+  }
+  ```
+
 ### `GET /api/commands/{command_id}`
 **Description:** Polling endpoint to retrieve the execution status and return payload of any command (module, policy, or endpoint management).
 **Auth Required:** Yes
@@ -266,7 +349,19 @@ These routes provide native REST abstractions for managing operating system endp
   }
   ```
 
-### User Management
+### `POST /api/agents/{agent_id}/endpoint/users/{username}/unlock`
+**Description:** Dispatches a `user_unlock` command to unlock a locked local user account.
+**Auth Required:** Yes
+
+#### Request
+- **Path Parameters:**
+  - `agent_id` (string): Target agent.
+  - `username` (string): Target user account name.
+
+#### Response
+- **Status `200 OK`:** Returns standard queued command response. 
+
+### Group Management
 
 ### `GET /api/agents/{agent_id}/endpoint/users`
 **Description:** Dispatches a `user_list` command to retrieve all local OS users.
@@ -449,6 +544,17 @@ These routes provide native REST abstractions for managing operating system endp
 #### Response
 - **Status `200 OK`:** Returns standard queued command response. 
 
+### `POST /api/agents/{agent_id}/endpoint/workstation/lock`
+**Description:** Dispatches a `workstation_lock` command to lock the current active workstation session.
+**Auth Required:** Yes
+
+#### Request
+- **Path Parameters:**
+  - `agent_id` (string): Target agent.
+
+#### Response
+- **Status `200 OK`:** Returns standard queued command response. 
+
 ### OS Password Policy
 
 ### `GET /api/agents/{agent_id}/endpoint/password-policy`
@@ -491,3 +597,29 @@ These routes provide native REST abstractions for managing operating system endp
 
 #### Response
 - **Status `200 OK`:** Returns standard queued command response. 
+
+---
+
+## Supported Agent Operations
+
+These are the actual command types supported by the `Agent` component that you should pass in as the `verb` (for `module-command`) or `policy_type` (for `policy` command).
+
+### Supported Module Command Verbs (`verb`)
+- `collector_start`: Resume event collection & batch sender
+- `collector_stop`: Pause event collection & batch sender
+- `fim_start`: Resume FIM monitoring
+- `fim_stop`: Pause FIM monitoring
+- `worker_restart`: Stop & re-spawn all persistent worker subprocesses
+- `status_request`: Force an immediate status flush and STATUS_REPORT
+- `diagnostics`: Return live counters & last log lines
+- `config_get`: Return the active JSON config or one section
+- `config_push`: Accept a new JSON config section, persist, and apply
+- `agent_restart`: Schedule a graceful restart
+- `av_update`: Trigger on-demand freshclam update via rp-antivirus
+- `av_version`: Query ClamAV DB metadata via rp-antivirus
+
+### Supported Policy Command Types (`policy_type`)
+- `web_blocking`: Pushes web blocking rules to the `rp-webblock` worker.
+- `software_blocking`: Pushes software blocking rules to the `rp-softblock` worker.
+- `patch`: Triggers a background patch scan via the `rp-patch` worker.
+- `antivirus`: Triggers antivirus actions via the `rp-antivirus` worker (e.g., `quick_scan`, `full_scan`, `update_definitions`, `database_info` which are specified in the `policy_data.action` payload).

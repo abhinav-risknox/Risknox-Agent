@@ -73,6 +73,10 @@ private:
     // ── Audit log ──
     void handleGetAuditLog(const httplib::Request& req, httplib::Response& res);
 
+    // ── Settings ──
+    void handleGetSettings(const httplib::Request& req, httplib::Response& res);
+    void handlePutSettings(const httplib::Request& req, httplib::Response& res);
+
     // ── Health ──
     void handleHealthCheck(const httplib::Request& req, httplib::Response& res);
 

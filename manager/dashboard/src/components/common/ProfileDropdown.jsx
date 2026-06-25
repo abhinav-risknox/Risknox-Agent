@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Dropdown, DropdownItem, DropdownMenu, DropdownToggle } from 'reactstrap';
 
 //import images
@@ -15,7 +15,13 @@ const ProfileDropdown = () => {
     // const user = useSelector(profiledropdownData);
 
     const userName = "Admin";
-    //setUserName("Test");
+    const navigate = useNavigate();
+
+    const handleLogout = (e) => {
+        e.preventDefault();
+        localStorage.removeItem('rn_token');
+        navigate('/login');
+    };
 
     //Dropdown Toggle
     const [isProfileDropdown, setIsProfileDropdown] = useState(false);
@@ -60,11 +66,11 @@ const ProfileDropdown = () => {
                         </Link>
                     </DropdownItem>
                     <DropdownItem className='p-0'>
-                        <Link to={process.env.PUBLIC_URL + "/logout"} className="dropdown-item">
+                        <a href="#" onClick={handleLogout} className="dropdown-item">
                             <i
                                 className="mdi mdi-logout text-muted fs-16 align-middle me-1"></i> <span
                                     className="align-middle" data-key="t-logout">Logout</span>
-                        </Link>
+                        </a>
                     </DropdownItem>
                 </DropdownMenu>
             </Dropdown>

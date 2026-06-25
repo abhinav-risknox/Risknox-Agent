@@ -643,3 +643,20 @@ ALTER TABLE ONLY public.certificates
 
 ALTER TABLE ONLY public.licenses
     ADD CONSTRAINT licenses_agent_id_fkey FOREIGN KEY (agent_id) REFERENCES public.agents(agent_id);
+
+--
+-- Manager settings (key-value store for platform configuration)
+--
+
+CREATE TABLE IF NOT EXISTS public.manager_settings (
+    key character varying(64) NOT NULL,
+    value jsonb NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT manager_settings_pkey PRIMARY KEY (key)
+);
+
+ALTER TABLE public.manager_settings OWNER TO postgres;
+
+-- Seed default agent limit
+INSERT INTO public.manager_settings (key, value) VALUES ('max_agents', '100')
+    ON CONFLICT (key) DO NOTHING;

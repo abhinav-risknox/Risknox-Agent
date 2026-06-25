@@ -227,6 +227,19 @@ void RestApi::registerRoutes() {
         handleGetAuditLog(req, res);
     });
 
+    // ── Settings ──
+    httpServer_->Get("/api/settings", [this](const Req& req, Res& res) {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleGetSettings(req, res);
+    });
+
+    httpServer_->Put("/api/settings", [this](const Req& req, Res& res) {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handlePutSettings(req, res);
+    });
+
     // ── Health check (no auth required) ──
     httpServer_->Get("/api/health", [this](const Req& req, Res& res) {
         addCorsHeaders(res);
@@ -359,9 +372,13 @@ void RestApi::handleGetAgents(const httplib::Request&, httplib::Response& res) {
         arr.push_back(std::move(j));
     }
 
+    int maxAgents = db_.getMaxAgentLimit();
+
     nlohmann::json resp;
-    resp["agents"] = arr;
-    resp["count"]  = arr.size();
+    resp["agents"]        = arr;
+    resp["count"]         = arr.size();
+    resp["max_agents"]    = maxAgents;
+    resp["limit_reached"] = (static_cast<int>(arr.size()) >= maxAgents);
     res.set_content(resp.dump(), "application/json");
 }
 
@@ -741,6 +758,50 @@ void RestApi::handleHealthCheck(const httplib::Request&, httplib::Response& res)
     j["timestamp"] = buf;
 
     res.set_content(j.dump(), "application/json");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Settings
+// ─────────────────────────────────────────────────────────────────────────────
+
+void RestApi::handleGetSettings(const httplib::Request&, httplib::Response& res) {
+    nlohmann::json resp;
+    resp["max_agents"]          = db_.getMaxAgentLimit();
+    resp["current_agent_count"] = db_.getTotalAgentCount();
+    res.set_content(resp.dump(), "application/json");
+}
+
+void RestApi::handlePutSettings(const httplib::Request& req, httplib::Response& res) {
+    try {
+        auto body = nlohmann::json::parse(req.body);
+
+        if (body.contains("max_agents")) {
+            int maxAgents = body["max_agents"].get<int>();
+            if (maxAgents < 0) {
+                res.status = 400;
+                res.set_content(R"({"error":"max_agents must be >= 0"})", "application/json");
+                return;
+            }
+            if (!db_.setMaxAgentLimit(maxAgents)) {
+                res.status = 500;
+                res.set_content(R"({"error":"Failed to update max_agents setting"})", "application/json");
+                return;
+            }
+        }
+
+        // Return updated settings
+        nlohmann::json resp;
+        resp["max_agents"]          = db_.getMaxAgentLimit();
+        resp["current_agent_count"] = db_.getTotalAgentCount();
+        resp["success"]             = true;
+        res.set_content(resp.dump(), "application/json");
+
+    } catch (const std::exception& e) {
+        res.status = 400;
+        nlohmann::json err;
+        err["error"] = std::string("Invalid request body: ") + e.what();
+        res.set_content(err.dump(), "application/json");
+    }
 }
 
 } // namespace ResolutePulse

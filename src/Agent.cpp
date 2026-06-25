@@ -143,6 +143,7 @@ bool Agent::initialize(const std::string& configPath) {
     if (!tcpSender->initialize(
             config.getFluentBitHost(),
             config.getFluentBitPort(),
+            config.getAgentId(),
             config.getFluentBitTlsEnabled(),
             config.getFluentBitCaCertPath())) {
         LOG_ERROR("Failed to initialize TCP sender for events");

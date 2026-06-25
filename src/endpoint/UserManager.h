@@ -15,6 +15,7 @@ struct UserInfo {
     bool isLocked;
     bool passwordExpires;
     bool passwordRequired;
+    uint64_t lastLogon;
 };
 
 class UserManager {

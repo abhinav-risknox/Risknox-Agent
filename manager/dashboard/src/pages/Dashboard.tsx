@@ -45,11 +45,11 @@ export const Dashboard: React.FC = () => {
           <Col xl={3} md={6}>
             <StatCard 
               title="Total Agents" 
-              value={isLoading ? "..." : totalAgents} 
+              value={isLoading ? "..." : `${totalAgents} / ${data?.max_agents || 100}`} 
               iconClass="ri-team-line" 
-              trend="12%" 
-              trendUp={true} 
-              color="primary"
+              trend={data?.limit_reached ? "Limit Reached" : "12%"} 
+              trendUp={!data?.limit_reached} 
+              color={data?.limit_reached ? "danger" : "primary"}
             />
           </Col>
           <Col xl={3} md={6}>

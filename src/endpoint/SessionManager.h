@@ -13,6 +13,8 @@ struct SessionInfo {
     std::string username;
     int state;
     std::string stateName;
+    uint64_t logonTime;
+    uint64_t idleTime;
 };
 
 class SessionManager {

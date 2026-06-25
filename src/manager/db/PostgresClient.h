@@ -262,6 +262,17 @@ public:
                                           const std::string& initiatedBy,
                                           bool pending = false);
 
+    // ── Agent limit management ──────────────────────────────────────────────
+
+    // Get total number of agents (all statuses)
+    int getTotalAgentCount();
+
+    // Get maximum agent limit from manager_settings (default 100)
+    int getMaxAgentLimit();
+
+    // Set maximum agent limit in manager_settings
+    bool setMaxAgentLimit(int limit);
+
     // Get last error message
     const std::string& getLastError() const { return lastError_; }
 

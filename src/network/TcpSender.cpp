@@ -34,10 +34,12 @@ TcpSender::~TcpSender() {
 }
 
 bool TcpSender::initialize(const std::string& host, int port,
+                            const std::string& agentId,
                             bool tlsEnabled,
                             const std::string& caCertPath) {
     host_ = host;
     port_ = port;
+    agentId_ = agentId;
     tlsEnabled_ = tlsEnabled;
     caCertPath_ = caCertPath;
     
@@ -342,6 +344,7 @@ SendResult TcpSender::sendBatch(const std::vector<Event>& events) {
         j["t"] = event.timestamp;     // t = timestamp
         j["x"] = event.data;          // x = data (generic payload)
         j["s"] = event.sourceType;    // s = source_type (winevent|logtail)
+        j["a"] = agentId_;            // a = agent_id
         
         batch << j.dump() << "\n";
     }

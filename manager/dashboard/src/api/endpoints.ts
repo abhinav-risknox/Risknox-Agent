@@ -13,12 +13,18 @@ export interface Agent {
   online: boolean;
 }
 
+export interface SettingsResponse {
+  max_agents: number;
+  current_agent_count: number;
+  success?: boolean;
+}
+
 export const endpoints = {
   health: () => api.get('/health'),
   login: (credentials: any) => api.post('/auth/login', credentials),
   
   agents: {
-    list: () => api.get<{ agents: Agent[], count: number }>('/agents'),
+    list: () => api.get<{ agents: Agent[], count: number, max_agents: number, limit_reached: boolean }>('/agents'),
     get: (id: string) => api.get<Agent>(`/agents/${id}`),
     delete: (id: string) => api.delete(`/agents/${id}`),
     status: (id: string) => api.get(`/agents/${id}/status`),
@@ -67,5 +73,10 @@ export const endpoints = {
   
   audit: {
     list: (params: any) => api.get('/audit-log', { params }),
-  }
+  },
+
+  settings: {
+    get: () => api.get<SettingsResponse>('/settings'),
+    update: (data: Partial<{ max_agents: number }>) => api.put<SettingsResponse>('/settings', data),
+  },
 };

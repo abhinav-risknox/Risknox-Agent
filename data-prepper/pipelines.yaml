@@ -1,3 +1,4 @@
+# Pipeline that separates FIM events into their own index
 windows-events-pipeline:
   source:
     http:
@@ -6,72 +7,22 @@ windows-events-pipeline:
       authentication:
         unauthenticated:
 
-  # Route events based on source_type: structured (winevent) vs raw tailed logs (logtail)
   route:
-    - json_route:    '/source_type == "winevent" and (/channel == "FIM" or /channel == "SystemInfo")'
-    - xml_route:     '/source_type == "winevent" and /channel != "FIM" and /channel != "SystemInfo"'
-    - logtail_route: '/source_type == "logtail"'
-
-  processor:
-    # 1a. Parse JSON for FIM / SystemInfo events
-    - parse_json:
-        source: "data"
-        destination: "winlog"
-        parse_when: '/source_type == "winevent" and (/channel == "FIM" or /channel == "SystemInfo")'
-
-    # 1b. Parse XML for Standard Windows Events
-    - parse_xml:
-        source: "data"
-        destination: "winlog"
-        parse_when: '/source_type == "winevent" and /channel != "FIM" and /channel != "SystemInfo"'
-
-    # 2. Remove the raw data field for parsed events (not for raw tailed logs)
-    - delete_entries:
-        with_keys: ["data"]
-        delete_when: '/source_type == "winevent"'
-
-    # 3. Standardize field names to ECS (Aligned with Sigma)
-    - rename_keys:
-        entries:
-          - from_key: "winlog/EventID"
-            to_key: "event/id"
-          - from_key: "winlog/Computer"
-            to_key: "host/computer"
-          - from_key: "winlog/Channel"
-            to_key: "event/channel"
-          - from_key: "winlog/Provider/Name"
-            to_key: "event/provider"
-          - from_key: "winlog/EventData/CommandLine"
-            to_key: "process/cmdline"
-          - from_key: "winlog/EventData/Image"
-            to_key: "process/path"
-          - from_key: "winlog/EventData/ParentImage"
-            to_key: "parent_process/path"
-          - from_key: "winlog/EventData/ParentCommandLine"
-            to_key: "parent_process/cmdline"
-          - from_key: "winlog/EventData/ProcessId"
-            to_key: "process/pid"
-          - from_key: "winlog/EventData/TargetFilename"
-            to_key: "file/path"
-          - from_key: "winlog/EventData/TargetObject"
-            to_key: "registry/key"
-          - from_key: "winlog/EventData/Details"
-            to_key: "registry/value_data"
-          - from_key: "winlog/EventData/SubjectUserName"
-            to_key: "user/name"
-          - from_key: "winlog/EventData/TargetUserName"
-            to_key: "target_user/name"
-          - from_key: "winlog/EventData/SourceIp"
-            to_key: "network/src_ip"
-          - from_key: "winlog/EventData/DestinationIp"
-            to_key: "network/dst_ip"
-
-    # 4. Ensure channel is lowercase for index routing
-    - lowercase_string:
-        with_keys: ["channel"]
+    - fim_route: '/channel == "fim" or /channel == "FIM"'
+    - other_route: '/channel != "fim" and /channel != "FIM"'
 
   sink:
-    # Structured Windows events (FIM, SystemInfo, Security, System, etc.) → fixed index
+    # FIM Events go to their own index
+    - opensearch:
+        hosts: [ "http://opensearch:9200" ]
+        insecure: true
+        username: "${OPENSEARCH_USERNAME}"
+        password: "${OPENSEARCH_PASSWORD}"
+        index: "windows-events-fim"
+        routes:
+          - fim_route
+
+    # All other Windows Events go to the standard index
     - opensearch:
         hosts: [ "http://opensearch:9200" ]
         insecure: true
@@ -79,19 +30,4 @@ windows-events-pipeline:
         password: "${OPENSEARCH_PASSWORD}"
         index: "windows-events"
         routes:
-          - json_route
-          - xml_route
-
-    # All tailed logs → DYNAMIC index derived from the channel name
-    # e.g. channel "TestLog"  → index "logs-TestLog"
-    #      channel "ClamAV"   → index "logs-ClamAV"
-    #      channel "IISLogs"  → index "logs-IISLogs"
-    # No pipeline restart needed when new log sources are added!
-    - opensearch:
-        hosts: [ "http://opensearch:9200" ]
-        insecure: true
-        username: "${OPENSEARCH_USERNAME}"
-        password: "${OPENSEARCH_PASSWORD}"
-        index: "logs-${/channel}"
-        routes:
-          - logtail_route
+          - other_route

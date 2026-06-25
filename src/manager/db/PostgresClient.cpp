@@ -223,10 +223,29 @@ bool PostgresClient::removeAgent(const std::string& agentId) {
 
     const char* paramValues[1] = { agentId.c_str() };
 
-    // The database tables might have ON DELETE CASCADE or not. 
-    // We execute a direct DELETE on agents table. If foreign keys prevent this, 
-    // we would need to manually delete from dependent tables here. 
-    // For now, assume CASCADE or manual cleanup if needed.
+    // Explicitly delete dependent records first to prevent foreign key constraint violations,
+    // as our schema does not use ON DELETE CASCADE.
+    const char* deleteQueries[] = {
+        "DELETE FROM agent_status_reports WHERE agent_id = $1",
+        "DELETE FROM certificates WHERE agent_id = $1",
+        "DELETE FROM licenses WHERE agent_id = $1",
+        "DELETE FROM module_commands WHERE agent_id = $1",
+        "DELETE FROM policy_commands WHERE agent_id = $1"
+    };
+
+    for (const char* query : deleteQueries) {
+        PGresult* resDep = PQexecParams(conn_, query, 1, nullptr, paramValues, nullptr, nullptr, 0);
+        if (PQresultStatus(resDep) != PGRES_COMMAND_OK) {
+            lastError_ = "Failed to clean up dependent records for agent " + agentId + ": " + std::string(PQerrorMessage(conn_));
+            LOG_ERROR("{}", lastError_);
+            PQclear(resDep);
+            PQexec(conn_, "ROLLBACK");
+            return false;
+        }
+        PQclear(resDep);
+    }
+
+    // Now delete the agent itself
     PGresult* res = PQexecParams(conn_,
         "DELETE FROM agents WHERE agent_id = $1",
         1, nullptr, paramValues, nullptr, nullptr, 0);
@@ -1302,6 +1321,81 @@ nlohmann::json PostgresClient::getGlobalPolicySummary() {
     }
 
     return summary;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Agent Limit Management
+// ─────────────────────────────────────────────────────────────
+
+int PostgresClient::getTotalAgentCount() {
+    std::lock_guard<std::recursive_mutex> lock(dbMutex_);
+    if (!isConnected() && !reconnect()) return 0;
+
+    PGresult* res = PQexec(conn_, "SELECT COUNT(*) FROM agents");
+
+    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
+        lastError_ = "getTotalAgentCount failed: " + std::string(PQerrorMessage(conn_));
+        LOG_ERROR("{}", lastError_);
+        PQclear(res);
+        return 0;
+    }
+
+    int count = std::stoi(PQgetvalue(res, 0, 0));
+    PQclear(res);
+    return count;
+}
+
+int PostgresClient::getMaxAgentLimit() {
+    std::lock_guard<std::recursive_mutex> lock(dbMutex_);
+    if (!isConnected() && !reconnect()) return 100; // safe default
+
+    PGresult* res = PQexec(conn_,
+        "SELECT value::text FROM manager_settings WHERE key = 'max_agents'");
+
+    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
+        // Table or row doesn't exist yet — return default
+        PQclear(res);
+        return 100;
+    }
+
+    // JSONB value is returned as text (e.g. "100"), parse as int
+    std::string val = PQgetvalue(res, 0, 0);
+    PQclear(res);
+
+    try {
+        return std::stoi(val);
+    } catch (...) {
+        LOG_WARN("Invalid max_agents setting value: '{}', using default 100", val);
+        return 100;
+    }
+}
+
+bool PostgresClient::setMaxAgentLimit(int limit) {
+    std::lock_guard<std::recursive_mutex> lock(dbMutex_);
+    if (!isConnected() && !reconnect()) {
+        lastError_ = "Not connected";
+        return false;
+    }
+
+    std::string valStr = std::to_string(limit);
+    const char* paramValues[1] = { valStr.c_str() };
+
+    PGresult* res = PQexecParams(conn_,
+        "INSERT INTO manager_settings (key, value, updated_at) "
+        "VALUES ('max_agents', $1::jsonb, NOW()) "
+        "ON CONFLICT (key) DO UPDATE SET value = $1::jsonb, updated_at = NOW()",
+        1, nullptr, paramValues, nullptr, nullptr, 0);
+
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        lastError_ = "setMaxAgentLimit failed: " + std::string(PQerrorMessage(conn_));
+        LOG_ERROR("{}", lastError_);
+        PQclear(res);
+        return false;
+    }
+
+    PQclear(res);
+    LOG_INFO("Max agent limit set to {}", limit);
+    return true;
 }
 
 } // namespace ResolutePulse
