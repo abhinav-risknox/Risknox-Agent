@@ -92,6 +92,27 @@ This document provides a production-grade specification for the ResolutePulse Ma
   }
   ```
 
+### `DELETE /api/agents/{agent_id}`
+**Description:** Removes a registered agent from the system.
+**Auth Required:** Yes
+
+#### Request
+- **Path Parameters:**
+  - `agent_id` (string): Unique identifier for the agent.
+
+#### Response
+- **Status `200 OK`:**
+  ```json
+  {
+    "success": true,
+    "message": "Agent removed successfully"
+  }
+  ```
+- **Status `404 Not Found`:**
+  ```json
+  { "error": "Agent not found" }
+  ```
+
 ### `GET /api/agents/{agent_id}`
 **Description:** Retrieves detailed information about a specific agent, including its active license.
 **Auth Required:** Yes
@@ -600,6 +621,52 @@ These routes provide native REST abstractions for managing operating system endp
 
 ---
 
+## Settings
+
+### `GET /api/settings`
+**Description:** Retrieves the current server settings, including the maximum number of agents allowed and the current agent count.
+**Auth Required:** Yes
+
+#### Request
+*(No parameters or body)*
+
+#### Response
+- **Status `200 OK`:**
+  ```json
+  {
+    "max_agents": 100,
+    "current_agent_count": 5
+  }
+  ```
+
+### `PUT /api/settings`
+**Description:** Updates server settings. Currently supports modifying the maximum number of allowed agents.
+**Auth Required:** Yes
+
+#### Request
+- **Body (`application/json`):**
+  ```json
+  {
+    "max_agents": 200
+  }
+  ```
+
+#### Response
+- **Status `200 OK`:**
+  ```json
+  {
+    "max_agents": 200,
+    "current_agent_count": 5,
+    "success": true
+  }
+  ```
+- **Status `400 Bad Request`:**
+  ```json
+  { "error": "max_agents must be >= 0" }
+  ```
+
+---
+
 ## Supported Agent Operations
 
 These are the actual command types supported by the `Agent` component that you should pass in as the `verb` (for `module-command`) or `policy_type` (for `policy` command).
@@ -619,7 +686,214 @@ These are the actual command types supported by the `Agent` component that you s
 - `av_version`: Query ClamAV DB metadata via rp-antivirus
 
 ### Supported Policy Command Types (`policy_type`)
-- `web_blocking`: Pushes web blocking rules to the `rp-webblock` worker.
-- `software_blocking`: Pushes software blocking rules to the `rp-softblock` worker.
-- `patch`: Triggers a background patch scan via the `rp-patch` worker.
-- `antivirus`: Triggers antivirus actions via the `rp-antivirus` worker (e.g., `quick_scan`, `full_scan`, `update_definitions`, `database_info` which are specified in the `policy_data.action` payload).
+
+All policy commands are dispatched via `POST /api/agents/{agent_id}/policy`.  The `policy_type` field selects the target module, and `policy_data` carries the action-specific payload.
+
+---
+
+#### `web_blocking` — Web URL Blocking
+
+Pushes web blocking rules to the `rp-webblock` worker. URLs are blocked by redirecting them to `127.0.0.1` in the OS hosts file.
+
+**Block a single URL:**
+```json
+{
+  "policy_type": "web_blocking",
+  "policy_data": {
+    "action": "block",
+    "url": "https://www.malicious-site.com"
+  }
+}
+```
+
+**Unblock a single URL:**
+```json
+{
+  "policy_type": "web_blocking",
+  "policy_data": {
+    "action": "unblock",
+    "url": "malicious-site.com"
+  }
+}
+```
+
+**Replace all blocked URLs (full sync):**
+```json
+{
+  "policy_type": "web_blocking",
+  "policy_data": {
+    "action": "replace",
+    "urls": [
+      { "url": "gambling-site.com", "status": "active" },
+      { "url": "phishing-domain.net", "status": "active" }
+    ]
+  }
+}
+```
+
+> **Notes:**
+> - URL protocols (`http://`, `https://`) and trailing slashes are stripped automatically.
+> - Both `example.com` and `www.example.com` variants are blocked.
+> - DNS cache is flushed automatically after every change.
+
+---
+
+#### `software_blocking` — Application Blocking
+
+Pushes software blocking rules to the `rp-softblock` worker. Blocked executables are prevented from launching via Windows IFEO (Image File Execution Options) registry keys, and any running instances are terminated immediately.
+
+**Block an application:**
+```json
+{
+  "policy_type": "software_blocking",
+  "policy_data": {
+    "action": "block",
+    "name": "Tor Browser",
+    "executable": "tor.exe"
+  }
+}
+```
+
+**Unblock an application:**
+```json
+{
+  "policy_type": "software_blocking",
+  "policy_data": {
+    "action": "unblock",
+    "executable": "tor.exe"
+  }
+}
+```
+
+**Replace all blocked applications (full sync):**
+```json
+{
+  "policy_type": "software_blocking",
+  "policy_data": {
+    "action": "replace",
+    "apps": [
+      { "name": "BitTorrent", "executable": "bittorrent.exe" },
+      { "name": "Tor Browser", "executable": "tor.exe" }
+    ]
+  }
+}
+```
+
+> **Notes:**
+> - Executable matching is case-insensitive and works with or without the `.exe` extension.
+> - Running instances are force-terminated via both Win32 API and `taskkill` fallback.
+> - A background process monitor continuously watches for re-launch attempts.
+
+---
+
+#### `patch` — Windows Patch Management
+
+Triggers a background patch scan via the `rp-patch` worker. Uses the Windows Update Agent (WUA) API to discover and optionally install missing updates.
+
+**Trigger an immediate patch scan:**
+```json
+{
+  "policy_type": "patch",
+  "policy_data": {
+    "trigger_scan": true
+  }
+}
+```
+
+**Update patch scan configuration:**
+```json
+{
+  "policy_type": "patch",
+  "policy_data": {
+    "auto_scan": true,
+    "scan_interval_hours": 12,
+    "auto_install": false,
+    "exclude_kbs": ["KB5001234", "KB5005678"]
+  }
+}
+```
+
+**Install specific updates by Update ID:**
+```json
+{
+  "policy_type": "patch",
+  "policy_data": {
+    "install_update_ids": [
+      "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+    ]
+  }
+}
+```
+
+> **Notes:**
+> - Patch scans can take several minutes; they run on a background thread and do not block the agent.
+> - `exclude_kbs` allows specific KB articles to be skipped during both scan and install.
+> - All `policy_data` fields are optional; omitting a field retains the current setting.
+> - Scan results are reported back via the `patch_scan` status report.
+
+---
+
+#### `antivirus` — Antivirus Scanning & Management
+
+Triggers antivirus actions via the `rp-antivirus` worker (backed by ClamAV). Supports on-demand scanning, definition updates, and database queries.
+
+**Quick scan (specific path):**
+```json
+{
+  "policy_type": "antivirus",
+  "policy_data": {
+    "action": "quick_scan",
+    "path": "C:\\Users\\Public\\Downloads"
+  }
+}
+```
+
+**Quick scan (multiple paths):**
+```json
+{
+  "policy_type": "antivirus",
+  "policy_data": {
+    "action": "quick_scan",
+    "paths": [
+      "C:\\Users\\Public\\Downloads",
+      "D:\\SharedFolder"
+    ]
+  }
+}
+```
+
+**Full system scan:**
+```json
+{
+  "policy_type": "antivirus",
+  "policy_data": {
+    "action": "full_scan"
+  }
+}
+```
+
+**Update virus definitions (freshclam):**
+```json
+{
+  "policy_type": "antivirus",
+  "policy_data": {
+    "action": "update_definitions"
+  }
+}
+```
+
+**Query ClamAV database info:**
+```json
+{
+  "policy_type": "antivirus",
+  "policy_data": {
+    "action": "database_info"
+  }
+}
+```
+
+> **Notes:**
+> - `quick_scan` and `full_scan` are serialized — only one scan runs at a time. Additional paths arriving during a scan are batched and processed when the current scan finishes.
+> - `update_definitions` and `database_info` run immediately on isolated pipes and do not block scans.
+> - Detected threats trigger a desktop notification (if `ThreatNotification.exe` is available) and are moved to a quarantine directory.
+> - Scan results are reported back via the `av_scan` status report.
