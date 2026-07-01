@@ -1,16 +1,15 @@
 FROM python:3.9-slim
 
-# Install system dependencies and sigma tools
+# Install system dependencies (curl for health checks, no sigma-cli needed)
 RUN apt-get update && apt-get install -y curl bash && \
-    pip install sigma-cli pysigma-backend-opensearch && \
-    sigma plugin install -f opensearch && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy pipeline config and startup script
-COPY sigma/pipeline.yml /etc/sigma/pipeline.yml
-COPY scripts/load_sigma.sh /entrypoint.d/load_sigma.sh
+# Copy provisioner files
+COPY scripts/provision.sh /etc/sigma/provision.sh
+COPY scripts/provision.py /etc/sigma/provision.py
+COPY scripts/template.json /etc/sigma/template.json
 
 # Ensure scripts are executable
-RUN chmod +x /entrypoint.d/load_sigma.sh
+RUN chmod +x /etc/sigma/provision.sh
 
-CMD ["/entrypoint.d/load_sigma.sh"]
+CMD ["/etc/sigma/provision.sh"]

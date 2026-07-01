@@ -50,6 +50,7 @@ services:
     volumes:
       - ./data-prepper/pipelines.yaml:/usr/share/data-prepper/pipelines/pipelines.yaml:ro
       - ./data-prepper/data-prepper-config.yaml:/usr/share/data-prepper/config/data-prepper-config.yaml:ro
+      - ./data-prepper/windows-event-normalizer/build/libs/windows-event-normalizer-1.0-SNAPSHOT.jar:/usr/share/data-prepper/lib/windows-event-normalizer-1.0-SNAPSHOT.jar:ro   
     networks:
       - risknox-net
     depends_on:
@@ -125,13 +126,20 @@ services:
     build:
       context: ./sigma-loader
     container_name: sigma-loader
-    volumes:
-      - ./sigma-loader/sigma/rules/sigma:/etc/sigma/rules/sigma
+    environment:
+      - OPENSEARCH_URL=http://opensearch:9200
+      - INDEX_NAME=rp-events
+      - DETECTOR_NAME=Windows-Threat-Detector
     networks:
       - risknox-net
     depends_on:
       opensearch:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://opensearch:9200/rp-events"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
 
 networks:
   risknox-net:

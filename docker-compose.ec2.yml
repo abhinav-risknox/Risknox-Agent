@@ -45,6 +45,7 @@ services:
     volumes:
       - ./data-prepper/pipelines.yaml:/usr/share/data-prepper/pipelines/pipelines.yaml:ro
       - ./data-prepper/data-prepper-config.yaml:/usr/share/data-prepper/config/data-prepper-config.yaml:ro
+      - ./data-prepper/windows-event-normalizer/build/libs/windows-event-normalizer-1.0-SNAPSHOT.jar:/usr/share/data-prepper/lib/windows-event-normalizer-1.0-SNAPSHOT.jar:ro
     networks:
       - risknox-net
     depends_on:
@@ -71,7 +72,7 @@ services:
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=risknox
     ports:
-      - 5433:5432
+      - 5432:5432
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./db/migrations/001_certificates.sql:/docker-entrypoint-initdb.d/001_certificates.sql:ro

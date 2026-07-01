@@ -1,0 +1,6045 @@
+{
+  "index_patterns": [
+    "rp-events*"
+  ],
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 1,
+      "index.mapping.total_fields.limit": 3000
+    },
+    "mappings": {
+      "date_detection": false,
+      "numeric_detection": false,
+      "dynamic_templates": [
+        {
+          "event_raw_as_keyword": {
+            "path_match": "event.raw.*",
+            "mapping": { "type": "keyword", "ignore_above": 8191 }
+          }
+        },
+        {
+          "longs_as_keyword": {
+            "match_mapping_type": "long",
+            "mapping": { "type": "keyword" }
+          }
+        },
+        {
+          "doubles_as_keyword": {
+            "match_mapping_type": "double",
+            "mapping": { "type": "keyword" }
+          }
+        },
+        {
+          "bools_as_keyword": {
+            "match_mapping_type": "boolean",
+            "mapping": { "type": "keyword" }
+          }
+        },
+        {
+          "strings_as_keyword": {
+            "match_mapping_type": "string",
+            "mapping": { "type": "keyword", "ignore_above": 8191 }
+          }
+        }
+      ],
+      "properties": {
+        "timestamp": {
+          "type": "date"
+        },
+        "@timestamp": {
+          "type": "date"
+        },
+        "host": {
+          "properties": {
+            "id": {
+              "type": "keyword"
+            },
+            "hostname": {
+              "type": "keyword"
+            },
+            "computer": {
+              "type": "keyword"
+            }
+          }
+        },
+        "event": {
+          "properties": {
+            "type": {
+              "type": "keyword"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "provider": {
+              "type": "keyword"
+            },
+            "event_data": {
+              "type": "object",
+              "dynamic": true
+            }
+          }
+        },
+        "winlog": {
+          "properties": {
+            "event_id": {
+              "type": "integer"
+            },
+            "provider_name": {
+              "type": "keyword"
+            },
+            "channel": {
+              "type": "keyword"
+            },
+            "computer_name": {
+              "type": "keyword"
+            },
+            "computerObject": {
+              "properties": {
+                "name": {
+                  "type": "keyword"
+                }
+              }
+            },
+            "event_data": {
+              "dynamic": true,
+              "properties": {
+                "Image": {
+                  "type": "keyword"
+                },
+                "CommandLine": {
+                  "type": "keyword"
+                },
+                "ParentImage": {
+                  "type": "keyword"
+                },
+                "ParentCommandLine": {
+                  "type": "keyword"
+                },
+                "OriginalFileName": {
+                  "type": "keyword"
+                },
+                "User": {
+                  "type": "keyword"
+                },
+                "IntegrityLevel": {
+                  "type": "keyword"
+                },
+                "CurrentDirectory": {
+                  "type": "keyword"
+                },
+                "ProcessGuid": {
+                  "type": "keyword"
+                },
+                "ParentProcessGuid": {
+                  "type": "keyword"
+                },
+                "ProcessId": {
+                  "type": "keyword"
+                },
+                "ParentProcessId": {
+                  "type": "keyword"
+                },
+                "Company": {
+                  "type": "keyword"
+                },
+                "Description": {
+                  "type": "keyword"
+                },
+                "Product": {
+                  "type": "keyword"
+                },
+                "FileVersion": {
+                  "type": "keyword"
+                },
+                "Hashes": {
+                  "type": "keyword"
+                },
+                "DestinationIp": {
+                  "type": "keyword"
+                },
+                "DestinationPort": {
+                  "type": "keyword"
+                },
+                "DestinationHostname": {
+                  "type": "keyword"
+                },
+                "SourceIp": {
+                  "type": "keyword"
+                },
+                "SourcePort": {
+                  "type": "keyword"
+                },
+                "Protocol": {
+                  "type": "keyword"
+                },
+                "Initiated": {
+                  "type": "keyword"
+                },
+                "ImageLoaded": {
+                  "type": "keyword"
+                },
+                "Signed": {
+                  "type": "keyword"
+                },
+                "Signature": {
+                  "type": "keyword"
+                },
+                "SignatureStatus": {
+                  "type": "keyword"
+                },
+                "TargetObject": {
+                  "type": "keyword"
+                },
+                "Details": {
+                  "type": "keyword"
+                },
+                "EventType": {
+                  "type": "keyword"
+                },
+                "TargetFilename": {
+                  "type": "keyword"
+                },
+                "GrantedAccess": {
+                  "type": "keyword"
+                },
+                "SourceImage": {
+                  "type": "keyword"
+                },
+                "TargetImage": {
+                  "type": "keyword"
+                },
+                "CallTrace": {
+                  "type": "keyword"
+                },
+                "PipeName": {
+                  "type": "keyword"
+                },
+                "QueryName": {
+                  "type": "keyword"
+                },
+                "QueryResults": {
+                  "type": "keyword"
+                },
+                "QueryStatus": {
+                  "type": "keyword"
+                },
+                "RuleName": {
+                  "type": "keyword"
+                },
+                "ServiceName": {
+                  "type": "keyword"
+                },
+                "ServiceFileName": {
+                  "type": "keyword"
+                },
+                "StartType": {
+                  "type": "keyword"
+                },
+                "ScriptBlockText": {
+                  "type": "keyword"
+                },
+                "HostApplication": {
+                  "type": "keyword"
+                },
+                "Path": {
+                  "type": "keyword"
+                },
+                "SubjectUserName": {
+                  "type": "keyword"
+                },
+                "SubjectDomainName": {
+                  "type": "keyword"
+                },
+                "SubjectUserSid": {
+                  "type": "keyword"
+                },
+                "SubjectLogonId": {
+                  "type": "keyword"
+                },
+                "TargetUserName": {
+                  "type": "keyword"
+                },
+                "TargetDomainName": {
+                  "type": "keyword"
+                },
+                "TargetUserSid": {
+                  "type": "keyword"
+                },
+                "LogonType": {
+                  "type": "keyword"
+                },
+                "LogonProcessName": {
+                  "type": "keyword"
+                },
+                "AuthenticationPackageName": {
+                  "type": "keyword"
+                },
+                "IpAddress": {
+                  "type": "keyword"
+                },
+                "IpPort": {
+                  "type": "keyword"
+                },
+                "WorkstationName": {
+                  "type": "keyword"
+                },
+                "ProcessName": {
+                  "type": "keyword"
+                },
+                "NewProcessName": {
+                  "type": "keyword"
+                },
+                "NewProcessId": {
+                  "type": "keyword"
+                },
+                "AccountName": {
+                  "type": "keyword"
+                },
+                "AccountDomain": {
+                  "type": "keyword"
+                },
+                "ObjectName": {
+                  "type": "keyword"
+                },
+                "ObjectType": {
+                  "type": "keyword"
+                },
+                "TaskName": {
+                  "type": "keyword"
+                },
+                "TaskContent": {
+                  "type": "keyword"
+                },
+                "StartAddress": {
+                  "type": "keyword"
+                },
+                "StartModule": {
+                  "type": "keyword"
+                },
+                "StartFunction": {
+                  "type": "keyword"
+                },
+                "TicketOptions": {
+                  "type": "keyword"
+                },
+                "TicketEncryptionType": {
+                  "type": "keyword"
+                },
+                "Provider_Name": {
+                  "type": "keyword"
+                },
+                "EventID": {
+                  "type": "keyword"
+                },
+                "AppName": {
+                  "type": "keyword"
+                },
+                "ExceptionCode": {
+                  "type": "keyword"
+                },
+                "type": {
+                  "type": "keyword"
+                },
+                "Data": {
+                  "type": "keyword"
+                },
+                "Message": {
+                  "type": "keyword"
+                },
+                "Level": {
+                  "type": "keyword"
+                },
+                "ImageName": {
+                  "type": "keyword"
+                },
+                "ErrorCode": {
+                  "type": "keyword"
+                },
+                "selection_eid": {
+                  "type": "keyword"
+                },
+                "selection_paths_forward": {
+                  "type": "keyword"
+                },
+                "selection_paths_back": {
+                  "type": "keyword"
+                },
+                "PackageFullName": {
+                  "type": "keyword"
+                },
+                "filter_main_generic": {
+                  "type": "keyword"
+                },
+                "filter_main_specific": {
+                  "type": "keyword"
+                },
+                "filter_optional_onedrive": {
+                  "type": "keyword"
+                },
+                "filter_optional_winget": {
+                  "type": "keyword"
+                },
+                "filter_optional_x_windowsupdate": {
+                  "type": "keyword"
+                },
+                "HasFullTrust": {
+                  "type": "keyword"
+                },
+                "filter_main_legitpath": {
+                  "type": "keyword"
+                },
+                "PackageSourceUri": {
+                  "type": "keyword"
+                },
+                "filter_main_microsoft": {
+                  "type": "keyword"
+                },
+                "filter_main_callerprocess": {
+                  "type": "keyword"
+                },
+                "CallingProcess": {
+                  "type": "keyword"
+                },
+                "filter_optional_x_update": {
+                  "type": "keyword"
+                },
+                "filter_optional_microsoftclient": {
+                  "type": "keyword"
+                },
+                "Flags": {
+                  "type": "keyword"
+                },
+                "subjectName": {
+                  "type": "keyword"
+                },
+                "processPath": {
+                  "type": "keyword"
+                },
+                "LocalName": {
+                  "type": "keyword"
+                },
+                "RemoteName": {
+                  "type": "keyword"
+                },
+                "filter_optional_local_networks": {
+                  "type": "keyword"
+                },
+                "filter_optional_seven_zip": {
+                  "type": "keyword"
+                },
+                "filter_optional_dtrace": {
+                  "type": "keyword"
+                },
+                "FileNameBuffer": {
+                  "type": "keyword"
+                },
+                "ProcessNameBuffer": {
+                  "type": "keyword"
+                },
+                "RequestedPolicy": {
+                  "type": "keyword"
+                },
+                "filter_optional_av_generic": {
+                  "type": "keyword"
+                },
+                "filter_optional_electron_based_app": {
+                  "type": "keyword"
+                },
+                "filter_optional_bonjour": {
+                  "type": "keyword"
+                },
+                "filter_optional_msoffice_1": {
+                  "type": "keyword"
+                },
+                "filter_optional_msoffice_2": {
+                  "type": "keyword"
+                },
+                "filter_optional_slack": {
+                  "type": "keyword"
+                },
+                "filter_optional_firefox": {
+                  "type": "keyword"
+                },
+                "filter_optional_avast": {
+                  "type": "keyword"
+                },
+                "filter_main_gac": {
+                  "type": "keyword"
+                },
+                "filter_optional_google_drive": {
+                  "type": "keyword"
+                },
+                "filter_optional_trend_micro": {
+                  "type": "keyword"
+                },
+                "filter_optional_mdns_responder": {
+                  "type": "keyword"
+                },
+                "filter_optional_mcafee": {
+                  "type": "keyword"
+                },
+                "filter_optional_eset": {
+                  "type": "keyword"
+                },
+                "filter_optional_comodo": {
+                  "type": "keyword"
+                },
+                "filter_optional_sentinel_one": {
+                  "type": "keyword"
+                },
+                "filter_optional_national_instruments": {
+                  "type": "keyword"
+                },
+                "filter_optional_kaspersky": {
+                  "type": "keyword"
+                },
+                "filter_optional_vmware": {
+                  "type": "keyword"
+                },
+                "PackagePath": {
+                  "type": "keyword"
+                },
+                "selection_query_1": {
+                  "type": "keyword"
+                },
+                "selection_query_2": {
+                  "type": "keyword"
+                },
+                "filter_main_block": {
+                  "type": "keyword"
+                },
+                "Action": {
+                  "type": "keyword"
+                },
+                "ApplicationPath": {
+                  "type": "keyword"
+                },
+                "filter_main_covered_paths": {
+                  "type": "keyword"
+                },
+                "filter_main_system_dllhost": {
+                  "type": "keyword"
+                },
+                "ModifyingApplication": {
+                  "type": "keyword"
+                },
+                "filter_main_tiworker": {
+                  "type": "keyword"
+                },
+                "filter_main_null": {
+                  "type": "keyword"
+                },
+                "filter_optional_no_path": {
+                  "type": "keyword"
+                },
+                "filter_optional_msmpeng": {
+                  "type": "keyword"
+                },
+                "filter_main_svchost": {
+                  "type": "keyword"
+                },
+                "filter_main_empty": {
+                  "type": "keyword"
+                },
+                "Configuration": {
+                  "type": "keyword"
+                },
+                "OldValue": {
+                  "type": "keyword"
+                },
+                "filter_main_etw_added": {
+                  "type": "keyword"
+                },
+                "NewValue": {
+                  "type": "keyword"
+                },
+                "filter_main_builtin": {
+                  "type": "keyword"
+                },
+                "filter_main_remove": {
+                  "type": "keyword"
+                },
+                "generic_search": {
+                  "type": "keyword"
+                },
+                "SearchFilter": {
+                  "type": "keyword"
+                },
+                "distinguished_name_enumeration": {
+                  "type": "keyword"
+                },
+                "DistinguishedName": {
+                  "type": "keyword"
+                },
+                "suspicious_flag": {
+                  "type": "keyword"
+                },
+                "narrow_down_filter": {
+                  "type": "keyword"
+                },
+                "SidList": {
+                  "type": "keyword"
+                },
+                "filter_main_admin": {
+                  "type": "keyword"
+                },
+                "keywords_cmdlet": {
+                  "type": "keyword"
+                },
+                "keywords_params": {
+                  "type": "keyword"
+                },
+                "keywords_export_command": {
+                  "type": "keyword"
+                },
+                "keywords_export_params": {
+                  "type": "keyword"
+                },
+                "export_command": {
+                  "type": "keyword"
+                },
+                "export_params": {
+                  "type": "keyword"
+                },
+                "role_assignment": {
+                  "type": "keyword"
+                },
+                "devicename": {
+                  "type": "keyword"
+                },
+                "TargetName": {
+                  "type": "keyword"
+                },
+                "process": {
+                  "type": "keyword"
+                },
+                "payload": {
+                  "type": "keyword"
+                },
+                "ImpersonationLevel": {
+                  "type": "keyword"
+                },
+                "TargetOutboundUserName": {
+                  "type": "keyword"
+                },
+                "selection_logon3": {
+                  "type": "keyword"
+                },
+                "KeyLength": {
+                  "type": "keyword"
+                },
+                "selection_logon9": {
+                  "type": "keyword"
+                },
+                "filter_main_local_ranges": {
+                  "type": "keyword"
+                },
+                "filter_main_ip_unknown": {
+                  "type": "keyword"
+                },
+                "filter_main_ip_null": {
+                  "type": "keyword"
+                },
+                "Application": {
+                  "type": "keyword"
+                },
+                "AttributeLDAPDisplayName": {
+                  "type": "keyword"
+                },
+                "AttributeValue": {
+                  "type": "keyword"
+                },
+                "filter_main_dns_object_class": {
+                  "type": "keyword"
+                },
+                "ObjectClass": {
+                  "type": "keyword"
+                },
+                "selection_object": {
+                  "type": "keyword"
+                },
+                "selection1": {
+                  "type": "keyword"
+                },
+                "TemplateContent": {
+                  "type": "keyword"
+                },
+                "selection2": {
+                  "type": "keyword"
+                },
+                "NewTemplateContent": {
+                  "type": "keyword"
+                },
+                "selection10": {
+                  "type": "keyword"
+                },
+                "selection11": {
+                  "type": "keyword"
+                },
+                "selection20": {
+                  "type": "keyword"
+                },
+                "selection21": {
+                  "type": "keyword"
+                },
+                "ShareName": {
+                  "type": "keyword"
+                },
+                "filter_main_computer_account": {
+                  "type": "keyword"
+                },
+                "ObjectServer": {
+                  "type": "keyword"
+                },
+                "AccessMask": {
+                  "type": "keyword"
+                },
+                "Properties": {
+                  "type": "keyword"
+                },
+                "filter_main_machine_accounts": {
+                  "type": "keyword"
+                },
+                "filter_main_msql": {
+                  "type": "keyword"
+                },
+                "selection_base": {
+                  "type": "keyword"
+                },
+                "selection_keywords": {
+                  "type": "keyword"
+                },
+                "PrivilegeList": {
+                  "type": "keyword"
+                },
+                "filter_empty": {
+                  "type": "keyword"
+                },
+                "AllowedToDelegateTo": {
+                  "type": "keyword"
+                },
+                "filter_null": {
+                  "type": "keyword"
+                },
+                "selection_5136_1": {
+                  "type": "keyword"
+                },
+                "selection_5136_2": {
+                  "type": "keyword"
+                },
+                "selection_5136_3": {
+                  "type": "keyword"
+                },
+                "olduac_des": {
+                  "type": "keyword"
+                },
+                "OldUacValue": {
+                  "type": "keyword"
+                },
+                "newuac_des": {
+                  "type": "keyword"
+                },
+                "NewUacValue": {
+                  "type": "keyword"
+                },
+                "olduac_preauth": {
+                  "type": "keyword"
+                },
+                "newuac_preauth": {
+                  "type": "keyword"
+                },
+                "olduac_encrypted": {
+                  "type": "keyword"
+                },
+                "newuac_encrypted": {
+                  "type": "keyword"
+                },
+                "Workstation": {
+                  "type": "keyword"
+                },
+                "RelativeTargetName": {
+                  "type": "keyword"
+                },
+                "AccessList": {
+                  "type": "keyword"
+                },
+                "selection_517": {
+                  "type": "keyword"
+                },
+                "selection_1102": {
+                  "type": "keyword"
+                },
+                "event_id": {
+                  "type": "keyword"
+                },
+                "selection3": {
+                  "type": "keyword"
+                },
+                "selection4": {
+                  "type": "keyword"
+                },
+                "filter_optional_crowdstrike": {
+                  "type": "keyword"
+                },
+                "param1": {
+                  "type": "keyword"
+                },
+                "filter_optional_sophos": {
+                  "type": "keyword"
+                },
+                "filter1": {
+                  "type": "keyword"
+                },
+                "filter2": {
+                  "type": "keyword"
+                },
+                "filter3": {
+                  "type": "keyword"
+                },
+                "ObjectDN": {
+                  "type": "keyword"
+                },
+                "AuditPolicyChanges": {
+                  "type": "keyword"
+                },
+                "filter_main_guid": {
+                  "type": "keyword"
+                },
+                "SubcategoryGuid": {
+                  "type": "keyword"
+                },
+                "selection_state_success_and_failure": {
+                  "type": "keyword"
+                },
+                "selection_state_success_only": {
+                  "type": "keyword"
+                },
+                "selection_etw_enabled": {
+                  "type": "keyword"
+                },
+                "ObjectValueName": {
+                  "type": "keyword"
+                },
+                "selection_complus": {
+                  "type": "keyword"
+                },
+                "selection_field": {
+                  "type": "keyword"
+                },
+                "selection_5136": {
+                  "type": "keyword"
+                },
+                "selection_5145": {
+                  "type": "keyword"
+                },
+                "filter_main_homegroup": {
+                  "type": "keyword"
+                },
+                "FilterName": {
+                  "type": "keyword"
+                },
+                "selection_5447": {
+                  "type": "keyword"
+                },
+                "selection_5449": {
+                  "type": "keyword"
+                },
+                "ProviderContextName": {
+                  "type": "keyword"
+                },
+                "selection_servicefilename": {
+                  "type": "keyword"
+                },
+                "Status": {
+                  "type": "keyword"
+                },
+                "filter_main_krbtgt": {
+                  "type": "keyword"
+                },
+                "PreAuthType": {
+                  "type": "keyword"
+                },
+                "selection_directory_service_changes": {
+                  "type": "keyword"
+                },
+                "selection_directory_service_access": {
+                  "type": "keyword"
+                },
+                "false_positives": {
+                  "type": "keyword"
+                },
+                "filter_main_service_account": {
+                  "type": "keyword"
+                },
+                "filter_main_wmiprvse": {
+                  "type": "keyword"
+                },
+                "filter_optional_steam": {
+                  "type": "keyword"
+                },
+                "ServiceStartType": {
+                  "type": "keyword"
+                },
+                "ServiceType": {
+                  "type": "keyword"
+                },
+                "selection_cli_cmd": {
+                  "type": "keyword"
+                },
+                "selection_cli_rundll": {
+                  "type": "keyword"
+                },
+                "selection_cli_share": {
+                  "type": "keyword"
+                },
+                "selection_create": {
+                  "type": "keyword"
+                },
+                "SamAccountName": {
+                  "type": "keyword"
+                },
+                "selection_rename": {
+                  "type": "keyword"
+                },
+                "NewTargetUserName": {
+                  "type": "keyword"
+                },
+                "CertThumbprint": {
+                  "type": "keyword"
+                },
+                "filter_local": {
+                  "type": "keyword"
+                },
+                "filter_thumbprint": {
+                  "type": "keyword"
+                },
+                "ServicePrincipalNames": {
+                  "type": "keyword"
+                },
+                "sourceRDP": {
+                  "type": "keyword"
+                },
+                "DestAddress": {
+                  "type": "keyword"
+                },
+                "destinationRDP": {
+                  "type": "keyword"
+                },
+                "DestPort": {
+                  "type": "keyword"
+                },
+                "SourceAddress": {
+                  "type": "keyword"
+                },
+                "filter_app_container": {
+                  "type": "keyword"
+                },
+                "FilterOrigin": {
+                  "type": "keyword"
+                },
+                "filter_thor": {
+                  "type": "keyword"
+                },
+                "LayerRTID": {
+                  "type": "keyword"
+                },
+                "selection_pid": {
+                  "type": "keyword"
+                },
+                "filter_main_signal": {
+                  "type": "keyword"
+                },
+                "filter_main_subjectusername": {
+                  "type": "keyword"
+                },
+                "filter_optional_local_ip": {
+                  "type": "keyword"
+                },
+                "SidHistory": {
+                  "type": "keyword"
+                },
+                "selection_status": {
+                  "type": "keyword"
+                },
+                "selection_eventid": {
+                  "type": "keyword"
+                },
+                "selection_attributes_main": {
+                  "type": "keyword"
+                },
+                "selection_attributes_optional": {
+                  "type": "keyword"
+                },
+                "selection_share": {
+                  "type": "keyword"
+                },
+                "TargetServerName": {
+                  "type": "keyword"
+                },
+                "selection_1": {
+                  "type": "keyword"
+                },
+                "selection_2": {
+                  "type": "keyword"
+                },
+                "filter_main_exact": {
+                  "type": "keyword"
+                },
+                "filter_main_sysmon": {
+                  "type": "keyword"
+                },
+                "filter_main_aurora": {
+                  "type": "keyword"
+                },
+                "filter_main_scenarioengine": {
+                  "type": "keyword"
+                },
+                "filter_main_avira1": {
+                  "type": "keyword"
+                },
+                "filter_main_avira2": {
+                  "type": "keyword"
+                },
+                "filter_main_snmp": {
+                  "type": "keyword"
+                },
+                "filter_main_googleupdate": {
+                  "type": "keyword"
+                },
+                "filter_optional_procmon": {
+                  "type": "keyword"
+                },
+                "selection_filename": {
+                  "type": "keyword"
+                },
+                "filter_main_lsass": {
+                  "type": "keyword"
+                },
+                "filter_optional_chrome": {
+                  "type": "keyword"
+                },
+                "filter_optional_tomcat": {
+                  "type": "keyword"
+                },
+                "reduction": {
+                  "type": "keyword"
+                },
+                "selection_commands": {
+                  "type": "keyword"
+                },
+                "filter_main_defender_update": {
+                  "type": "keyword"
+                },
+                "name": {
+                  "type": "keyword"
+                },
+                "technique": {
+                  "type": "keyword"
+                },
+                "atomic_guid": {
+                  "type": "keyword"
+                },
+                "TaskContentNew": {
+                  "type": "keyword"
+                },
+                "filter_optional_vmtools": {
+                  "type": "keyword"
+                },
+                "selection_group": {
+                  "type": "keyword"
+                },
+                "filter_main_computer_accounts": {
+                  "type": "keyword"
+                },
+                "Service": {
+                  "type": "keyword"
+                },
+                "Keywords": {
+                  "type": "keyword"
+                },
+                "filter_optional_others": {
+                  "type": "keyword"
+                },
+                "filter_main_startswith": {
+                  "type": "keyword"
+                },
+                "filter_optional_dropbox": {
+                  "type": "keyword"
+                },
+                "AuditSourceName": {
+                  "type": "keyword"
+                },
+                "ProcessPath": {
+                  "type": "keyword"
+                },
+                "selection_name": {
+                  "type": "keyword"
+                },
+                "Name": {
+                  "type": "keyword"
+                },
+                "selection_packageid": {
+                  "type": "keyword"
+                },
+                "AppID": {
+                  "type": "keyword"
+                },
+                "UserName": {
+                  "type": "keyword"
+                },
+                "ServerName": {
+                  "type": "keyword"
+                },
+                "selection_shares": {
+                  "type": "keyword"
+                },
+                "Caption": {
+                  "type": "keyword"
+                },
+                "param2": {
+                  "type": "keyword"
+                },
+                "param3": {
+                  "type": "keyword"
+                },
+                "filter_main_covered": {
+                  "type": "keyword"
+                },
+                "Channel": {
+                  "type": "keyword"
+                },
+                "filter_main_localhost": {
+                  "type": "keyword"
+                },
+                "IsatapRouter": {
+                  "type": "keyword"
+                },
+                "filter_optional_null": {
+                  "type": "keyword"
+                },
+                "HiveName": {
+                  "type": "keyword"
+                },
+                "DeviceName": {
+                  "type": "keyword"
+                },
+                "Origin": {
+                  "type": "keyword"
+                },
+                "selection_id": {
+                  "type": "keyword"
+                },
+                "ImagePath": {
+                  "type": "keyword"
+                },
+                "selection_service_name": {
+                  "type": "keyword"
+                },
+                "selection_service_image": {
+                  "type": "keyword"
+                },
+                "selection_imagepath": {
+                  "type": "keyword"
+                },
+                "selection_main": {
+                  "type": "keyword"
+                },
+                "selection_other": {
+                  "type": "keyword"
+                },
+                "selection_provider": {
+                  "type": "keyword"
+                },
+                "selection_service": {
+                  "type": "keyword"
+                },
+                "selection_image": {
+                  "type": "keyword"
+                },
+                "selection_service_1": {
+                  "type": "keyword"
+                },
+                "selection_service_2": {
+                  "type": "keyword"
+                },
+                "suspicious_paths": {
+                  "type": "keyword"
+                },
+                "suspicious_encoded_flag": {
+                  "type": "keyword"
+                },
+                "suspicious_encoded_keywords": {
+                  "type": "keyword"
+                },
+                "filter_optional_thor_remote": {
+                  "type": "keyword"
+                },
+                "filter_main_defender_def_updates": {
+                  "type": "keyword"
+                },
+                "filter_optional_zoom": {
+                  "type": "keyword"
+                },
+                "selection_img_paths": {
+                  "type": "keyword"
+                },
+                "selection_cmd_flags": {
+                  "type": "keyword"
+                },
+                "selection_binaries": {
+                  "type": "keyword"
+                },
+                "filter_main_user": {
+                  "type": "keyword"
+                },
+                "Address": {
+                  "type": "keyword"
+                },
+                "filter_exact": {
+                  "type": "keyword"
+                },
+                "filter_begins": {
+                  "type": "keyword"
+                },
+                "allowed_apps_key": {
+                  "type": "keyword"
+                },
+                "allowed_apps_path": {
+                  "type": "keyword"
+                },
+                "protected_folders": {
+                  "type": "keyword"
+                },
+                "SourceName": {
+                  "type": "keyword"
+                },
+                "filter_optional_network_inspection": {
+                  "type": "keyword"
+                },
+                "Feature_Name": {
+                  "type": "keyword"
+                },
+                "Reason": {
+                  "type": "keyword"
+                },
+                "Value": {
+                  "type": "keyword"
+                },
+                "wmi_filter_to_consumer_binding": {
+                  "type": "keyword"
+                },
+                "consumer_keywords": {
+                  "type": "keyword"
+                },
+                "wmi_filter_registration": {
+                  "type": "keyword"
+                },
+                "filter_scmevent": {
+                  "type": "keyword"
+                },
+                "Provider": {
+                  "type": "keyword"
+                },
+                "Query": {
+                  "type": "keyword"
+                },
+                "PossibleCause": {
+                  "type": "keyword"
+                },
+                "filter_main_conhost": {
+                  "type": "keyword"
+                },
+                "filter_main_provtol_svchost": {
+                  "type": "keyword"
+                },
+                "filter_main_provtool_system": {
+                  "type": "keyword"
+                },
+                "filter_main_userinit": {
+                  "type": "keyword"
+                },
+                "filter_main_winword": {
+                  "type": "keyword"
+                },
+                "filter_main_ms_office": {
+                  "type": "keyword"
+                },
+                "filter_optional_explorer_vmtools": {
+                  "type": "keyword"
+                },
+                "filter_main_winlogon_1": {
+                  "type": "keyword"
+                },
+                "filter_main_winlogon_2": {
+                  "type": "keyword"
+                },
+                "TargetParentProcessId": {
+                  "type": "keyword"
+                },
+                "filter_main_schtasks_conhost": {
+                  "type": "keyword"
+                },
+                "filter_main_explorer": {
+                  "type": "keyword"
+                },
+                "filter_main_system": {
+                  "type": "keyword"
+                },
+                "filter_main_msiexec_1": {
+                  "type": "keyword"
+                },
+                "filter_main_msiexec_2": {
+                  "type": "keyword"
+                },
+                "filter_main_iexplore": {
+                  "type": "keyword"
+                },
+                "filter_main_powerpnt": {
+                  "type": "keyword"
+                },
+                "filter_optional_aurora_smartconsole1": {
+                  "type": "keyword"
+                },
+                "filter_optional_aurora_smartconsole2": {
+                  "type": "keyword"
+                },
+                "SourceParentImage": {
+                  "type": "keyword"
+                },
+                "filter_optional_powerpnt": {
+                  "type": "keyword"
+                },
+                "filter_optional_aurora": {
+                  "type": "keyword"
+                },
+                "filter_optional_officesetup": {
+                  "type": "keyword"
+                },
+                "filter_main_csrss": {
+                  "type": "keyword"
+                },
+                "filter_main_notepad": {
+                  "type": "keyword"
+                },
+                "filter_main_sethc": {
+                  "type": "keyword"
+                },
+                "filter_optional_aurora_1": {
+                  "type": "keyword"
+                },
+                "filter_optional_aurora_2": {
+                  "type": "keyword"
+                },
+                "filter_optional_vmtoolsd": {
+                  "type": "keyword"
+                },
+                "filter_optional_xerox_pjems": {
+                  "type": "keyword"
+                },
+                "Hash": {
+                  "type": "keyword"
+                },
+                "Contents": {
+                  "type": "keyword"
+                },
+                "filter_optional_brave": {
+                  "type": "keyword"
+                },
+                "filter_optional_ie": {
+                  "type": "keyword"
+                },
+                "filter_optional_maxthon": {
+                  "type": "keyword"
+                },
+                "filter_optional_edge_1": {
+                  "type": "keyword"
+                },
+                "filter_optional_edge_2": {
+                  "type": "keyword"
+                },
+                "filter_optional_opera": {
+                  "type": "keyword"
+                },
+                "filter_optional_safari": {
+                  "type": "keyword"
+                },
+                "filter_optional_seamonkey": {
+                  "type": "keyword"
+                },
+                "filter_optional_vivaldi": {
+                  "type": "keyword"
+                },
+                "filter_optional_whale": {
+                  "type": "keyword"
+                },
+                "filter_optional_snipping_tool": {
+                  "type": "keyword"
+                },
+                "selection_domain": {
+                  "type": "keyword"
+                },
+                "selection_extension": {
+                  "type": "keyword"
+                },
+                "filter_main_defender": {
+                  "type": "keyword"
+                },
+                "filter_main_unknown": {
+                  "type": "keyword"
+                },
+                "filter_optional_azure": {
+                  "type": "keyword"
+                },
+                "filter_optional_browsers": {
+                  "type": "keyword"
+                },
+                "filter_optional_defender": {
+                  "type": "keyword"
+                },
+                "filter_optional_tor": {
+                  "type": "keyword"
+                },
+                "filter_optional_whaterfox": {
+                  "type": "keyword"
+                },
+                "filter_optional_midori": {
+                  "type": "keyword"
+                },
+                "filter_optional_slimbrowser": {
+                  "type": "keyword"
+                },
+                "filter_optional_flock": {
+                  "type": "keyword"
+                },
+                "filter_optional_phoebe": {
+                  "type": "keyword"
+                },
+                "filter_optional_falkon": {
+                  "type": "keyword"
+                },
+                "filter_optional_avant": {
+                  "type": "keyword"
+                },
+                "filter_main_notepad_legit_domain": {
+                  "type": "keyword"
+                },
+                "filter_optional_sourceforge_legit_domain": {
+                  "type": "keyword"
+                },
+                "filter_optional_github_legit_domain": {
+                  "type": "keyword"
+                },
+                "filter_optional_google_storage_legit_domain": {
+                  "type": "keyword"
+                },
+                "filter_optional_uncommon_domains": {
+                  "type": "keyword"
+                },
+                "selection_generic": {
+                  "type": "keyword"
+                },
+                "selection_rustdesk": {
+                  "type": "keyword"
+                },
+                "filter_main_teamviewer": {
+                  "type": "keyword"
+                },
+                "FileName": {
+                  "type": "keyword"
+                },
+                "filter_system_folders": {
+                  "type": "keyword"
+                },
+                "filter_main_system_folders": {
+                  "type": "keyword"
+                },
+                "selection_browser_paths": {
+                  "type": "keyword"
+                },
+                "selection_browser_subpaths": {
+                  "type": "keyword"
+                },
+                "selection_cred_files": {
+                  "type": "keyword"
+                },
+                "filter_main_img": {
+                  "type": "keyword"
+                },
+                "filter_main_path": {
+                  "type": "keyword"
+                },
+                "filter_optional_thor": {
+                  "type": "keyword"
+                },
+                "filter_optional_msiexec": {
+                  "type": "keyword"
+                },
+                "filter_optional_other": {
+                  "type": "keyword"
+                },
+                "filter_main_legit_location": {
+                  "type": "keyword"
+                },
+                "filter_wireshark": {
+                  "type": "keyword"
+                },
+                "filter_optional_browsers_chrome": {
+                  "type": "keyword"
+                },
+                "filter_optional_browsers_firefox": {
+                  "type": "keyword"
+                },
+                "filter_optional_browsers_msedge": {
+                  "type": "keyword"
+                },
+                "filter_main_office": {
+                  "type": "keyword"
+                },
+                "filter_optional_ldapwhoami": {
+                  "type": "keyword"
+                },
+                "filter_optional_citrix": {
+                  "type": "keyword"
+                },
+                "filter_dlls": {
+                  "type": "keyword"
+                },
+                "filter_optional_ms_winapps": {
+                  "type": "keyword"
+                },
+                "selection_process": {
+                  "type": "keyword"
+                },
+                "selection_suspicious_extensions": {
+                  "type": "keyword"
+                },
+                "filter_main_baseimage": {
+                  "type": "keyword"
+                },
+                "selection_path": {
+                  "type": "keyword"
+                },
+                "filter_generic": {
+                  "type": "keyword"
+                },
+                "filter_tiworker": {
+                  "type": "keyword"
+                },
+                "filter_main_wuauclt": {
+                  "type": "keyword"
+                },
+                "filter_main_msiexec": {
+                  "type": "keyword"
+                },
+                "filter_main_healtray": {
+                  "type": "keyword"
+                },
+                "filter_main_upgrade": {
+                  "type": "keyword"
+                },
+                "filter_optional_jetbrains": {
+                  "type": "keyword"
+                },
+                "selection_types": {
+                  "type": "keyword"
+                },
+                "filter_main_legit_paths": {
+                  "type": "keyword"
+                },
+                "filter_main_temp_update_installer": {
+                  "type": "keyword"
+                },
+                "filter_main_temp_generic_zip": {
+                  "type": "keyword"
+                },
+                "filter_main_recycle_bin": {
+                  "type": "keyword"
+                },
+                "filter_main_plugins": {
+                  "type": "keyword"
+                },
+                "selection_names_str": {
+                  "type": "keyword"
+                },
+                "selection_names_re": {
+                  "type": "keyword"
+                },
+                "selection_3": {
+                  "type": "keyword"
+                },
+                "selection_4": {
+                  "type": "keyword"
+                },
+                "selection_5": {
+                  "type": "keyword"
+                },
+                "filter_main_rundll32": {
+                  "type": "keyword"
+                },
+                "filter_main": {
+                  "type": "keyword"
+                },
+                "filter_gup": {
+                  "type": "keyword"
+                },
+                "filter_install": {
+                  "type": "keyword"
+                },
+                "filter_main_installer": {
+                  "type": "keyword"
+                },
+                "selection_file": {
+                  "type": "keyword"
+                },
+                "selection_process_parent": {
+                  "type": "keyword"
+                },
+                "selection_process_parent_path": {
+                  "type": "keyword"
+                },
+                "selection_ntds": {
+                  "type": "keyword"
+                },
+                "selection_process_img": {
+                  "type": "keyword"
+                },
+                "selection_process_paths": {
+                  "type": "keyword"
+                },
+                "selection_wlldropped": {
+                  "type": "keyword"
+                },
+                "selection_xlldropped": {
+                  "type": "keyword"
+                },
+                "selection_xladropped": {
+                  "type": "keyword"
+                },
+                "selection_processes": {
+                  "type": "keyword"
+                },
+                "selection_ext": {
+                  "type": "keyword"
+                },
+                "selection_cmd": {
+                  "type": "keyword"
+                },
+                "filter_main_onenote": {
+                  "type": "keyword"
+                },
+                "selection_location": {
+                  "type": "keyword"
+                },
+                "selection_word_paths": {
+                  "type": "keyword"
+                },
+                "selection_word_extension": {
+                  "type": "keyword"
+                },
+                "selection_excel_paths": {
+                  "type": "keyword"
+                },
+                "selection_excel_extension": {
+                  "type": "keyword"
+                },
+                "filter_main_localassembly": {
+                  "type": "keyword"
+                },
+                "filter_optional_webservicecache": {
+                  "type": "keyword"
+                },
+                "filter_optional_webex": {
+                  "type": "keyword"
+                },
+                "filter_optional_backstageinappnavcache": {
+                  "type": "keyword"
+                },
+                "filter_exclude_word_ext": {
+                  "type": "keyword"
+                },
+                "filter_exclude_excel_ext": {
+                  "type": "keyword"
+                },
+                "filter_main_office_click_to_run": {
+                  "type": "keyword"
+                },
+                "filter_main_office_apps": {
+                  "type": "keyword"
+                },
+                "filter_main_user_temp": {
+                  "type": "keyword"
+                },
+                "filter_main_other_temp": {
+                  "type": "keyword"
+                },
+                "filter_main_powershell_module": {
+                  "type": "keyword"
+                },
+                "filter_main_nuget": {
+                  "type": "keyword"
+                },
+                "filter_main_psscriptpolicytest": {
+                  "type": "keyword"
+                },
+                "filter_main_appdata": {
+                  "type": "keyword"
+                },
+                "filter_main_windows_temp": {
+                  "type": "keyword"
+                },
+                "selection_invoke_sharp": {
+                  "type": "keyword"
+                },
+                "filter_main_pwsh": {
+                  "type": "keyword"
+                },
+                "filter_main_powershell": {
+                  "type": "keyword"
+                },
+                "filter_main_pwsh_preview": {
+                  "type": "keyword"
+                },
+                "selection_special": {
+                  "type": "keyword"
+                },
+                "filter_main_AppLockerPolicyTest": {
+                  "type": "keyword"
+                },
+                "filter_main_script_gpo_machine": {
+                  "type": "keyword"
+                },
+                "filter_main_clipchamp": {
+                  "type": "keyword"
+                },
+                "filter_main_powershell_preview": {
+                  "type": "keyword"
+                },
+                "filter_main_update": {
+                  "type": "keyword"
+                },
+                "filter_optional_onenote": {
+                  "type": "keyword"
+                },
+                "filter_ext": {
+                  "type": "keyword"
+                },
+                "selection_mobsync": {
+                  "type": "keyword"
+                },
+                "filter_created_file": {
+                  "type": "keyword"
+                },
+                "selection_gen": {
+                  "type": "keyword"
+                },
+                "selection_exe": {
+                  "type": "keyword"
+                },
+                "filter_icons_linux": {
+                  "type": "keyword"
+                },
+                "selection_susp_img": {
+                  "type": "keyword"
+                },
+                "selection_servers": {
+                  "type": "keyword"
+                },
+                "selection_susp_extensions": {
+                  "type": "keyword"
+                },
+                "selection_upper": {
+                  "type": "keyword"
+                },
+                "selection_lower": {
+                  "type": "keyword"
+                },
+                "selection_img": {
+                  "type": "keyword"
+                },
+                "selection_locations": {
+                  "type": "keyword"
+                },
+                "filter_main_recent": {
+                  "type": "keyword"
+                },
+                "filter_optional_office_recent": {
+                  "type": "keyword"
+                },
+                "filter_optional_office_excel": {
+                  "type": "keyword"
+                },
+                "filter_optional_office_powerpoint": {
+                  "type": "keyword"
+                },
+                "filter_optional_office_word": {
+                  "type": "keyword"
+                },
+                "selection_rtlo_unicode": {
+                  "type": "keyword"
+                },
+                "selection_extensions": {
+                  "type": "keyword"
+                },
+                "selection_target": {
+                  "type": "keyword"
+                },
+                "filter_main_images": {
+                  "type": "keyword"
+                },
+                "filter_main_cli": {
+                  "type": "keyword"
+                },
+                "filter_main_wuaucltcore": {
+                  "type": "keyword"
+                },
+                "filter_main_system_location": {
+                  "type": "keyword"
+                },
+                "filter_main_legit_name": {
+                  "type": "keyword"
+                },
+                "filter_main_process_explorer": {
+                  "type": "keyword"
+                },
+                "selection_wwwroot_path": {
+                  "type": "keyword"
+                },
+                "selection_wwwroot_ext": {
+                  "type": "keyword"
+                },
+                "selection_htdocs_path": {
+                  "type": "keyword"
+                },
+                "selection_htdocs_ext": {
+                  "type": "keyword"
+                },
+                "filter_main_temp": {
+                  "type": "keyword"
+                },
+                "filter_main_legitimate": {
+                  "type": "keyword"
+                },
+                "filter_main_known_locations": {
+                  "type": "keyword"
+                },
+                "filter_main_process": {
+                  "type": "keyword"
+                },
+                "system_files": {
+                  "type": "keyword"
+                },
+                "in_system_folder": {
+                  "type": "keyword"
+                },
+                "SourceFilename": {
+                  "type": "keyword"
+                },
+                "filter_optional_anaconda": {
+                  "type": "keyword"
+                },
+                "selection_dll": {
+                  "type": "keyword"
+                },
+                "selection_folders_1": {
+                  "type": "keyword"
+                },
+                "selection_folders_2": {
+                  "type": "keyword"
+                },
+                "filter_main_bgtaskhost": {
+                  "type": "keyword"
+                },
+                "filter_optional_devenv": {
+                  "type": "keyword"
+                },
+                "filter_main_full": {
+                  "type": "keyword"
+                },
+                "filter_optional_process_explorer": {
+                  "type": "keyword"
+                },
+                "filter_optional_teams": {
+                  "type": "keyword"
+                },
+                "filter_main_user_software_installations": {
+                  "type": "keyword"
+                },
+                "filter_main_admin_software_installations": {
+                  "type": "keyword"
+                },
+                "filter_main_dotnet": {
+                  "type": "keyword"
+                },
+                "filter_optional_sql_server_mgmt": {
+                  "type": "keyword"
+                },
+                "filter_optional_sql_server_tools": {
+                  "type": "keyword"
+                },
+                "filter_optional_vs": {
+                  "type": "keyword"
+                },
+                "filter_optional_chocolatey": {
+                  "type": "keyword"
+                },
+                "filter_optional_nextron": {
+                  "type": "keyword"
+                },
+                "selection_node_extension": {
+                  "type": "keyword"
+                },
+                "filter_optional_vscode_jupyter": {
+                  "type": "keyword"
+                },
+                "filter_main_windows": {
+                  "type": "keyword"
+                },
+                "filter_main_program_files": {
+                  "type": "keyword"
+                },
+                "filter_main_null_image": {
+                  "type": "keyword"
+                },
+                "filter_optional_programdata_packagecache": {
+                  "type": "keyword"
+                },
+                "filter_optional_avira": {
+                  "type": "keyword"
+                },
+                "filter_optional_recovery": {
+                  "type": "keyword"
+                },
+                "filter_main_legit": {
+                  "type": "keyword"
+                },
+                "filter_main_image_null": {
+                  "type": "keyword"
+                },
+                "filter_optional_programfiles": {
+                  "type": "keyword"
+                },
+                "filter_main_legit_path": {
+                  "type": "keyword"
+                },
+                "selection_bitdefender": {
+                  "type": "keyword"
+                },
+                "filter_log_dll_bitdefender": {
+                  "type": "keyword"
+                },
+                "filter_log_dll_dell_sar": {
+                  "type": "keyword"
+                },
+                "filter_log_dll_canon": {
+                  "type": "keyword"
+                },
+                "filter_log_dll_avast": {
+                  "type": "keyword"
+                },
+                "filter_log_dll_avg": {
+                  "type": "keyword"
+                },
+                "selection_fsecure": {
+                  "type": "keyword"
+                },
+                "filter_fsecure": {
+                  "type": "keyword"
+                },
+                "selection_mcafee": {
+                  "type": "keyword"
+                },
+                "filter_mcafee": {
+                  "type": "keyword"
+                },
+                "selection_cyberark": {
+                  "type": "keyword"
+                },
+                "filter_cyberark": {
+                  "type": "keyword"
+                },
+                "selection_avast": {
+                  "type": "keyword"
+                },
+                "filter_wsc_dll_avast": {
+                  "type": "keyword"
+                },
+                "filter_wsc_dll_avg": {
+                  "type": "keyword"
+                },
+                "selection_eset_deslock": {
+                  "type": "keyword"
+                },
+                "filter_eset_deslock": {
+                  "type": "keyword"
+                },
+                "selection_titanium": {
+                  "type": "keyword"
+                },
+                "filter_titanium": {
+                  "type": "keyword"
+                },
+                "filter_optional_user_path": {
+                  "type": "keyword"
+                },
+                "selection_classicexplorer": {
+                  "type": "keyword"
+                },
+                "filter_classicexplorer": {
+                  "type": "keyword"
+                },
+                "filter_optional_epicgames": {
+                  "type": "keyword"
+                },
+                "filter_optional_windbg": {
+                  "type": "keyword"
+                },
+                "filter_optional_windows_kits": {
+                  "type": "keyword"
+                },
+                "filter_main_dot_net": {
+                  "type": "keyword"
+                },
+                "filter_main_directx": {
+                  "type": "keyword"
+                },
+                "filter_optional_exchange": {
+                  "type": "keyword"
+                },
+                "filter_optional_arsenal_image_mounter": {
+                  "type": "keyword"
+                },
+                "filter_optional_office_appvpolicy": {
+                  "type": "keyword"
+                },
+                "filter_optional_dell": {
+                  "type": "keyword"
+                },
+                "filter_optional_dell_wldp": {
+                  "type": "keyword"
+                },
+                "filter_optional_checkpoint": {
+                  "type": "keyword"
+                },
+                "filter_optional_dropbox_installer_temp": {
+                  "type": "keyword"
+                },
+                "filter_optional_googleupdate_temp": {
+                  "type": "keyword"
+                },
+                "filter_main_notepad_plusplus": {
+                  "type": "keyword"
+                },
+                "filter_main_legitimate_install_paths": {
+                  "type": "keyword"
+                },
+                "filter_optional_eclipse": {
+                  "type": "keyword"
+                },
+                "filter_main_legitimate_path": {
+                  "type": "keyword"
+                },
+                "filter_main_signature": {
+                  "type": "keyword"
+                },
+                "filter_main_vlc": {
+                  "type": "keyword"
+                },
+                "filter_main_ms_signed": {
+                  "type": "keyword"
+                },
+                "filter_main_default_install_paths": {
+                  "type": "keyword"
+                },
+                "filter_optional_visual_studio": {
+                  "type": "keyword"
+                },
+                "filter_optional_cpython": {
+                  "type": "keyword"
+                },
+                "filter_optional_pyinstaller": {
+                  "type": "keyword"
+                },
+                "filter_main_legit_signature_details": {
+                  "type": "keyword"
+                },
+                "selection_lenovo": {
+                  "type": "keyword"
+                },
+                "filter_lenovo": {
+                  "type": "keyword"
+                },
+                "selection_toshiba": {
+                  "type": "keyword"
+                },
+                "filter_toshiba": {
+                  "type": "keyword"
+                },
+                "filter_main_legitimate_signer": {
+                  "type": "keyword"
+                },
+                "filter_main_signed": {
+                  "type": "keyword"
+                },
+                "filter_optional_mingw64": {
+                  "type": "keyword"
+                },
+                "selection_sig_status": {
+                  "type": "keyword"
+                },
+                "filter_optional_null_image": {
+                  "type": "keyword"
+                },
+                "filter_main_sig_status": {
+                  "type": "keyword"
+                },
+                "filter_main_signed_null": {
+                  "type": "keyword"
+                },
+                "filter_main_signed_empty": {
+                  "type": "keyword"
+                },
+                "filter_main_sig_status_null": {
+                  "type": "keyword"
+                },
+                "filter_main_sig_status_empty": {
+                  "type": "keyword"
+                },
+                "filter_main_windows_installer": {
+                  "type": "keyword"
+                },
+                "filter_main_assembly": {
+                  "type": "keyword"
+                },
+                "filter_optional_klite_codec": {
+                  "type": "keyword"
+                },
+                "request_client": {
+                  "type": "keyword"
+                },
+                "respond_server": {
+                  "type": "keyword"
+                },
+                "filter_general": {
+                  "type": "keyword"
+                },
+                "filter_svchost": {
+                  "type": "keyword"
+                },
+                "filter_mscorsvw": {
+                  "type": "keyword"
+                },
+                "filter_svr_2019": {
+                  "type": "keyword"
+                },
+                "filter_nextron": {
+                  "type": "keyword"
+                },
+                "filter_citrix": {
+                  "type": "keyword"
+                },
+                "filter_upgrade": {
+                  "type": "keyword"
+                },
+                "filter_mmc": {
+                  "type": "keyword"
+                },
+                "svchost": {
+                  "type": "keyword"
+                },
+                "commandline_null": {
+                  "type": "keyword"
+                },
+                "filter_main_dsac": {
+                  "type": "keyword"
+                },
+                "filter_main_ms_monitoring_agent": {
+                  "type": "keyword"
+                },
+                "filter_main_chrome": {
+                  "type": "keyword"
+                },
+                "filter_main_chrome_appdata": {
+                  "type": "keyword"
+                },
+                "filter_main_firefox": {
+                  "type": "keyword"
+                },
+                "filter_main_firefox_appdata": {
+                  "type": "keyword"
+                },
+                "filter_main_ie": {
+                  "type": "keyword"
+                },
+                "filter_main_edge_1": {
+                  "type": "keyword"
+                },
+                "filter_main_edge_2": {
+                  "type": "keyword"
+                },
+                "filter_main_safari": {
+                  "type": "keyword"
+                },
+                "filter_main_prtg": {
+                  "type": "keyword"
+                },
+                "filter_main_brave": {
+                  "type": "keyword"
+                },
+                "filter_main_maxthon": {
+                  "type": "keyword"
+                },
+                "filter_main_opera": {
+                  "type": "keyword"
+                },
+                "filter_main_seamonkey": {
+                  "type": "keyword"
+                },
+                "filter_main_vivaldi": {
+                  "type": "keyword"
+                },
+                "filter_main_whale": {
+                  "type": "keyword"
+                },
+                "filter_main_whaterfox": {
+                  "type": "keyword"
+                },
+                "filter_main_slimbrowser": {
+                  "type": "keyword"
+                },
+                "filter_main_flock": {
+                  "type": "keyword"
+                },
+                "filter_main_phoebe": {
+                  "type": "keyword"
+                },
+                "filter_main_falkon": {
+                  "type": "keyword"
+                },
+                "filter_main_qtweb": {
+                  "type": "keyword"
+                },
+                "filter_main_avant": {
+                  "type": "keyword"
+                },
+                "filter_main_discord": {
+                  "type": "keyword"
+                },
+                "filter_main_midori": {
+                  "type": "keyword"
+                },
+                "filter_main_whatsapp": {
+                  "type": "keyword"
+                },
+                "filter_main_telegram": {
+                  "type": "keyword"
+                },
+                "filter_main_onedrive": {
+                  "type": "keyword"
+                },
+                "filter_main_dropbox": {
+                  "type": "keyword"
+                },
+                "filter_main_mega": {
+                  "type": "keyword"
+                },
+                "filter_main_googledrive": {
+                  "type": "keyword"
+                },
+                "filter_main_legit_dropbox": {
+                  "type": "keyword"
+                },
+                "filter_optional_googleupdate": {
+                  "type": "keyword"
+                },
+                "filter_optional_outlook_exe": {
+                  "type": "keyword"
+                },
+                "filter_main_notion": {
+                  "type": "keyword"
+                },
+                "filter_optional_printing": {
+                  "type": "keyword"
+                },
+                "filter_main_msrange_generic": {
+                  "type": "keyword"
+                },
+                "filter_main_msrange_exchange_1": {
+                  "type": "keyword"
+                },
+                "filter_main_msrange_exchange_2": {
+                  "type": "keyword"
+                },
+                "filter_main_msrange_exchange_3": {
+                  "type": "keyword"
+                },
+                "filter_main_msrange_exchange_4": {
+                  "type": "keyword"
+                },
+                "filter_main_msrange_sharepoint_1": {
+                  "type": "keyword"
+                },
+                "filter_main_msrange_office_1": {
+                  "type": "keyword"
+                },
+                "filter_main_msrange_office_2": {
+                  "type": "keyword"
+                },
+                "filter_main_msrange_office_3": {
+                  "type": "keyword"
+                },
+                "filter_main_destination_host": {
+                  "type": "keyword"
+                },
+                "filter_main_common_ports": {
+                  "type": "keyword"
+                },
+                "filter_main_outlook_ports": {
+                  "type": "keyword"
+                },
+                "filter_optional_conda": {
+                  "type": "keyword"
+                },
+                "filter_optional_conda_jupyter_notebook": {
+                  "type": "keyword"
+                },
+                "filter_main_local_communication": {
+                  "type": "keyword"
+                },
+                "filter_main_pip": {
+                  "type": "keyword"
+                },
+                "filter_main_mstsc": {
+                  "type": "keyword"
+                },
+                "filter_optional_dns": {
+                  "type": "keyword"
+                },
+                "filter_optional_sysinternals_rdcman": {
+                  "type": "keyword"
+                },
+                "filter_optional_third_party": {
+                  "type": "keyword"
+                },
+                "filter_optional_splunk": {
+                  "type": "keyword"
+                },
+                "filter_optional_tsplus": {
+                  "type": "keyword"
+                },
+                "filter_optional_empty": {
+                  "type": "keyword"
+                },
+                "filter_optional_unknown": {
+                  "type": "keyword"
+                },
+                "selection_destination": {
+                  "type": "keyword"
+                },
+                "filter_main_ms_ranges": {
+                  "type": "keyword"
+                },
+                "filter_main_app_sdb": {
+                  "type": "keyword"
+                },
+                "filter_main_azure_managed": {
+                  "type": "keyword"
+                },
+                "SourceHostname": {
+                  "type": "keyword"
+                },
+                "filter_main_svchost_update_processes": {
+                  "type": "keyword"
+                },
+                "filter_no_cmdline": {
+                  "type": "keyword"
+                },
+                "selection_domains": {
+                  "type": "keyword"
+                },
+                "filter_main_domains": {
+                  "type": "keyword"
+                },
+                "filter_optional_sys_directories": {
+                  "type": "keyword"
+                },
+                "filter_clients": {
+                  "type": "keyword"
+                },
+                "filter_mailserver": {
+                  "type": "keyword"
+                },
+                "filter_outlook": {
+                  "type": "keyword"
+                },
+                "SourceIsIpv6": {
+                  "type": "keyword"
+                },
+                "filter_main_service_users": {
+                  "type": "keyword"
+                },
+                "filter_main_ports": {
+                  "type": "keyword"
+                },
+                "filter_main_ip": {
+                  "type": "keyword"
+                },
+                "filter_main_msrange": {
+                  "type": "keyword"
+                },
+                "filter_main_uus": {
+                  "type": "keyword"
+                },
+                "filter_main_winsxs": {
+                  "type": "keyword"
+                },
+                "filter_main_cli_null": {
+                  "type": "keyword"
+                },
+                "filter_main_cli_empty": {
+                  "type": "keyword"
+                },
+                "selection_MSSE": {
+                  "type": "keyword"
+                },
+                "selection_postex": {
+                  "type": "keyword"
+                },
+                "selection_msagent": {
+                  "type": "keyword"
+                },
+                "selection_mojo": {
+                  "type": "keyword"
+                },
+                "selection_interprocess": {
+                  "type": "keyword"
+                },
+                "selection_samr": {
+                  "type": "keyword"
+                },
+                "selection_netlogon": {
+                  "type": "keyword"
+                },
+                "selection_srvsvc": {
+                  "type": "keyword"
+                },
+                "selection_lsarpc": {
+                  "type": "keyword"
+                },
+                "selection_wkssvc": {
+                  "type": "keyword"
+                },
+                "selection_malleable_profile_generic": {
+                  "type": "keyword"
+                },
+                "selection_malleable_profile_catalog_change_listener": {
+                  "type": "keyword"
+                },
+                "filter_optional_websense": {
+                  "type": "keyword"
+                },
+                "filter_optional_ctx": {
+                  "type": "keyword"
+                },
+                "filter_optional_default": {
+                  "type": "keyword"
+                },
+                "filter_optional_sqlserver": {
+                  "type": "keyword"
+                },
+                "filter_optional_azure_connected_machine_agent": {
+                  "type": "keyword"
+                },
+                "selection_webclient": {
+                  "type": "keyword"
+                },
+                "selection_download": {
+                  "type": "keyword"
+                },
+                "selection_engine": {
+                  "type": "keyword"
+                },
+                "selection_host": {
+                  "type": "keyword"
+                },
+                "filter_main_ps": {
+                  "type": "keyword"
+                },
+                "filter_main_host_application_null": {
+                  "type": "keyword"
+                },
+                "selection_set_mppreference": {
+                  "type": "keyword"
+                },
+                "selection_options_bool_allow": {
+                  "type": "keyword"
+                },
+                "selection_options_actions_func": {
+                  "type": "keyword"
+                },
+                "filter_optional_hexnode": {
+                  "type": "keyword"
+                },
+                "selection_cmdlet": {
+                  "type": "keyword"
+                },
+                "Payload": {
+                  "type": "keyword"
+                },
+                "ContextInfo": {
+                  "type": "keyword"
+                },
+                "filter_powershell": {
+                  "type": "keyword"
+                },
+                "filter_sdiagnhost": {
+                  "type": "keyword"
+                },
+                "filter_adace": {
+                  "type": "keyword"
+                },
+                "filter_winrm": {
+                  "type": "keyword"
+                },
+                "filter_help_update": {
+                  "type": "keyword"
+                },
+                "selection_4103": {
+                  "type": "keyword"
+                },
+                "selection_1a_payload": {
+                  "type": "keyword"
+                },
+                "selection_1b_payload": {
+                  "type": "keyword"
+                },
+                "selection_payload_2": {
+                  "type": "keyword"
+                },
+                "selection_payload_3": {
+                  "type": "keyword"
+                },
+                "selection_wsm": {
+                  "type": "keyword"
+                },
+                "selection_payload_1": {
+                  "type": "keyword"
+                },
+                "selection_payload": {
+                  "type": "keyword"
+                },
+                "filter_pwsh_archive": {
+                  "type": "keyword"
+                },
+                "selection_ad_principal": {
+                  "type": "keyword"
+                },
+                "selection_get_aduser": {
+                  "type": "keyword"
+                },
+                "selection_webclient_": {
+                  "type": "keyword"
+                },
+                "selection_function": {
+                  "type": "keyword"
+                },
+                "selection_encoded": {
+                  "type": "keyword"
+                },
+                "selection_hidden": {
+                  "type": "keyword"
+                },
+                "selection_noninteractive": {
+                  "type": "keyword"
+                },
+                "selection_convert_b64": {
+                  "type": "keyword"
+                },
+                "selection_iex": {
+                  "type": "keyword"
+                },
+                "selection_enc": {
+                  "type": "keyword"
+                },
+                "selection_reg": {
+                  "type": "keyword"
+                },
+                "selection_iex_webclient": {
+                  "type": "keyword"
+                },
+                "filter_chocolatey": {
+                  "type": "keyword"
+                },
+                "selection_localgroup": {
+                  "type": "keyword"
+                },
+                "selection_wmi_module": {
+                  "type": "keyword"
+                },
+                "selection_wmi_class": {
+                  "type": "keyword"
+                },
+                "selection_specific": {
+                  "type": "keyword"
+                },
+                "selection_capa": {
+                  "type": "keyword"
+                },
+                "empire": {
+                  "type": "keyword"
+                },
+                "dnscat": {
+                  "type": "keyword"
+                },
+                "selection_header_wav": {
+                  "type": "keyword"
+                },
+                "selection2a": {
+                  "type": "keyword"
+                },
+                "selection2b": {
+                  "type": "keyword"
+                },
+                "selection1a": {
+                  "type": "keyword"
+                },
+                "selection1b": {
+                  "type": "keyword"
+                },
+                "selection_cimmethod": {
+                  "type": "keyword"
+                },
+                "filter_main_legitimate_scripts": {
+                  "type": "keyword"
+                },
+                "selection_action": {
+                  "type": "keyword"
+                },
+                "selection_module": {
+                  "type": "keyword"
+                },
+                "selection_feature": {
+                  "type": "keyword"
+                },
+                "selection_kiddie": {
+                  "type": "keyword"
+                },
+                "selection_rename_Password": {
+                  "type": "keyword"
+                },
+                "selection_rename_credman": {
+                  "type": "keyword"
+                },
+                "selection_option": {
+                  "type": "keyword"
+                },
+                "selection_pwsh_remove": {
+                  "type": "keyword"
+                },
+                "selection_pwsh_set": {
+                  "type": "keyword"
+                },
+                "filter_optional_module_export": {
+                  "type": "keyword"
+                },
+                "selection_flag": {
+                  "type": "keyword"
+                },
+                "selection_4104": {
+                  "type": "keyword"
+                },
+                "selection_basic": {
+                  "type": "keyword"
+                },
+                "selection_high": {
+                  "type": "keyword"
+                },
+                "filter_optional_amazon_ec2": {
+                  "type": "keyword"
+                },
+                "selection_key": {
+                  "type": "keyword"
+                },
+                "selection_content": {
+                  "type": "keyword"
+                },
+                "selection_stream": {
+                  "type": "keyword"
+                },
+                "selection_install": {
+                  "type": "keyword"
+                },
+                "selection_config": {
+                  "type": "keyword"
+                },
+                "selection_auth": {
+                  "type": "keyword"
+                },
+                "selection_recurse": {
+                  "type": "keyword"
+                },
+                "selection_permissions": {
+                  "type": "keyword"
+                },
+                "selection_compspec": {
+                  "type": "keyword"
+                },
+                "test_2": {
+                  "type": "keyword"
+                },
+                "test_7": {
+                  "type": "keyword"
+                },
+                "webclient": {
+                  "type": "keyword"
+                },
+                "download": {
+                  "type": "keyword"
+                },
+                "selection_start": {
+                  "type": "keyword"
+                },
+                "selection_batch": {
+                  "type": "keyword"
+                },
+                "selection_iex_selection": {
+                  "type": "keyword"
+                },
+                "selection_enc_selection": {
+                  "type": "keyword"
+                },
+                "selection_reg_selection": {
+                  "type": "keyword"
+                },
+                "selection_webclient_selection": {
+                  "type": "keyword"
+                },
+                "selection_webrequest": {
+                  "type": "keyword"
+                },
+                "selection_useragent": {
+                  "type": "keyword"
+                },
+                "filter_main_module_load": {
+                  "type": "keyword"
+                },
+                "selection_redirect": {
+                  "type": "keyword"
+                },
+                "selection_sddl_flag": {
+                  "type": "keyword"
+                },
+                "selection_set_service": {
+                  "type": "keyword"
+                },
+                "filter_main_cim": {
+                  "type": "keyword"
+                },
+                "selection_get": {
+                  "type": "keyword"
+                },
+                "selection_shadowcopy": {
+                  "type": "keyword"
+                },
+                "selection_delete": {
+                  "type": "keyword"
+                },
+                "selection_remove": {
+                  "type": "keyword"
+                },
+                "selection_tamper": {
+                  "type": "keyword"
+                },
+                "selection_options_disabling_preference": {
+                  "type": "keyword"
+                },
+                "selection_options_disabling_function": {
+                  "type": "keyword"
+                },
+                "selection_other_default_actions_allow": {
+                  "type": "keyword"
+                },
+                "selection_other_default_actions_func": {
+                  "type": "keyword"
+                },
+                "selection_ioc": {
+                  "type": "keyword"
+                },
+                "selection_add": {
+                  "type": "keyword"
+                },
+                "selection_options": {
+                  "type": "keyword"
+                },
+                "selection_class": {
+                  "type": "keyword"
+                },
+                "selection_args": {
+                  "type": "keyword"
+                },
+                "selection_opt": {
+                  "type": "keyword"
+                },
+                "selection_injection": {
+                  "type": "keyword"
+                },
+                "selection_token_steal": {
+                  "type": "keyword"
+                },
+                "selection_duplicate_token": {
+                  "type": "keyword"
+                },
+                "selection_process_write_read": {
+                  "type": "keyword"
+                },
+                "selection_args_exc": {
+                  "type": "keyword"
+                },
+                "selection_args_pref": {
+                  "type": "keyword"
+                },
+                "selection_xml": {
+                  "type": "keyword"
+                },
+                "selection_exec": {
+                  "type": "keyword"
+                },
+                "selection_sysmon": {
+                  "type": "keyword"
+                },
+                "selection_calltrace": {
+                  "type": "keyword"
+                },
+                "filter_main_msdefender": {
+                  "type": "keyword"
+                },
+                "filter_main_system_user": {
+                  "type": "keyword"
+                },
+                "SourceUser": {
+                  "type": "keyword"
+                },
+                "filter_optional_sysmon": {
+                  "type": "keyword"
+                },
+                "filter_main_access": {
+                  "type": "keyword"
+                },
+                "selection_access": {
+                  "type": "keyword"
+                },
+                "filter_optional_malwarebytes": {
+                  "type": "keyword"
+                },
+                "filter_optional_vscode": {
+                  "type": "keyword"
+                },
+                "filter_main_windefend_1": {
+                  "type": "keyword"
+                },
+                "filter_main_windefend_2": {
+                  "type": "keyword"
+                },
+                "filter_main_windefend_3": {
+                  "type": "keyword"
+                },
+                "filter_optional_vmwaretools": {
+                  "type": "keyword"
+                },
+                "filter_optional_sysinternals_process_explorer": {
+                  "type": "keyword"
+                },
+                "filter_optional_mbami": {
+                  "type": "keyword"
+                },
+                "filter_optional_sysinternals_handle": {
+                  "type": "keyword"
+                },
+                "filter_optional_steam_apps": {
+                  "type": "keyword"
+                },
+                "selection_lsass_calltrace": {
+                  "type": "keyword"
+                },
+                "selection_susp_location": {
+                  "type": "keyword"
+                },
+                "filter_main_vcredist": {
+                  "type": "keyword"
+                },
+                "filter_main_kerneltrace_edge": {
+                  "type": "keyword"
+                },
+                "filter_optional_cylance": {
+                  "type": "keyword"
+                },
+                "filter_optional_amazon": {
+                  "type": "keyword"
+                },
+                "filter_optional_discord": {
+                  "type": "keyword"
+                },
+                "filter_optional_yammer": {
+                  "type": "keyword"
+                },
+                "filter_optional_evernote": {
+                  "type": "keyword"
+                },
+                "filter_optional_adobe_acrobat": {
+                  "type": "keyword"
+                },
+                "filter_main_known_processes": {
+                  "type": "keyword"
+                },
+                "filter_main_msbuild": {
+                  "type": "keyword"
+                },
+                "selection_password": {
+                  "type": "keyword"
+                },
+                "selection_cli": {
+                  "type": "keyword"
+                },
+                "selection_susp_1_flags": {
+                  "type": "keyword"
+                },
+                "selection_susp_1_paths": {
+                  "type": "keyword"
+                },
+                "selection_susp_2": {
+                  "type": "keyword"
+                },
+                "filter_main_werfault": {
+                  "type": "keyword"
+                },
+                "filter_main_addinroot": {
+                  "type": "keyword"
+                },
+                "filter_main_intune": {
+                  "type": "keyword"
+                },
+                "selection_reg_img": {
+                  "type": "keyword"
+                },
+                "selection_reg_cmd": {
+                  "type": "keyword"
+                },
+                "selection_powershell_img": {
+                  "type": "keyword"
+                },
+                "selection_powershell_cmd": {
+                  "type": "keyword"
+                },
+                "filter_optional_office_msoasb": {
+                  "type": "keyword"
+                },
+                "filter_optional_office_skype": {
+                  "type": "keyword"
+                },
+                "filter_optional_office_msouc": {
+                  "type": "keyword"
+                },
+                "filter_main_cmd": {
+                  "type": "keyword"
+                },
+                "selection_parent": {
+                  "type": "keyword"
+                },
+                "selection_child": {
+                  "type": "keyword"
+                },
+                "filter_optional_java": {
+                  "type": "keyword"
+                },
+                "filter_optional_intel": {
+                  "type": "keyword"
+                },
+                "filter_optional_installer": {
+                  "type": "keyword"
+                },
+                "selection_cli_action": {
+                  "type": "keyword"
+                },
+                "selection_cli_base": {
+                  "type": "keyword"
+                },
+                "selection_cli_key": {
+                  "type": "keyword"
+                },
+                "selection_execution_img": {
+                  "type": "keyword"
+                },
+                "selection_execution_cmd": {
+                  "type": "keyword"
+                },
+                "selection_suspicious_paths_1": {
+                  "type": "keyword"
+                },
+                "selection_suspicious_paths_user_1": {
+                  "type": "keyword"
+                },
+                "selection_suspicious_paths_user_2": {
+                  "type": "keyword"
+                },
+                "filter_main_cli_flag": {
+                  "type": "keyword"
+                },
+                "filter_main_no_cli": {
+                  "type": "keyword"
+                },
+                "filter_main_no_flag": {
+                  "type": "keyword"
+                },
+                "selection_set": {
+                  "type": "keyword"
+                },
+                "selection_cli_1": {
+                  "type": "keyword"
+                },
+                "selection_cli_2": {
+                  "type": "keyword"
+                },
+                "selection_flags": {
+                  "type": "keyword"
+                },
+                "filter_seven_zip": {
+                  "type": "keyword"
+                },
+                "selection_folder": {
+                  "type": "keyword"
+                },
+                "selection_cli_notify_1": {
+                  "type": "keyword"
+                },
+                "selection_cli_notify_2": {
+                  "type": "keyword"
+                },
+                "selection_cli_add_1": {
+                  "type": "keyword"
+                },
+                "selection_cli_add_2": {
+                  "type": "keyword"
+                },
+                "selection_headless": {
+                  "type": "keyword"
+                },
+                "selection_url": {
+                  "type": "keyword"
+                },
+                "selection_http": {
+                  "type": "keyword"
+                },
+                "selection_chromium_based": {
+                  "type": "keyword"
+                },
+                "selection_firefox": {
+                  "type": "keyword"
+                },
+                "selection_ip": {
+                  "type": "keyword"
+                },
+                "selection_cli_flag_post": {
+                  "type": "keyword"
+                },
+                "selection_cli_flag_config": {
+                  "type": "keyword"
+                },
+                "selection_cli_http": {
+                  "type": "keyword"
+                },
+                "selection_cli_add": {
+                  "type": "keyword"
+                },
+                "selection_cli_store": {
+                  "type": "keyword"
+                },
+                "filter_main_seven_zip": {
+                  "type": "keyword"
+                },
+                "renamed": {
+                  "type": "keyword"
+                },
+                "filter_renamed": {
+                  "type": "keyword"
+                },
+                "filter_main_admin_location": {
+                  "type": "keyword"
+                },
+                "selection_param": {
+                  "type": "keyword"
+                },
+                "selection_cli_generic": {
+                  "type": "keyword"
+                },
+                "selection_cli_user": {
+                  "type": "keyword"
+                },
+                "selection_cli_password": {
+                  "type": "keyword"
+                },
+                "selection_del": {
+                  "type": "keyword"
+                },
+                "filter_main_rmdir": {
+                  "type": "keyword"
+                },
+                "selection_cmd_img": {
+                  "type": "keyword"
+                },
+                "selection_cmd_hidden_start_1": {
+                  "type": "keyword"
+                },
+                "selection_cmd_hidden_start_2": {
+                  "type": "keyword"
+                },
+                "selection_cli_uncommon_location": {
+                  "type": "keyword"
+                },
+                "selection_cli_susp_extension": {
+                  "type": "keyword"
+                },
+                "selection_cli_susp_pattern": {
+                  "type": "keyword"
+                },
+                "filter_fp": {
+                  "type": "keyword"
+                },
+                "selection_path_traversal": {
+                  "type": "keyword"
+                },
+                "filter_java": {
+                  "type": "keyword"
+                },
+                "selection_count": {
+                  "type": "keyword"
+                },
+                "selection_nul": {
+                  "type": "keyword"
+                },
+                "selection_del_param": {
+                  "type": "keyword"
+                },
+                "selection_all": {
+                  "type": "keyword"
+                },
+                "selection_rmdir": {
+                  "type": "keyword"
+                },
+                "selection_upload": {
+                  "type": "keyword"
+                },
+                "selection_cli_shell": {
+                  "type": "keyword"
+                },
+                "filter_optional_provider": {
+                  "type": "keyword"
+                },
+                "selection_reg_cli": {
+                  "type": "keyword"
+                },
+                "selection_cpl": {
+                  "type": "keyword"
+                },
+                "filter_cpl_sys": {
+                  "type": "keyword"
+                },
+                "filter_cpl_igfx": {
+                  "type": "keyword"
+                },
+                "selection_key_base": {
+                  "type": "keyword"
+                },
+                "selection_key_specific": {
+                  "type": "keyword"
+                },
+                "selection_susp_location_1": {
+                  "type": "keyword"
+                },
+                "selection_susp_location_2": {
+                  "type": "keyword"
+                },
+                "selection_susp_location_3": {
+                  "type": "keyword"
+                },
+                "filter_main_programfiles": {
+                  "type": "keyword"
+                },
+                "filter_main_sdiagnhost": {
+                  "type": "keyword"
+                },
+                "filter_main_w3p": {
+                  "type": "keyword"
+                },
+                "filter_optional_ansible": {
+                  "type": "keyword"
+                },
+                "selection_parent_generic": {
+                  "type": "keyword"
+                },
+                "selection_parent_powershell": {
+                  "type": "keyword"
+                },
+                "selection_parent_susp_location": {
+                  "type": "keyword"
+                },
+                "selection_remote": {
+                  "type": "keyword"
+                },
+                "filter_import": {
+                  "type": "keyword"
+                },
+                "selection_header_flag_1": {
+                  "type": "keyword"
+                },
+                "selection_header_flag_2": {
+                  "type": "keyword"
+                },
+                "selection_user_agent": {
+                  "type": "keyword"
+                },
+                "filter_main_ext": {
+                  "type": "keyword"
+                },
+                "selection_websites": {
+                  "type": "keyword"
+                },
+                "selection_ntlm_flag": {
+                  "type": "keyword"
+                },
+                "selection_empty_creds": {
+                  "type": "keyword"
+                },
+                "selection_curl": {
+                  "type": "keyword"
+                },
+                "selection_susp_locations": {
+                  "type": "keyword"
+                },
+                "filter_optional_git_windows": {
+                  "type": "keyword"
+                },
+                "selection_value": {
+                  "type": "keyword"
+                },
+                "selection_reg_path": {
+                  "type": "keyword"
+                },
+                "selection1_filter": {
+                  "type": "keyword"
+                },
+                "selection_vmci_pci": {
+                  "type": "keyword"
+                },
+                "selection_cmd_reg": {
+                  "type": "keyword"
+                },
+                "selection_cmd_powershell": {
+                  "type": "keyword"
+                },
+                "selection_keys": {
+                  "type": "keyword"
+                },
+                "selection_dismhost": {
+                  "type": "keyword"
+                },
+                "selection_dism": {
+                  "type": "keyword"
+                },
+                "filter_optional_notepadplus_plus": {
+                  "type": "keyword"
+                },
+                "filter_main_other": {
+                  "type": "keyword"
+                },
+                "selection_plain": {
+                  "type": "keyword"
+                },
+                "selection_obfuscated": {
+                  "type": "keyword"
+                },
+                "selection_dump": {
+                  "type": "keyword"
+                },
+                "selection_tools_procdump": {
+                  "type": "keyword"
+                },
+                "filter_folder": {
+                  "type": "keyword"
+                },
+                "susp_flags": {
+                  "type": "keyword"
+                },
+                "cmd_has_flags": {
+                  "type": "keyword"
+                },
+                "filter_cmd_misses_flags": {
+                  "type": "keyword"
+                },
+                "selection_esent_img": {
+                  "type": "keyword"
+                },
+                "selection_esent_cli": {
+                  "type": "keyword"
+                },
+                "selection_susp_paths": {
+                  "type": "keyword"
+                },
+                "selection_webcache": {
+                  "type": "keyword"
+                },
+                "selection_powershell_cmd1": {
+                  "type": "keyword"
+                },
+                "selection_powershell_cmd2": {
+                  "type": "keyword"
+                },
+                "selection_factory": {
+                  "type": "keyword"
+                },
+                "filter_dc_logon": {
+                  "type": "keyword"
+                },
+                "selection_findstr": {
+                  "type": "keyword"
+                },
+                "selection_cli_download_1": {
+                  "type": "keyword"
+                },
+                "selection_cli_download_2": {
+                  "type": "keyword"
+                },
+                "selection_cli_download_3": {
+                  "type": "keyword"
+                },
+                "selection_findstr_img": {
+                  "type": "keyword"
+                },
+                "selection_findstr_cli": {
+                  "type": "keyword"
+                },
+                "filter_optional_xampp": {
+                  "type": "keyword"
+                },
+                "selection_cli_search_subfolder": {
+                  "type": "keyword"
+                },
+                "selection_cli_search_insensitive": {
+                  "type": "keyword"
+                },
+                "filter_optional_manageengine": {
+                  "type": "keyword"
+                },
+                "filter_main_parent_not_sys": {
+                  "type": "keyword"
+                },
+                "filter_main_known_fs": {
+                  "type": "keyword"
+                },
+                "selection_img_proxy": {
+                  "type": "keyword"
+                },
+                "selection_fsutil_cli": {
+                  "type": "keyword"
+                },
+                "selection_symlink_params": {
+                  "type": "keyword"
+                },
+                "selection_child_img": {
+                  "type": "keyword"
+                },
+                "selection_child_cli": {
+                  "type": "keyword"
+                },
+                "filter_main_known_urls": {
+                  "type": "keyword"
+                },
+                "selection_worker_img": {
+                  "type": "keyword"
+                },
+                "selection_worker_cli": {
+                  "type": "keyword"
+                },
+                "selection_listener_img": {
+                  "type": "keyword"
+                },
+                "selection_listener_cli": {
+                  "type": "keyword"
+                },
+                "selection_keyword": {
+                  "type": "keyword"
+                },
+                "filter_main_known_legit": {
+                  "type": "keyword"
+                },
+                "selection_metadata": {
+                  "type": "keyword"
+                },
+                "filter_parent": {
+                  "type": "keyword"
+                },
+                "filter_programfiles": {
+                  "type": "keyword"
+                },
+                "filter_user": {
+                  "type": "keyword"
+                },
+                "selection_cli_3": {
+                  "type": "keyword"
+                },
+                "selection_cli_commands": {
+                  "type": "keyword"
+                },
+                "selection_cli_options": {
+                  "type": "keyword"
+                },
+                "selection_cli_flags": {
+                  "type": "keyword"
+                },
+                "selection_rundll": {
+                  "type": "keyword"
+                },
+                "selection_params": {
+                  "type": "keyword"
+                },
+                "selection_generic_1": {
+                  "type": "keyword"
+                },
+                "selection_generic_2": {
+                  "type": "keyword"
+                },
+                "selection_conhost_1": {
+                  "type": "keyword"
+                },
+                "selection_conhost_2": {
+                  "type": "keyword"
+                },
+                "selection_loader_img": {
+                  "type": "keyword"
+                },
+                "selection_loader_imphash": {
+                  "type": "keyword"
+                },
+                "selection_binary": {
+                  "type": "keyword"
+                },
+                "selection_execute": {
+                  "type": "keyword"
+                },
+                "selection_hash": {
+                  "type": "keyword"
+                },
+                "selection_module_mssql": {
+                  "type": "keyword"
+                },
+                "selection_module_smb1": {
+                  "type": "keyword"
+                },
+                "selection_module_smb2": {
+                  "type": "keyword"
+                },
+                "part_localauth_1": {
+                  "type": "keyword"
+                },
+                "part_localauth_2": {
+                  "type": "keyword"
+                },
+                "selection_lsass_dump1": {
+                  "type": "keyword"
+                },
+                "selection_lsass_dump2": {
+                  "type": "keyword"
+                },
+                "selection_procdump": {
+                  "type": "keyword"
+                },
+                "selection_imphash": {
+                  "type": "keyword"
+                },
+                "selection_sysmon_hash": {
+                  "type": "keyword"
+                },
+                "selection_atexec": {
+                  "type": "keyword"
+                },
+                "selection_commandline_exe": {
+                  "type": "keyword"
+                },
+                "selection_commandline_opt": {
+                  "type": "keyword"
+                },
+                "parent_selection": {
+                  "type": "keyword"
+                },
+                "selection_cli_required": {
+                  "type": "keyword"
+                },
+                "selection_cli_attack_smb": {
+                  "type": "keyword"
+                },
+                "selection_cli_attack_rbcd_main": {
+                  "type": "keyword"
+                },
+                "selection_cli_attack_rbcd_options": {
+                  "type": "keyword"
+                },
+                "selection_cli_attack_changepass": {
+                  "type": "keyword"
+                },
+                "selection_cli_attack_addgrpname": {
+                  "type": "keyword"
+                },
+                "selection_img_metadata": {
+                  "type": "keyword"
+                },
+                "selection_img_cli": {
+                  "type": "keyword"
+                },
+                "selection_cli_modules": {
+                  "type": "keyword"
+                },
+                "selection_hash_plain": {
+                  "type": "keyword"
+                },
+                "selection_technique_1": {
+                  "type": "keyword"
+                },
+                "selection_technique_2": {
+                  "type": "keyword"
+                },
+                "filter_defender": {
+                  "type": "keyword"
+                },
+                "selection_tools_name": {
+                  "type": "keyword"
+                },
+                "selection_function_names": {
+                  "type": "keyword"
+                },
+                "selection_module_names": {
+                  "type": "keyword"
+                },
+                "selection_pe": {
+                  "type": "keyword"
+                },
+                "selection_hashes": {
+                  "type": "keyword"
+                },
+                "selection_script": {
+                  "type": "keyword"
+                },
+                "selection_juicypotato_enum": {
+                  "type": "keyword"
+                },
+                "filter_hotpotatoes": {
+                  "type": "keyword"
+                },
+                "selection_cli_4": {
+                  "type": "keyword"
+                },
+                "selection_flags1": {
+                  "type": "keyword"
+                },
+                "selection_cli_computer": {
+                  "type": "keyword"
+                },
+                "selection_cli_actions": {
+                  "type": "keyword"
+                },
+                "selection_wsuspendu_inject": {
+                  "type": "keyword"
+                },
+                "selection_wsuspendu_payload": {
+                  "type": "keyword"
+                },
+                "selection_sharpwsus_commands": {
+                  "type": "keyword"
+                },
+                "selection_sharpwsus_flags": {
+                  "type": "keyword"
+                },
+                "selection_other_cli": {
+                  "type": "keyword"
+                },
+                "selection_other_options_guid": {
+                  "type": "keyword"
+                },
+                "selection_other_options_flags": {
+                  "type": "keyword"
+                },
+                "selection_hashes_sysmon": {
+                  "type": "keyword"
+                },
+                "selection_cli_option": {
+                  "type": "keyword"
+                },
+                "selection_cli_dl": {
+                  "type": "keyword"
+                },
+                "selection_cli_specific": {
+                  "type": "keyword"
+                },
+                "run": {
+                  "type": "keyword"
+                },
+                "delete": {
+                  "type": "keyword"
+                },
+                "filter_main_hxtsr": {
+                  "type": "keyword"
+                },
+                "selection_icacls": {
+                  "type": "keyword"
+                },
+                "selection_base_name": {
+                  "type": "keyword"
+                },
+                "selection_base_list": {
+                  "type": "keyword"
+                },
+                "selection_standalone": {
+                  "type": "keyword"
+                },
+                "selection_cmd_grep": {
+                  "type": "keyword"
+                },
+                "filter_iis_setup": {
+                  "type": "keyword"
+                },
+                "selection_cli_del": {
+                  "type": "keyword"
+                },
+                "selection_cli_iis_dir": {
+                  "type": "keyword"
+                },
+                "filter_main_net": {
+                  "type": "keyword"
+                },
+                "selection_jdwp_transport": {
+                  "type": "keyword"
+                },
+                "selection_old_jvm_version": {
+                  "type": "keyword"
+                },
+                "exclusion": {
+                  "type": "keyword"
+                },
+                "filter_main_build": {
+                  "type": "keyword"
+                },
+                "filter_main_legit_parents": {
+                  "type": "keyword"
+                },
+                "selection_ldif": {
+                  "type": "keyword"
+                },
+                "filter_main_visual_studio": {
+                  "type": "keyword"
+                },
+                "selection_lolbas": {
+                  "type": "keyword"
+                },
+                "selection_archive": {
+                  "type": "keyword"
+                },
+                "lolbin": {
+                  "type": "keyword"
+                },
+                "filter_correct": {
+                  "type": "keyword"
+                },
+                "filter_missing": {
+                  "type": "keyword"
+                },
+                "selection_wscript_img": {
+                  "type": "keyword"
+                },
+                "selection_wscript_cli": {
+                  "type": "keyword"
+                },
+                "selection_filter_cmd": {
+                  "type": "keyword"
+                },
+                "powershell_module": {
+                  "type": "keyword"
+                },
+                "cmd_execution": {
+                  "type": "keyword"
+                },
+                "get_help": {
+                  "type": "keyword"
+                },
+                "argument": {
+                  "type": "keyword"
+                },
+                "system_utility": {
+                  "type": "keyword"
+                },
+                "parent_is_settingsynchost": {
+                  "type": "keyword"
+                },
+                "filter_msbuild1": {
+                  "type": "keyword"
+                },
+                "filter_msbuild2": {
+                  "type": "keyword"
+                },
+                "selection_mmc": {
+                  "type": "keyword"
+                },
+                "selection_gpme": {
+                  "type": "keyword"
+                },
+                "selection_default_gpos": {
+                  "type": "keyword"
+                },
+                "selection_commandline": {
+                  "type": "keyword"
+                },
+                "selection_case": {
+                  "type": "keyword"
+                },
+                "filter_optional_null_parent": {
+                  "type": "keyword"
+                },
+                "filter_main_pcwrun": {
+                  "type": "keyword"
+                },
+                "selection_cmd_inline": {
+                  "type": "keyword"
+                },
+                "selection_cmd_answerfile_flag": {
+                  "type": "keyword"
+                },
+                "selection_cmd_answerfile_param": {
+                  "type": "keyword"
+                },
+                "selection_msdt": {
+                  "type": "keyword"
+                },
+                "selection_susp": {
+                  "type": "keyword"
+                },
+                "filter_img": {
+                  "type": "keyword"
+                },
+                "filter_splunk_ufw": {
+                  "type": "keyword"
+                },
+                "filter_vs": {
+                  "type": "keyword"
+                },
+                "selection_quiet": {
+                  "type": "keyword"
+                },
+                "filter_user_temp": {
+                  "type": "keyword"
+                },
+                "filter_system_temp": {
+                  "type": "keyword"
+                },
+                "filter_ccm": {
+                  "type": "keyword"
+                },
+                "filter_optional_openoffice": {
+                  "type": "keyword"
+                },
+                "filter_image": {
+                  "type": "keyword"
+                },
+                "filter_optional_datev": {
+                  "type": "keyword"
+                },
+                "selection_child_1": {
+                  "type": "keyword"
+                },
+                "selection_child_2": {
+                  "type": "keyword"
+                },
+                "filter_optional_wsl": {
+                  "type": "keyword"
+                },
+                "selection_group_root": {
+                  "type": "keyword"
+                },
+                "selection_group_flags": {
+                  "type": "keyword"
+                },
+                "filter_group_add": {
+                  "type": "keyword"
+                },
+                "selection_accounts_root": {
+                  "type": "keyword"
+                },
+                "selection_accounts_flags": {
+                  "type": "keyword"
+                },
+                "selection_user_option": {
+                  "type": "keyword"
+                },
+                "selection_username": {
+                  "type": "keyword"
+                },
+                "selection_nltest": {
+                  "type": "keyword"
+                },
+                "selection_recon": {
+                  "type": "keyword"
+                },
+                "selection_action_reverse_shell": {
+                  "type": "keyword"
+                },
+                "filter_main_dll_ext": {
+                  "type": "keyword"
+                },
+                "selection_rsp_ext": {
+                  "type": "keyword"
+                },
+                "filter_main_rsp_ext": {
+                  "type": "keyword"
+                },
+                "filter_main_runonce_odbc": {
+                  "type": "keyword"
+                },
+                "selection_trusted_location": {
+                  "type": "keyword"
+                },
+                "filter_main_dotx": {
+                  "type": "keyword"
+                },
+                "selection_opt_img": {
+                  "type": "keyword"
+                },
+                "selection_opt_explorer": {
+                  "type": "keyword"
+                },
+                "selection_opt_paths": {
+                  "type": "keyword"
+                },
+                "filter_teams": {
+                  "type": "keyword"
+                },
+                "filter_onedrive": {
+                  "type": "keyword"
+                },
+                "selection_child_processes": {
+                  "type": "keyword"
+                },
+                "selection_child_susp_paths": {
+                  "type": "keyword"
+                },
+                "filter_main_legit_dir": {
+                  "type": "keyword"
+                },
+                "selection_a": {
+                  "type": "keyword"
+                },
+                "selection_b1": {
+                  "type": "keyword"
+                },
+                "selection_b2": {
+                  "type": "keyword"
+                },
+                "selection_power": {
+                  "type": "keyword"
+                },
+                "selection_standby": {
+                  "type": "keyword"
+                },
+                "selection_cli_enc": {
+                  "type": "keyword"
+                },
+                "selection_cli_content": {
+                  "type": "keyword"
+                },
+                "filter_optional_remote_signed": {
+                  "type": "keyword"
+                },
+                "filter_gcworker": {
+                  "type": "keyword"
+                },
+                "selection_cli_invoke": {
+                  "type": "keyword"
+                },
+                "selection_cli_shadowcopy": {
+                  "type": "keyword"
+                },
+                "selection_cli_scheduledJob": {
+                  "type": "keyword"
+                },
+                "selection_cli_process": {
+                  "type": "keyword"
+                },
+                "selection_cli_useraccount": {
+                  "type": "keyword"
+                },
+                "selection_cli_loggedonuser": {
+                  "type": "keyword"
+                },
+                "selection_pwsh": {
+                  "type": "keyword"
+                },
+                "selection_temp": {
+                  "type": "keyword"
+                },
+                "filter_main_encoded_keyword": {
+                  "type": "keyword"
+                },
+                "selection_re": {
+                  "type": "keyword"
+                },
+                "filter_optional_amazonSSM": {
+                  "type": "keyword"
+                },
+                "filter_optional_defender_atp": {
+                  "type": "keyword"
+                },
+                "selection_cli_dir": {
+                  "type": "keyword"
+                },
+                "selection_cli_gc": {
+                  "type": "keyword"
+                },
+                "selection_cli_cmdlet": {
+                  "type": "keyword"
+                },
+                "selection_cli_value": {
+                  "type": "keyword"
+                },
+                "selection_encoded_modifier": {
+                  "type": "keyword"
+                },
+                "selection_encoded_direct": {
+                  "type": "keyword"
+                },
+                "selection_pwsh_binary": {
+                  "type": "keyword"
+                },
+                "selection_pwsh_cli": {
+                  "type": "keyword"
+                },
+                "selection_sc_binary": {
+                  "type": "keyword"
+                },
+                "selection_sc_tamper_cmd_stop": {
+                  "type": "keyword"
+                },
+                "selection_sc_tamper_cmd_delete": {
+                  "type": "keyword"
+                },
+                "selection_sc_tamper_cmd_disabled": {
+                  "type": "keyword"
+                },
+                "filter_encoding": {
+                  "type": "keyword"
+                },
+                "filter_azure": {
+                  "type": "keyword"
+                },
+                "selection_to_1": {
+                  "type": "keyword"
+                },
+                "selection_to_2": {
+                  "type": "keyword"
+                },
+                "selection_gen_1": {
+                  "type": "keyword"
+                },
+                "selection_gen_2": {
+                  "type": "keyword"
+                },
+                "selection_read": {
+                  "type": "keyword"
+                },
+                "selection_raw": {
+                  "type": "keyword"
+                },
+                "selection_sddl": {
+                  "type": "keyword"
+                },
+                "selection_combined_1": {
+                  "type": "keyword"
+                },
+                "selection_combined_2": {
+                  "type": "keyword"
+                },
+                "filter_main_windows_update": {
+                  "type": "keyword"
+                },
+                "filter_optional_terminal": {
+                  "type": "keyword"
+                },
+                "filter_health_service": {
+                  "type": "keyword"
+                },
+                "filter_optional_chocolatey_installer": {
+                  "type": "keyword"
+                },
+                "selection_level": {
+                  "type": "keyword"
+                },
+                "filter_main_powershell_core": {
+                  "type": "keyword"
+                },
+                "filter_msiexec": {
+                  "type": "keyword"
+                },
+                "selection_sc_net_img": {
+                  "type": "keyword"
+                },
+                "selection_powershell": {
+                  "type": "keyword"
+                },
+                "filter_main_envpath": {
+                  "type": "keyword"
+                },
+                "selection_cli_uninstall": {
+                  "type": "keyword"
+                },
+                "selection_cli_defender_feature": {
+                  "type": "keyword"
+                },
+                "selection_cli_xor": {
+                  "type": "keyword"
+                },
+                "selection_cli_other": {
+                  "type": "keyword"
+                },
+                "filter_print": {
+                  "type": "keyword"
+                },
+                "filter_main_covered_children": {
+                  "type": "keyword"
+                },
+                "selection_enum_ad": {
+                  "type": "keyword"
+                },
+                "selection_enum_exchange": {
+                  "type": "keyword"
+                },
+                "selection_runas": {
+                  "type": "keyword"
+                },
+                "selection_param1": {
+                  "type": "keyword"
+                },
+                "selection_param2": {
+                  "type": "keyword"
+                },
+                "selection_cli_suspicious": {
+                  "type": "keyword"
+                },
+                "selection_cmdline": {
+                  "type": "keyword"
+                },
+                "selection_org": {
+                  "type": "keyword"
+                },
+                "combo_exec": {
+                  "type": "keyword"
+                },
+                "combo_exec_params": {
+                  "type": "keyword"
+                },
+                "selection_parent_ext": {
+                  "type": "keyword"
+                },
+                "selection_parent_path_1": {
+                  "type": "keyword"
+                },
+                "selection_parent_path_2": {
+                  "type": "keyword"
+                },
+                "selection_attributes": {
+                  "type": "keyword"
+                },
+                "selection_specific_options": {
+                  "type": "keyword"
+                },
+                "selection_rclone_img": {
+                  "type": "keyword"
+                },
+                "selection_rclone_cli": {
+                  "type": "keyword"
+                },
+                "selection_restic": {
+                  "type": "keyword"
+                },
+                "selection_account": {
+                  "type": "keyword"
+                },
+                "selection_group_list": {
+                  "type": "keyword"
+                },
+                "selection_group_output": {
+                  "type": "keyword"
+                },
+                "selection_cli_platform": {
+                  "type": "keyword"
+                },
+                "selection_cli_verified": {
+                  "type": "keyword"
+                },
+                "filter_main_python_1": {
+                  "type": "keyword"
+                },
+                "filter_main_python_trace": {
+                  "type": "keyword"
+                },
+                "filter_optional_pip": {
+                  "type": "keyword"
+                },
+                "filter_main_normal_usecase": {
+                  "type": "keyword"
+                },
+                "selection_opt_1": {
+                  "type": "keyword"
+                },
+                "selection_opt_2": {
+                  "type": "keyword"
+                },
+                "selection_cli_folders": {
+                  "type": "keyword"
+                },
+                "selection_cli_method": {
+                  "type": "keyword"
+                },
+                "selection_cli_property": {
+                  "type": "keyword"
+                },
+                "selection_cli_dump": {
+                  "type": "keyword"
+                },
+                "selection_cli_output_process": {
+                  "type": "keyword"
+                },
+                "selection_dir": {
+                  "type": "keyword"
+                },
+                "filter_1": {
+                  "type": "keyword"
+                },
+                "filter_2": {
+                  "type": "keyword"
+                },
+                "filter_main_other_rule": {
+                  "type": "keyword"
+                },
+                "selection_cli_save": {
+                  "type": "keyword"
+                },
+                "selection_cli_path": {
+                  "type": "keyword"
+                },
+                "selection_values": {
+                  "type": "keyword"
+                },
+                "filter_main_flag": {
+                  "type": "keyword"
+                },
+                "selection_protocol": {
+                  "type": "keyword"
+                },
+                "selection_path_1": {
+                  "type": "keyword"
+                },
+                "selection_path_2": {
+                  "type": "keyword"
+                },
+                "selection_exclude_known_dirs": {
+                  "type": "keyword"
+                },
+                "filter_main_rpcproxy": {
+                  "type": "keyword"
+                },
+                "filter_main_legit_ext": {
+                  "type": "keyword"
+                },
+                "filter_optional_pascal": {
+                  "type": "keyword"
+                },
+                "filter_optional_avg": {
+                  "type": "keyword"
+                },
+                "filter_main_null_4688": {
+                  "type": "keyword"
+                },
+                "filter_main_empty_4688": {
+                  "type": "keyword"
+                },
+                "selection_safeboot": {
+                  "type": "keyword"
+                },
+                "selection_reg_flag": {
+                  "type": "keyword"
+                },
+                "selection_cli_reg_1": {
+                  "type": "keyword"
+                },
+                "selection_cli_reg_2": {
+                  "type": "keyword"
+                },
+                "selection_cli_reg_3": {
+                  "type": "keyword"
+                },
+                "selection_cli_keys": {
+                  "type": "keyword"
+                },
+                "selection_reg_add": {
+                  "type": "keyword"
+                },
+                "filter_main_enable": {
+                  "type": "keyword"
+                },
+                "selection_cli_reg_start": {
+                  "type": "keyword"
+                },
+                "selection_cli_flag": {
+                  "type": "keyword"
+                },
+                "selection_cli_hklm": {
+                  "type": "keyword"
+                },
+                "selection_cli_hive": {
+                  "type": "keyword"
+                },
+                "selection_action_add": {
+                  "type": "keyword"
+                },
+                "selection_action_delete": {
+                  "type": "keyword"
+                },
+                "reg": {
+                  "type": "keyword"
+                },
+                "hive": {
+                  "type": "keyword"
+                },
+                "selection_main_img": {
+                  "type": "keyword"
+                },
+                "selection_main_cli": {
+                  "type": "keyword"
+                },
+                "selection_values_1": {
+                  "type": "keyword"
+                },
+                "selection_values_2": {
+                  "type": "keyword"
+                },
+                "filter_main_values_tls": {
+                  "type": "keyword"
+                },
+                "selection_option_1": {
+                  "type": "keyword"
+                },
+                "selection_option_2": {
+                  "type": "keyword"
+                },
+                "selection_option_3": {
+                  "type": "keyword"
+                },
+                "selection_option_4": {
+                  "type": "keyword"
+                },
+                "selection_cli_reg_root": {
+                  "type": "keyword"
+                },
+                "selection_cli_reg_key": {
+                  "type": "keyword"
+                },
+                "selection_root_img": {
+                  "type": "keyword"
+                },
+                "selection_root_path": {
+                  "type": "keyword"
+                },
+                "selection_dword_0": {
+                  "type": "keyword"
+                },
+                "selection_dword_1": {
+                  "type": "keyword"
+                },
+                "selection_version": {
+                  "type": "keyword"
+                },
+                "filter_main_uninstall": {
+                  "type": "keyword"
+                },
+                "selection_meshagent": {
+                  "type": "keyword"
+                },
+                "selection_time": {
+                  "type": "keyword"
+                },
+                "selection_w32tm": {
+                  "type": "keyword"
+                },
+                "filter_realbrowsercore": {
+                  "type": "keyword"
+                },
+                "selection_cleanup": {
+                  "type": "keyword"
+                },
+                "selection_tunnel": {
+                  "type": "keyword"
+                },
+                "selection_accountless": {
+                  "type": "keyword"
+                },
+                "filter_main_known_names": {
+                  "type": "keyword"
+                },
+                "selection_original": {
+                  "type": "keyword"
+                },
+                "filter_main_legit_names": {
+                  "type": "keyword"
+                },
+                "filter_main_known_location": {
+                  "type": "keyword"
+                },
+                "selection_cmd_operation": {
+                  "type": "keyword"
+                },
+                "selection_ofn": {
+                  "type": "keyword"
+                },
+                "selection_cli_dump_flag": {
+                  "type": "keyword"
+                },
+                "selection_cli_eula_flag": {
+                  "type": "keyword"
+                },
+                "filter_rename": {
+                  "type": "keyword"
+                },
+                "selection_main_flag": {
+                  "type": "keyword"
+                },
+                "selection_cli_ntlm": {
+                  "type": "keyword"
+                },
+                "selection_cli_ncacn": {
+                  "type": "keyword"
+                },
+                "selection_cli_dll": {
+                  "type": "keyword"
+                },
+                "selection_cli_ordinal": {
+                  "type": "keyword"
+                },
+                "filter_main_screensaver": {
+                  "type": "keyword"
+                },
+                "filter_main_parent_cpl": {
+                  "type": "keyword"
+                },
+                "filter_main_startmenu": {
+                  "type": "keyword"
+                },
+                "selection_openasrundll": {
+                  "type": "keyword"
+                },
+                "selection_suspcli": {
+                  "type": "keyword"
+                },
+                "selection_parent_img": {
+                  "type": "keyword"
+                },
+                "selection_parent_ordinal": {
+                  "type": "keyword"
+                },
+                "selection_susp_cli_parent": {
+                  "type": "keyword"
+                },
+                "selection_susp_child_img": {
+                  "type": "keyword"
+                },
+                "filter_main_known_extension": {
+                  "type": "keyword"
+                },
+                "filter_main_localserver": {
+                  "type": "keyword"
+                },
+                "filter_main_zzzzInvokeManagedCustomActionOutOfProc": {
+                  "type": "keyword"
+                },
+                "filter_optional_EdgeUpdate": {
+                  "type": "keyword"
+                },
+                "selection_call_img": {
+                  "type": "keyword"
+                },
+                "selection_call_parent": {
+                  "type": "keyword"
+                },
+                "selection_call_cli": {
+                  "type": "keyword"
+                },
+                "filter_local_ips": {
+                  "type": "keyword"
+                },
+                "selection_schtasks": {
+                  "type": "keyword"
+                },
+                "selection_susp_images": {
+                  "type": "keyword"
+                },
+                "filter_optional_msoffice": {
+                  "type": "keyword"
+                },
+                "selection_cli_delete": {
+                  "type": "keyword"
+                },
+                "selection_cli_task": {
+                  "type": "keyword"
+                },
+                "selection_cli_disable": {
+                  "type": "keyword"
+                },
+                "selection_1_create": {
+                  "type": "keyword"
+                },
+                "selection_1_all_folders": {
+                  "type": "keyword"
+                },
+                "selection_2_parent": {
+                  "type": "keyword"
+                },
+                "selection_2_some_folders": {
+                  "type": "keyword"
+                },
+                "filter_optional_team_viewer": {
+                  "type": "keyword"
+                },
+                "filter_optional_avira_install": {
+                  "type": "keyword"
+                },
+                "filter_optional_avira_other": {
+                  "type": "keyword"
+                },
+                "selection_command": {
+                  "type": "keyword"
+                },
+                "selection_all_folders": {
+                  "type": "keyword"
+                },
+                "selection_tn": {
+                  "type": "keyword"
+                },
+                "selection_end": {
+                  "type": "keyword"
+                },
+                "selection_cli_sshd": {
+                  "type": "keyword"
+                },
+                "selection_cli_ssh": {
+                  "type": "keyword"
+                },
+                "selection_cli_create": {
+                  "type": "keyword"
+                },
+                "selection_cli_get": {
+                  "type": "keyword"
+                },
+                "filter_main_encoding": {
+                  "type": "keyword"
+                },
+                "selection_cli_encoding": {
+                  "type": "keyword"
+                },
+                "filter_privs": {
+                  "type": "keyword"
+                },
+                "selection_privs": {
+                  "type": "keyword"
+                },
+                "selection_cli_xml": {
+                  "type": "keyword"
+                },
+                "filter_main_extension_xml": {
+                  "type": "keyword"
+                },
+                "filter_main_system_process": {
+                  "type": "keyword"
+                },
+                "selection_pattern_1": {
+                  "type": "keyword"
+                },
+                "selection_pattern_2": {
+                  "type": "keyword"
+                },
+                "selection_uncommon": {
+                  "type": "keyword"
+                },
+                "selection_anomaly_1": {
+                  "type": "keyword"
+                },
+                "selection_anomaly_2": {
+                  "type": "keyword"
+                },
+                "selection_run": {
+                  "type": "keyword"
+                },
+                "selection_user": {
+                  "type": "keyword"
+                },
+                "filter_optional_teamviewer": {
+                  "type": "keyword"
+                },
+                "filter_optional_office": {
+                  "type": "keyword"
+                },
+                "scbynonadmin": {
+                  "type": "keyword"
+                },
+                "selection_binpath": {
+                  "type": "keyword"
+                },
+                "selection_failure": {
+                  "type": "keyword"
+                },
+                "filter_optional_avira_driver": {
+                  "type": "keyword"
+                },
+                "selection_sc": {
+                  "type": "keyword"
+                },
+                "selection_sdset": {
+                  "type": "keyword"
+                },
+                "selection_trustee": {
+                  "type": "keyword"
+                },
+                "selection_reg_ext": {
+                  "type": "keyword"
+                },
+                "filter_optional_iis": {
+                  "type": "keyword"
+                },
+                "filter_main_legit_extensions": {
+                  "type": "keyword"
+                },
+                "filter_main_cmd_bits": {
+                  "type": "keyword"
+                },
+                "filter_main_powershell_noprofile": {
+                  "type": "keyword"
+                },
+                "selection_flags_discovery": {
+                  "type": "keyword"
+                },
+                "selection_flags_configure": {
+                  "type": "keyword"
+                },
+                "filter_optional_valid_path": {
+                  "type": "keyword"
+                },
+                "spoolsv": {
+                  "type": "keyword"
+                },
+                "suspicious_unrestricted": {
+                  "type": "keyword"
+                },
+                "suspicious_net": {
+                  "type": "keyword"
+                },
+                "suspicious_net_filter": {
+                  "type": "keyword"
+                },
+                "suspicious_cmd": {
+                  "type": "keyword"
+                },
+                "suspicious_cmd_filter": {
+                  "type": "keyword"
+                },
+                "suspicious_netsh": {
+                  "type": "keyword"
+                },
+                "suspicious_netsh_filter": {
+                  "type": "keyword"
+                },
+                "suspicious_powershell": {
+                  "type": "keyword"
+                },
+                "suspicious_powershell_filter": {
+                  "type": "keyword"
+                },
+                "suspicious_rundll32_img": {
+                  "type": "keyword"
+                },
+                "suspicious_rundll32_cli": {
+                  "type": "keyword"
+                },
+                "selection_sql": {
+                  "type": "keyword"
+                },
+                "selection_db": {
+                  "type": "keyword"
+                },
+                "selection_tools": {
+                  "type": "keyword"
+                },
+                "selection_query": {
+                  "type": "keyword"
+                },
+                "selection_chromium": {
+                  "type": "keyword"
+                },
+                "selection_data": {
+                  "type": "keyword"
+                },
+                "selection_download_cli": {
+                  "type": "keyword"
+                },
+                "selection_download_http_keyword": {
+                  "type": "keyword"
+                },
+                "filter_optional_github_desktop": {
+                  "type": "keyword"
+                },
+                "selection_cli_img": {
+                  "type": "keyword"
+                },
+                "selection_tools_type": {
+                  "type": "keyword"
+                },
+                "selection_tools_makecab": {
+                  "type": "keyword"
+                },
+                "selection_tools_reg": {
+                  "type": "keyword"
+                },
+                "selection_tools_regedit": {
+                  "type": "keyword"
+                },
+                "selection_tools_esentutl": {
+                  "type": "keyword"
+                },
+                "selection_image_1": {
+                  "type": "keyword"
+                },
+                "selection_image_2": {
+                  "type": "keyword"
+                },
+                "filter_installer": {
+                  "type": "keyword"
+                },
+                "filter_repair": {
+                  "type": "keyword"
+                },
+                "filter_sophos": {
+                  "type": "keyword"
+                },
+                "filter_avira": {
+                  "type": "keyword"
+                },
+                "filter_avast": {
+                  "type": "keyword"
+                },
+                "filter_google_update": {
+                  "type": "keyword"
+                },
+                "selection_susp_cli": {
+                  "type": "keyword"
+                },
+                "filter_optional_sysinternals": {
+                  "type": "keyword"
+                },
+                "selection_other_dir": {
+                  "type": "keyword"
+                },
+                "selection_other_findstr": {
+                  "type": "keyword"
+                },
+                "selection_werfault": {
+                  "type": "keyword"
+                },
+                "selection_rundll32": {
+                  "type": "keyword"
+                },
+                "selection_regsvcs": {
+                  "type": "keyword"
+                },
+                "selection_regasm": {
+                  "type": "keyword"
+                },
+                "selection_regsvr32": {
+                  "type": "keyword"
+                },
+                "filter_optional_edge_update": {
+                  "type": "keyword"
+                },
+                "filter_optional_chromium_installer": {
+                  "type": "keyword"
+                },
+                "filter_main_microsoft_help": {
+                  "type": "keyword"
+                },
+                "filter_optional_foxit": {
+                  "type": "keyword"
+                },
+                "ParentUser": {
+                  "type": "keyword"
+                },
+                "filter_rundll32": {
+                  "type": "keyword"
+                },
+                "selection_cli_captcha": {
+                  "type": "keyword"
+                },
+                "selection_explorer": {
+                  "type": "keyword"
+                },
+                "selection_space_variation": {
+                  "type": "keyword"
+                },
+                "selection_special_chars": {
+                  "type": "keyword"
+                },
+                "selection_tokens": {
+                  "type": "keyword"
+                },
+                "selection_tokens_parent": {
+                  "type": "keyword"
+                },
+                "selection_other_tools": {
+                  "type": "keyword"
+                },
+                "selection_cmd_cli": {
+                  "type": "keyword"
+                },
+                "selection_pwsh_img": {
+                  "type": "keyword"
+                },
+                "selection_img_cmd": {
+                  "type": "keyword"
+                },
+                "selection_img_pwsh": {
+                  "type": "keyword"
+                },
+                "selection_img_other": {
+                  "type": "keyword"
+                },
+                "selection_tools_cmd": {
+                  "type": "keyword"
+                },
+                "selection_tools_pwsh": {
+                  "type": "keyword"
+                },
+                "selection_tools_other": {
+                  "type": "keyword"
+                },
+                "selection_target_path": {
+                  "type": "keyword"
+                },
+                "selection_target_lolbin": {
+                  "type": "keyword"
+                },
+                "selection_iwr": {
+                  "type": "keyword"
+                },
+                "selection_curl_data": {
+                  "type": "keyword"
+                },
+                "selection_wget": {
+                  "type": "keyword"
+                },
+                "payloads": {
+                  "type": "keyword"
+                },
+                "selection_child_image": {
+                  "type": "keyword"
+                },
+                "selection_child_paths": {
+                  "type": "keyword"
+                },
+                "selection_shell": {
+                  "type": "keyword"
+                },
+                "LogonId": {
+                  "type": "keyword"
+                },
+                "filter_optional_asgard": {
+                  "type": "keyword"
+                },
+                "filter_optional_ibm_spectrumprotect": {
+                  "type": "keyword"
+                },
+                "filter_main_parent_null": {
+                  "type": "keyword"
+                },
+                "filter_main_parent_empty": {
+                  "type": "keyword"
+                },
+                "selection_clear_1": {
+                  "type": "keyword"
+                },
+                "selection_clear_2": {
+                  "type": "keyword"
+                },
+                "selection_disable_1": {
+                  "type": "keyword"
+                },
+                "selection_disable_2": {
+                  "type": "keyword"
+                },
+                "selection_disable_3": {
+                  "type": "keyword"
+                },
+                "selection_wevtutil_img": {
+                  "type": "keyword"
+                },
+                "selection_wevtutil_cmd": {
+                  "type": "keyword"
+                },
+                "selection_other_ps_img": {
+                  "type": "keyword"
+                },
+                "selection_other_ps_cmd": {
+                  "type": "keyword"
+                },
+                "selection_other_wmi": {
+                  "type": "keyword"
+                },
+                "selection_wmi": {
+                  "type": "keyword"
+                },
+                "selection_wevtutil_cli": {
+                  "type": "keyword"
+                },
+                "selection_wmic_img": {
+                  "type": "keyword"
+                },
+                "selection_wmic_cli": {
+                  "type": "keyword"
+                },
+                "selection_logs_name": {
+                  "type": "keyword"
+                },
+                "selection_logs_eid": {
+                  "type": "keyword"
+                },
+                "filter_optional_ibm": {
+                  "type": "keyword"
+                },
+                "selection_exec_parent": {
+                  "type": "keyword"
+                },
+                "selection_cli_lolbin": {
+                  "type": "keyword"
+                },
+                "folder": {
+                  "type": "keyword"
+                },
+                "image_absolute_path": {
+                  "type": "keyword"
+                },
+                "filter_4688": {
+                  "type": "keyword"
+                },
+                "filter_optional_mpcmdrun": {
+                  "type": "keyword"
+                },
+                "filter_optional_compatTelRunner": {
+                  "type": "keyword"
+                },
+                "selection_jwt_string": {
+                  "type": "keyword"
+                },
+                "selection_other_img": {
+                  "type": "keyword"
+                },
+                "selection_other_cmdkey": {
+                  "type": "keyword"
+                },
+                "filter_cmd": {
+                  "type": "keyword"
+                },
+                "selection_net": {
+                  "type": "keyword"
+                },
+                "filter_net": {
+                  "type": "keyword"
+                },
+                "filter_main_currentdirectory": {
+                  "type": "keyword"
+                },
+                "selection_loop": {
+                  "type": "keyword"
+                },
+                "selection_tshark": {
+                  "type": "keyword"
+                },
+                "selection_windump": {
+                  "type": "keyword"
+                },
+                "known_image_extension": {
+                  "type": "keyword"
+                },
+                "filter_main_image": {
+                  "type": "keyword"
+                },
+                "filter_main_msi_installers": {
+                  "type": "keyword"
+                },
+                "filter_main_driver_store": {
+                  "type": "keyword"
+                },
+                "filter_main_msi_rollbackfiles": {
+                  "type": "keyword"
+                },
+                "filter_main_deleted": {
+                  "type": "keyword"
+                },
+                "filter_optional_nvidia": {
+                  "type": "keyword"
+                },
+                "filter_optional_winpakpro": {
+                  "type": "keyword"
+                },
+                "filter_optional_myq_server": {
+                  "type": "keyword"
+                },
+                "filter_optional_lzma_exe": {
+                  "type": "keyword"
+                },
+                "filter_optional_docker": {
+                  "type": "keyword"
+                },
+                "selection_tool": {
+                  "type": "keyword"
+                },
+                "selection_oneliner_1": {
+                  "type": "keyword"
+                },
+                "selection_onliner_2": {
+                  "type": "keyword"
+                },
+                "selection_onliner_3": {
+                  "type": "keyword"
+                },
+                "set1_selection_ntds_dit": {
+                  "type": "keyword"
+                },
+                "set1_selection_image_folder": {
+                  "type": "keyword"
+                },
+                "filter_main_installers": {
+                  "type": "keyword"
+                },
+                "filter_optional_installshield": {
+                  "type": "keyword"
+                },
+                "filter_main_generic_parent": {
+                  "type": "keyword"
+                },
+                "filter_optional_winzip": {
+                  "type": "keyword"
+                },
+                "filter_optional_vcred": {
+                  "type": "keyword"
+                },
+                "selection_ip_1": {
+                  "type": "keyword"
+                },
+                "selection_ip_2": {
+                  "type": "keyword"
+                },
+                "selection_ip_3": {
+                  "type": "keyword"
+                },
+                "filter_main_valid_ip": {
+                  "type": "keyword"
+                },
+                "filter_special": {
+                  "type": "keyword"
+                },
+                "filter_sys": {
+                  "type": "keyword"
+                },
+                "filter_msmpeng": {
+                  "type": "keyword"
+                },
+                "selection_proc_image": {
+                  "type": "keyword"
+                },
+                "selection_proc_flags": {
+                  "type": "keyword"
+                },
+                "selection_proc_original": {
+                  "type": "keyword"
+                },
+                "selection_posh": {
+                  "type": "keyword"
+                },
+                "susp_binpath": {
+                  "type": "keyword"
+                },
+                "selection_tools_img": {
+                  "type": "keyword"
+                },
+                "selection_tools_cli": {
+                  "type": "keyword"
+                },
+                "selection_services": {
+                  "type": "keyword"
+                },
+                "selection1_img": {
+                  "type": "keyword"
+                },
+                "selection1_cli": {
+                  "type": "keyword"
+                },
+                "selection2_img": {
+                  "type": "keyword"
+                },
+                "selection2_cli": {
+                  "type": "keyword"
+                },
+                "selection3_img": {
+                  "type": "keyword"
+                },
+                "selection3_cli": {
+                  "type": "keyword"
+                },
+                "filter_ccmcache": {
+                  "type": "keyword"
+                },
+                "filter_amazon": {
+                  "type": "keyword"
+                },
+                "filter_nessus": {
+                  "type": "keyword"
+                },
+                "filter_sccm_install": {
+                  "type": "keyword"
+                },
+                "filter_main_ngen": {
+                  "type": "keyword"
+                },
+                "filter_optional_system32": {
+                  "type": "keyword"
+                },
+                "filter_main_wsl_programfiles": {
+                  "type": "keyword"
+                },
+                "filter_main_wsl_appdata": {
+                  "type": "keyword"
+                },
+                "filter_main_ping": {
+                  "type": "keyword"
+                },
+                "filter_config_mgr": {
+                  "type": "keyword"
+                },
+                "filter_main_netlogon": {
+                  "type": "keyword"
+                },
+                "reduction1": {
+                  "type": "keyword"
+                },
+                "reduction2": {
+                  "type": "keyword"
+                },
+                "selection_child_vscode_tunnel": {
+                  "type": "keyword"
+                },
+                "selection_child_msiexec": {
+                  "type": "keyword"
+                },
+                "selection_child_powershell": {
+                  "type": "keyword"
+                },
+                "filter_main_img_location": {
+                  "type": "keyword"
+                },
+                "filter_main_ofn": {
+                  "type": "keyword"
+                },
+                "filter_main_flags": {
+                  "type": "keyword"
+                },
+                "filter_optional_mrt": {
+                  "type": "keyword"
+                },
+                "selection_sys": {
+                  "type": "keyword"
+                },
+                "selection_cli_eventlog": {
+                  "type": "keyword"
+                },
+                "filter_main_exclude_coverage": {
+                  "type": "keyword"
+                },
+                "selection_arm64": {
+                  "type": "keyword"
+                },
+                "filter_valid": {
+                  "type": "keyword"
+                },
+                "filter_optional_openvpn": {
+                  "type": "keyword"
+                },
+                "filter_optional_protonvpn": {
+                  "type": "keyword"
+                },
+                "selection_extract": {
+                  "type": "keyword"
+                },
+                "filter_main_legit_locations": {
+                  "type": "keyword"
+                },
+                "selection_integrity": {
+                  "type": "keyword"
+                },
+                "selection_img_1": {
+                  "type": "keyword"
+                },
+                "selection_img_2": {
+                  "type": "keyword"
+                },
+                "filter_optional_logonscripts": {
+                  "type": "keyword"
+                },
+                "filter_optional_windows_core": {
+                  "type": "keyword"
+                },
+                "filter_optional_proquota": {
+                  "type": "keyword"
+                },
+                "filter_optional_image_null": {
+                  "type": "keyword"
+                },
+                "selection_cli_paths_root": {
+                  "type": "keyword"
+                },
+                "selection_cli_paths_suffix": {
+                  "type": "keyword"
+                },
+                "filter_main_runtimebroker": {
+                  "type": "keyword"
+                },
+                "selection_bin_img": {
+                  "type": "keyword"
+                },
+                "selection_bin_cli": {
+                  "type": "keyword"
+                },
+                "filter_main_vmwaretools_script": {
+                  "type": "keyword"
+                },
+                "selection_children_images": {
+                  "type": "keyword"
+                },
+                "selection_children_cli": {
+                  "type": "keyword"
+                },
+                "selection_children_paths": {
+                  "type": "keyword"
+                },
+                "selection_only_tunnel": {
+                  "type": "keyword"
+                },
+                "selection_tunnel_args": {
+                  "type": "keyword"
+                },
+                "selection_parent_tunnel": {
+                  "type": "keyword"
+                },
+                "selection_image_only_tunnel": {
+                  "type": "keyword"
+                },
+                "selection_image_tunnel_args": {
+                  "type": "keyword"
+                },
+                "selection_image_tunnel_service": {
+                  "type": "keyword"
+                },
+                "filter_main_parent_code": {
+                  "type": "keyword"
+                },
+                "filter_main_image_code": {
+                  "type": "keyword"
+                },
+                "selection_cli_start": {
+                  "type": "keyword"
+                },
+                "selection_cli_launch": {
+                  "type": "keyword"
+                },
+                "filter_main_keep_versions": {
+                  "type": "keyword"
+                },
+                "selection_backup": {
+                  "type": "keyword"
+                },
+                "selection_origin": {
+                  "type": "keyword"
+                },
+                "selection_webserver_image": {
+                  "type": "keyword"
+                },
+                "selection_webserver_characteristics_tomcat1": {
+                  "type": "keyword"
+                },
+                "selection_webserver_characteristics_tomcat2": {
+                  "type": "keyword"
+                },
+                "selection_child_3": {
+                  "type": "keyword"
+                },
+                "selection_child_4": {
+                  "type": "keyword"
+                },
+                "selection_child_5": {
+                  "type": "keyword"
+                },
+                "selection_child_6": {
+                  "type": "keyword"
+                },
+                "selection_susp_net_utility": {
+                  "type": "keyword"
+                },
+                "selection_susp_ping_utility": {
+                  "type": "keyword"
+                },
+                "selection_susp_change_dir": {
+                  "type": "keyword"
+                },
+                "selection_susp_wmic_utility": {
+                  "type": "keyword"
+                },
+                "selection_susp_powershell_cli": {
+                  "type": "keyword"
+                },
+                "selection_susp_misc_discovery_binaries": {
+                  "type": "keyword"
+                },
+                "selection_susp_misc_discovery_commands": {
+                  "type": "keyword"
+                },
+                "selection_anomaly_children": {
+                  "type": "keyword"
+                },
+                "filter_main_fp_1": {
+                  "type": "keyword"
+                },
+                "filter_main_fp_2": {
+                  "type": "keyword"
+                },
+                "filter_lsass": {
+                  "type": "keyword"
+                },
+                "where_exe": {
+                  "type": "keyword"
+                },
+                "where_opt": {
+                  "type": "keyword"
+                },
+                "filter_main_known_parents": {
+                  "type": "keyword"
+                },
+                "filter_optional_ms_monitoring_agent": {
+                  "type": "keyword"
+                },
+                "filter_builtin_visual_studio_shell": {
+                  "type": "keyword"
+                },
+                "filter_open_settings": {
+                  "type": "keyword"
+                },
+                "filter_vsdevcmd": {
+                  "type": "keyword"
+                },
+                "selection_source_direct_ip": {
+                  "type": "keyword"
+                },
+                "selection_install_flag": {
+                  "type": "keyword"
+                },
+                "selection_manifest_flag": {
+                  "type": "keyword"
+                },
+                "filter_main_unrar": {
+                  "type": "keyword"
+                },
+                "filter_optional_temp": {
+                  "type": "keyword"
+                },
+                "contains_format_pretty_arg": {
+                  "type": "keyword"
+                },
+                "image_from_system_folder": {
+                  "type": "keyword"
+                },
+                "contains_winrm": {
+                  "type": "keyword"
+                },
+                "selection_local_ip": {
+                  "type": "keyword"
+                },
+                "filter_main_remote": {
+                  "type": "keyword"
+                },
+                "selection_winzip": {
+                  "type": "keyword"
+                },
+                "selection_child_cli_flags_s": {
+                  "type": "keyword"
+                },
+                "selection_child_cli_flags_f": {
+                  "type": "keyword"
+                },
+                "selection_child_cli_flags_t": {
+                  "type": "keyword"
+                },
+                "selection_child_cli_flags_m": {
+                  "type": "keyword"
+                },
+                "selection_child_cli_flags_a": {
+                  "type": "keyword"
+                },
+                "selection_child_cli_flags_u": {
+                  "type": "keyword"
+                },
+                "filter_main_winlogon": {
+                  "type": "keyword"
+                },
+                "filter_main_creation": {
+                  "type": "keyword"
+                },
+                "filter_main_call_operations": {
+                  "type": "keyword"
+                },
+                "filter_main_win32_methods": {
+                  "type": "keyword"
+                },
+                "selection_wmic": {
+                  "type": "keyword"
+                },
+                "selection_product": {
+                  "type": "keyword"
+                },
+                "filter_main_known_format": {
+                  "type": "keyword"
+                },
+                "filter_main_remote_operation": {
+                  "type": "keyword"
+                },
+                "filter_logonid": {
+                  "type": "keyword"
+                },
+                "filter_system_user": {
+                  "type": "keyword"
+                },
+                "filter_wmiprvse": {
+                  "type": "keyword"
+                },
+                "filter_werfault": {
+                  "type": "keyword"
+                },
+                "selection_children_1": {
+                  "type": "keyword"
+                },
+                "selection_children_2": {
+                  "type": "keyword"
+                },
+                "filter_conhost": {
+                  "type": "keyword"
+                },
+                "filter_oleconverter": {
+                  "type": "keyword"
+                },
+                "selection_cli_script_main": {
+                  "type": "keyword"
+                },
+                "selection_cli_script_option_mshta": {
+                  "type": "keyword"
+                },
+                "selection_cli_script_option_other": {
+                  "type": "keyword"
+                },
+                "selection_cli_standalone": {
+                  "type": "keyword"
+                },
+                "filter_main_rundll32_known_exports": {
+                  "type": "keyword"
+                },
+                "selection_wsl_img": {
+                  "type": "keyword"
+                },
+                "selection_wsl_install": {
+                  "type": "keyword"
+                },
+                "selection_wsl_kali": {
+                  "type": "keyword"
+                },
+                "selection_img_appdata": {
+                  "type": "keyword"
+                },
+                "selection_img_windowsapps": {
+                  "type": "keyword"
+                },
+                "selection_kali_wsl_parent": {
+                  "type": "keyword"
+                },
+                "selection_kali_wsl_child": {
+                  "type": "keyword"
+                },
+                "filter_main_install_uninstall": {
+                  "type": "keyword"
+                },
+                "filter_main_wuaueng": {
+                  "type": "keyword"
+                },
+                "selection_paths_1": {
+                  "type": "keyword"
+                },
+                "selection_paths_2": {
+                  "type": "keyword"
+                },
+                "filter_main_msu": {
+                  "type": "keyword"
+                },
+                "Type": {
+                  "type": "keyword"
+                },
+                "filter_optional_edge": {
+                  "type": "keyword"
+                },
+                "filter_main_floppy": {
+                  "type": "keyword"
+                },
+                "Device": {
+                  "type": "keyword"
+                },
+                "filter_main_system_images": {
+                  "type": "keyword"
+                },
+                "filter_main_windefender": {
+                  "type": "keyword"
+                },
+                "filter_main_microsoft_appdata": {
+                  "type": "keyword"
+                },
+                "filter_main_ssd_nvme": {
+                  "type": "keyword"
+                },
+                "filter_main_systemsettings": {
+                  "type": "keyword"
+                },
+                "filter_optional_Keybase": {
+                  "type": "keyword"
+                },
+                "filter_main_default_keys": {
+                  "type": "keyword"
+                },
+                "filter_main_generic_prorams": {
+                  "type": "keyword"
+                },
+                "filter_main_openwith": {
+                  "type": "keyword"
+                },
+                "filter_optional_wireshark": {
+                  "type": "keyword"
+                },
+                "filter_optional_peazip": {
+                  "type": "keyword"
+                },
+                "filter_optional_everything": {
+                  "type": "keyword"
+                },
+                "filter_optional_uninstallers": {
+                  "type": "keyword"
+                },
+                "filter_optional_edgeupdate": {
+                  "type": "keyword"
+                },
+                "filter_optional_installer_temp": {
+                  "type": "keyword"
+                },
+                "filter_optional_ninite": {
+                  "type": "keyword"
+                },
+                "filter_optional_spotify": {
+                  "type": "keyword"
+                },
+                "HKLM": {
+                  "type": "keyword"
+                },
+                "selection_regkey": {
+                  "type": "keyword"
+                },
+                "selection_value_lmcompatibilitylevel": {
+                  "type": "keyword"
+                },
+                "selection_value_ntlmminclientsec": {
+                  "type": "keyword"
+                },
+                "selection_value_restrictsendingntlmtraffic": {
+                  "type": "keyword"
+                },
+                "NewName": {
+                  "type": "keyword"
+                },
+                "filter_sel3": {
+                  "type": "keyword"
+                },
+                "selection_registry": {
+                  "type": "keyword"
+                },
+                "filter_atbroker": {
+                  "type": "keyword"
+                },
+                "filter_uninstallers": {
+                  "type": "keyword"
+                },
+                "filter_domain_controller": {
+                  "type": "keyword"
+                },
+                "filter_main_binary_data": {
+                  "type": "keyword"
+                },
+                "filter_main_wscript_legit_1": {
+                  "type": "keyword"
+                },
+                "filter_main_wscript_legit_2": {
+                  "type": "keyword"
+                },
+                "filter_optional_mbamservice": {
+                  "type": "keyword"
+                },
+                "filter_optional_cutepdf": {
+                  "type": "keyword"
+                },
+                "filter_optional_monvnc": {
+                  "type": "keyword"
+                },
+                "filter_optional_vnc": {
+                  "type": "keyword"
+                },
+                "selection_classes_base": {
+                  "type": "keyword"
+                },
+                "selection_classes_target": {
+                  "type": "keyword"
+                },
+                "filter_main_drivers": {
+                  "type": "keyword"
+                },
+                "filter_main_poqexec": {
+                  "type": "keyword"
+                },
+                "filter_optional_IE": {
+                  "type": "keyword"
+                },
+                "filter_optional_integrator": {
+                  "type": "keyword"
+                },
+                "system_control_base": {
+                  "type": "keyword"
+                },
+                "system_control_keys": {
+                  "type": "keyword"
+                },
+                "filter_cutepdf": {
+                  "type": "keyword"
+                },
+                "filter_onenote": {
+                  "type": "keyword"
+                },
+                "filter_poqexec": {
+                  "type": "keyword"
+                },
+                "filter_realvnc": {
+                  "type": "keyword"
+                },
+                "selection_current_version_base": {
+                  "type": "keyword"
+                },
+                "selection_current_version_keys": {
+                  "type": "keyword"
+                },
+                "filter_main_generic_all": {
+                  "type": "keyword"
+                },
+                "filter_main_logonui": {
+                  "type": "keyword"
+                },
+                "filter_main_edge": {
+                  "type": "keyword"
+                },
+                "filter_main_teams": {
+                  "type": "keyword"
+                },
+                "filter_main_ctfmon": {
+                  "type": "keyword"
+                },
+                "filter_optional_opera_1": {
+                  "type": "keyword"
+                },
+                "filter_optional_opera_2": {
+                  "type": "keyword"
+                },
+                "filter_optional_itunes": {
+                  "type": "keyword"
+                },
+                "filter_optional_greenshot": {
+                  "type": "keyword"
+                },
+                "filter_optional_googledrive1": {
+                  "type": "keyword"
+                },
+                "filter_optional_googledrive2": {
+                  "type": "keyword"
+                },
+                "filter_optional_python": {
+                  "type": "keyword"
+                },
+                "filter_optional_officeclicktorun": {
+                  "type": "keyword"
+                },
+                "filter_optional_AVG_setup": {
+                  "type": "keyword"
+                },
+                "filter_optional_Avast": {
+                  "type": "keyword"
+                },
+                "filter_optional_AVG_avgtoolsvc": {
+                  "type": "keyword"
+                },
+                "filter_optional_aurora_dashboard": {
+                  "type": "keyword"
+                },
+                "selection_nt_current_version_base": {
+                  "type": "keyword"
+                },
+                "selection_nt_current_version": {
+                  "type": "keyword"
+                },
+                "filter_main_legitimate_subkey": {
+                  "type": "keyword"
+                },
+                "filter_main_security_extension_dc": {
+                  "type": "keyword"
+                },
+                "filter_optional_avguard": {
+                  "type": "keyword"
+                },
+                "filter_optional_ngen": {
+                  "type": "keyword"
+                },
+                "ie": {
+                  "type": "keyword"
+                },
+                "ie_details": {
+                  "type": "keyword"
+                },
+                "filter_extensions": {
+                  "type": "keyword"
+                },
+                "filter_toolbar": {
+                  "type": "keyword"
+                },
+                "selection_office_root": {
+                  "type": "keyword"
+                },
+                "selection_office_details": {
+                  "type": "keyword"
+                },
+                "filter_main_known_addins": {
+                  "type": "keyword"
+                },
+                "filter_main_officeclicktorun": {
+                  "type": "keyword"
+                },
+                "filter_main_vsto": {
+                  "type": "keyword"
+                },
+                "session_manager_base": {
+                  "type": "keyword"
+                },
+                "session_manager": {
+                  "type": "keyword"
+                },
+                "scripts_base": {
+                  "type": "keyword"
+                },
+                "scripts": {
+                  "type": "keyword"
+                },
+                "winsock_parameters_base": {
+                  "type": "keyword"
+                },
+                "winsock_parameters": {
+                  "type": "keyword"
+                },
+                "selection_wow_current_version_base": {
+                  "type": "keyword"
+                },
+                "selection_wow_current_version_keys": {
+                  "type": "keyword"
+                },
+                "filter_main_ms_win_desktop_runtime": {
+                  "type": "keyword"
+                },
+                "filter_main_upgrades": {
+                  "type": "keyword"
+                },
+                "filter_main_uninstallers": {
+                  "type": "keyword"
+                },
+                "filter_optional_msoffice1": {
+                  "type": "keyword"
+                },
+                "filter_optional_msoffice2": {
+                  "type": "keyword"
+                },
+                "filter_optional_dotnet": {
+                  "type": "keyword"
+                },
+                "filter_optional_avg_1": {
+                  "type": "keyword"
+                },
+                "filter_optional_avg_2": {
+                  "type": "keyword"
+                },
+                "wow_classes_base": {
+                  "type": "keyword"
+                },
+                "wow_classes": {
+                  "type": "keyword"
+                },
+                "selection_wow_nt_current_version_base": {
+                  "type": "keyword"
+                },
+                "selection_wow_nt_current_version": {
+                  "type": "keyword"
+                },
+                "filter_main_file_exec_options": {
+                  "type": "keyword"
+                },
+                "filter_main_default": {
+                  "type": "keyword"
+                },
+                "filter_main_port": {
+                  "type": "keyword"
+                },
+                "filter_main_trustedinstaller": {
+                  "type": "keyword"
+                },
+                "chrome_ext": {
+                  "type": "keyword"
+                },
+                "chrome_vpn": {
+                  "type": "keyword"
+                },
+                "selection_details": {
+                  "type": "keyword"
+                },
+                "selection_service_start": {
+                  "type": "keyword"
+                },
+                "selection_service_imagepath": {
+                  "type": "keyword"
+                },
+                "selection_values_3": {
+                  "type": "keyword"
+                },
+                "filter_optional_ec2launch": {
+                  "type": "keyword"
+                },
+                "filter_msmpeng_client": {
+                  "type": "keyword"
+                },
+                "filter_msmpeng_domain_controller": {
+                  "type": "keyword"
+                },
+                "filter_main_wevtutil": {
+                  "type": "keyword"
+                },
+                "selection_set_1": {
+                  "type": "keyword"
+                },
+                "selection_set_0": {
+                  "type": "keyword"
+                },
+                "selection_key_1": {
+                  "type": "keyword"
+                },
+                "selection_key_2": {
+                  "type": "keyword"
+                },
+                "filter_main_wevutil": {
+                  "type": "keyword"
+                },
+                "filter_main_iis": {
+                  "type": "keyword"
+                },
+                "filter_main_trusted_installer": {
+                  "type": "keyword"
+                },
+                "root": {
+                  "type": "keyword"
+                },
+                "selection_autorun": {
+                  "type": "keyword"
+                },
+                "selection_pre_after": {
+                  "type": "keyword"
+                },
+                "selection_edge": {
+                  "type": "keyword"
+                },
+                "selection_chrome": {
+                  "type": "keyword"
+                },
+                "filter_main_default_value": {
+                  "type": "keyword"
+                },
+                "selection_HideFileExt": {
+                  "type": "keyword"
+                },
+                "selection_Hidden": {
+                  "type": "keyword"
+                },
+                "filter_valid_procs": {
+                  "type": "keyword"
+                },
+                "filter_main_sqlserver": {
+                  "type": "keyword"
+                },
+                "filter_optional_office_access": {
+                  "type": "keyword"
+                },
+                "selection_values_0": {
+                  "type": "keyword"
+                },
+                "selection_word": {
+                  "type": "keyword"
+                },
+                "selection_excel": {
+                  "type": "keyword"
+                },
+                "filter_main_outlook": {
+                  "type": "keyword"
+                },
+                "filter_exclude_known_paths": {
+                  "type": "keyword"
+                },
+                "selection_debug": {
+                  "type": "keyword"
+                },
+                "selection_default": {
+                  "type": "keyword"
+                },
+                "selection_target_root": {
+                  "type": "keyword"
+                },
+                "selection_target_builtin_clsid": {
+                  "type": "keyword"
+                },
+                "filter_main_ms_trusted": {
+                  "type": "keyword"
+                },
+                "filter_main_generic_locations": {
+                  "type": "keyword"
+                },
+                "filter_default_redirect_program": {
+                  "type": "keyword"
+                },
+                "filter_default_redirect_program_cli": {
+                  "type": "keyword"
+                },
+                "filter_url": {
+                  "type": "keyword"
+                },
+                "filter_cleaner": {
+                  "type": "keyword"
+                },
+                "selection_global_flag": {
+                  "type": "keyword"
+                },
+                "selection_silent_process": {
+                  "type": "keyword"
+                },
+                "filter_main_dword": {
+                  "type": "keyword"
+                },
+                "filter_main_binary": {
+                  "type": "keyword"
+                },
+                "filter_optional_accepted_documents": {
+                  "type": "keyword"
+                },
+                "selection_clsid": {
+                  "type": "keyword"
+                },
+                "filter_default_targets": {
+                  "type": "keyword"
+                },
+                "filter_generic_paths": {
+                  "type": "keyword"
+                },
+                "filter_main_integrator": {
+                  "type": "keyword"
+                },
+                "selection_value_stamp": {
+                  "type": "keyword"
+                },
+                "selection_value_url": {
+                  "type": "keyword"
+                },
+                "filter_main_empty_string": {
+                  "type": "keyword"
+                },
+                "filter_main_empty_value": {
+                  "type": "keyword"
+                },
+                "selection_value_default_file_type_rsik": {
+                  "type": "keyword"
+                },
+                "selection_value_low_risk_filetypes": {
+                  "type": "keyword"
+                },
+                "selection_value_hide_zone_info": {
+                  "type": "keyword"
+                },
+                "selection_value_save_zone_info": {
+                  "type": "keyword"
+                },
+                "selection_value_scan_with_av": {
+                  "type": "keyword"
+                },
+                "selection_susp_pattern": {
+                  "type": "keyword"
+                },
+                "selection_ocilib": {
+                  "type": "keyword"
+                },
+                "filter_main_ocilib_file": {
+                  "type": "keyword"
+                },
+                "selection_ocilibpath": {
+                  "type": "keyword"
+                },
+                "filter_main_ocilibpath": {
+                  "type": "keyword"
+                },
+                "filter_main_image_names": {
+                  "type": "keyword"
+                },
+                "selection_powershell_command": {
+                  "type": "keyword"
+                },
+                "selection_powershell_susp_keywords": {
+                  "type": "keyword"
+                },
+                "selection_wmic_command": {
+                  "type": "keyword"
+                },
+                "selection_wmic_susp_keywords": {
+                  "type": "keyword"
+                },
+                "registry": {
+                  "type": "keyword"
+                },
+                "filter_main_sentinelone_default_scan_binary": {
+                  "type": "keyword"
+                },
+                "filter_main_sentinelone_binary": {
+                  "type": "keyword"
+                },
+                "filter_main_printextensionmanger": {
+                  "type": "keyword"
+                },
+                "filter_main_domain_controller": {
+                  "type": "keyword"
+                },
+                "filter_optional_safetica": {
+                  "type": "keyword"
+                },
+                "filter_vnc": {
+                  "type": "keyword"
+                },
+                "filter_pdf24": {
+                  "type": "keyword"
+                },
+                "filter_main_details_null": {
+                  "type": "keyword"
+                },
+                "filter_main_programdata_startup": {
+                  "type": "keyword"
+                },
+                "filter_main_userprofile_startup_1": {
+                  "type": "keyword"
+                },
+                "filter_main_userprofile_startup_2": {
+                  "type": "keyword"
+                },
+                "filter_main_mousocoreworker": {
+                  "type": "keyword"
+                },
+                "filter_main_services": {
+                  "type": "keyword"
+                },
+                "filter_optional_dropbox_updater": {
+                  "type": "keyword"
+                },
+                "selection_shadow": {
+                  "type": "keyword"
+                },
+                "selection_terminal_services_key": {
+                  "type": "keyword"
+                },
+                "selection_tamper_only": {
+                  "type": "keyword"
+                },
+                "filter_main_securitylayer_tls": {
+                  "type": "keyword"
+                },
+                "filter_main_w32time": {
+                  "type": "keyword"
+                },
+                "filter_office": {
+                  "type": "keyword"
+                },
+                "filter_office2": {
+                  "type": "keyword"
+                },
+                "filter_misexec": {
+                  "type": "keyword"
+                },
+                "filter_dotnet": {
+                  "type": "keyword"
+                },
+                "filter_optional_symantec": {
+                  "type": "keyword"
+                },
+                "selection_error": {
+                  "type": "keyword"
+                },
+                "filter_generic_english": {
+                  "type": "keyword"
+                },
+                "filter_by_errorcode": {
+                  "type": "keyword"
+                },
+                "selection_stop": {
+                  "type": "keyword"
+                },
+                "State": {
+                  "type": "keyword"
+                },
+                "selection_conf": {
+                  "type": "keyword"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
