@@ -72,42 +72,7 @@ public class XmlParserUtilsTest {
         assertEquals("4000", eventData.get("ParentProcessId"));
     }
 
-    @Test
-    public void testEcsNormalization() {
-        String xml = "<Event xmlns=\"http://schemas.microsoft.com/win/2004/08/events/event\">" +
-                "<System><Provider Name=\"Microsoft-Windows-Sysmon\"/><EventID>1</EventID></System>" +
-                "<EventData>" +
-                "<Data Name=\"ProcessId\">5000</Data>" +
-                "<Data Name=\"Image\">C:\\Windows\\System32\\cmd.exe</Data>" +
-                "<Data Name=\"CommandLine\">cmd.exe /c test</Data>" +
-                "<Data Name=\"User\">DOMAIN\\User</Data>" +
-                "</EventData></Event>";
 
-        WindowsEventNormalizerConfig config = new WindowsEventNormalizerConfig();
-        WindowsEventNormalizer normalizer = new WindowsEventNormalizer(config);
-
-        Event event = JacksonEvent.builder()
-                .withEventType("event")
-                .withData(Map.of("data", xml))
-                .build();
-
-        Record<Event> record = new Record<>(event);
-        Collection<Record<Event>> results = normalizer.execute(Collections.singletonList(record));
-
-        Event processedEvent = results.iterator().next().getData();
-
-        // ECS process fields still work (safeGetInt handles string→int)
-        Map<String, Object> process = processedEvent.get("process", Map.class);
-        assertNotNull(process);
-        assertEquals(5000, process.get("pid"));
-        assertEquals("C:\\Windows\\System32\\cmd.exe", process.get("executable"));
-        assertEquals("cmd.exe", process.get("name"));
-        assertEquals("cmd.exe /c test", process.get("command_line"));
-
-        Map<String, Object> user = processedEvent.get("user", Map.class);
-        assertNotNull(user);
-        assertEquals("DOMAIN\\User", user.get("name"));
-    }
 
     @SuppressWarnings("unchecked")
     @Test
@@ -124,6 +89,14 @@ public class XmlParserUtilsTest {
         Collection<Record<Event>> results = normalizer.execute(Collections.singletonList(record));
         Event processedEvent = results.iterator().next().getData();
 
+        // Verify @timestamp exists
+        assertEquals("2026-06-30T10:00:00.000000Z", processedEvent.get("@timestamp", String.class));
+
+        // Verify NO event, host, or computerObject objects are produced
+        // (OSSA handles all ECS mapping automatically)
+        assertNull(processedEvent.get("event", Map.class), "event object must NOT exist — OSSA handles ECS");
+        assertNull(processedEvent.get("host", Map.class), "host object must NOT exist — OSSA handles ECS");
+
         // Verify winlog top-level fields
         Map<String, Object> winlog = processedEvent.get("winlog", Map.class);
         assertNotNull(winlog, "winlog object must exist");
@@ -132,10 +105,8 @@ public class XmlParserUtilsTest {
         assertEquals("Microsoft-Windows-Sysmon/Operational", winlog.get("channel"));
         assertEquals("TEST-PC", winlog.get("computer_name"));
 
-        // Verify computerObject
-        Map<String, Object> computerObj = (Map<String, Object>) winlog.get("computerObject");
-        assertNotNull(computerObj);
-        assertEquals("TEST-PC", computerObj.get("name"));
+        // Verify NO computerObject (not in OSSA spec)
+        assertNull(winlog.get("computerObject"), "computerObject must NOT exist — not in OSSA spec");
 
         // Verify event_data contains EventData fields as strings
         Map<String, Object> eventData = (Map<String, Object>) winlog.get("event_data");
