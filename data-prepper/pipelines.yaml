@@ -1,24 +1,16 @@
-# Pipeline: Parse Windows Event XML and map to Sigma-compatible fields
-# Field names match sigma-loader/sigma/pipeline.yml for alert generation
+# Pipeline: Parse Windows Event XML via custom processor plugin
+# Fields are written flat at document root matching OSSA raw_field names
+# (CommandLine, EventID, SubjectUserName, etc.) for 100% auto-mapping.
 #
 # ARCHITECTURE:
-#   Agent â†’ TCP (compact NDJSON) â†’ Fluent Bit (rename keys) â†’ Data Prepper (this) â†’ OpenSearch
+#   Agent → TCP (compact NDJSON) → Fluent Bit (rename keys) → Data Prepper (this) → OpenSearch
 #   The 'data' field contains raw Windows Event XML when source_type=winevent
 #
-# COVERAGE: Matches normalizer.cpp + sysmon_parser.cpp field extraction
-#   - System fields (EventID, Provider, Channel, Level, etc.)
-#   - Process (Event 1, 4688) + Parent Process
-#   - File (Event 11, 23, 4663, Code Integrity 3033)
-#   - Network (Event 3, 22, 5140/5145)
-#   - Registry (Event 12/13/14, 4657)
-#   - Authentication (Event 4624/4625/4648)
-#   - Image Load (Sysmon Event 7)
-#   - Pipe (Sysmon Event 17/18)
-#   - Remote Thread (Sysmon Event 8)
-#   - Process Access (Sysmon Event 10)
-#   - WMI Activity (Event 5857-5861)
-#   - PowerShell (Event 4104)
-#   - Service (Event 7045)
+# OUTPUT STRUCTURE (flat at root):
+#   EventID, Provider_Name, Channel, ComputerName  — from <System> block
+#   CommandLine, Image, SubjectUserName, ...        — from <EventData> block
+#   @timestamp                                      — from TimeCreated_SystemTime
+
 
 rp-events-pipeline:
   source:
@@ -29,41 +21,17 @@ rp-events-pipeline:
         unauthenticated:
 
   processor:
-    # ─── STAGE 1-3: Custom Windows Event XML Normalizer ───────────────
-    - windows_event_normalizer:
+    # ─── Parse Windows Event XML → flat raw_field output ────────────────
+    - windows_xml_parser:
         source_field: "data"
-        drop_raw_xml: false
-
-    # â”€â”€â”€ STAGE 4: Parse FIM JSON data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    - parse_json:
-        source: "data"
-        destination: "fim_data"
-        parse_when: '/channel == "fim" or /channel == "FIM"'
-        handle_failed_events: "skip"
-        tags_on_failure: ["_json_parse_failure"]
-
-    # â”€â”€â”€ STAGE 5: Type conversion for numeric fields â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    - convert_type:
-        key: "event.id"
-        type: "integer"
-
-    # â”€â”€â”€ STAGE 6: Rename timestamp â†’ @timestamp for Dashboards â”€â”€â”€â”€â”€â”€â”€â”€
-    - rename_keys:
-        entries:
-          - from_key: "timestamp"
-            to_key: "@timestamp"
-            overwrite_if_to_key_exists: true
-
-    # â”€â”€â”€ STAGE 7: Delete raw XML and date to save index space â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    - delete_entries:
-        with_keys: ["data", "date"]
+        drop_raw_xml: true
 
   route:
     - fim_route: '/channel == "fim" or /channel == "FIM"'
     - other_route: '/channel != "fim" and /channel != "FIM"'
 
   sink:
-    # FIM Events â†’ dedicated index
+    # FIM Events → dedicated index
     - opensearch:
         hosts: [ "http://opensearch:9200" ]
         insecure: true
@@ -74,7 +42,7 @@ rp-events-pipeline:
         routes:
           - fim_route
 
-    # All other Windows Events â†’ standard index
+    # All other Windows Events → standard index
     - opensearch:
         hosts: [ "http://opensearch:9200" ]
         insecure: true
@@ -84,4 +52,3 @@ rp-events-pipeline:
         index_type: "management_disabled"
         routes:
           - other_route
-

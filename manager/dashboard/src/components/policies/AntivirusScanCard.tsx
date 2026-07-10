@@ -14,7 +14,7 @@ export const AntivirusScanCard: React.FC<AntivirusScanCardProps> = ({ agentId, o
   const queryClient = useQueryClient();
 
   const commandMutation = useMutation({
-    mutationFn: (data: any) => endpoints.agents.sendModuleCommand(agentId, 'av_scan', data),
+    mutationFn: (data: any) => endpoints.agents.sendPolicy(agentId, 'antivirus', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agent-history', agentId] });
       queryClient.invalidateQueries({ queryKey: ['agent-status', agentId] });

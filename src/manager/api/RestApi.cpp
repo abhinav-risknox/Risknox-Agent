@@ -6,802 +6,1056 @@
 #include <iomanip>
 #include <ctime>
 
-namespace ResolutePulse {
+namespace ResolutePulse
+{
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Construction / Destruction
-// ─────────────────────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Construction / Destruction
+    // ─────────────────────────────────────────────────────────────────────────────
 
-RestApi::RestApi(PostgresClient& db, ManagerServer& server)
-    : db_(db), server_(server) {}
+    RestApi::RestApi(PostgresClient &db, ManagerServer &server)
+        : db_(db), server_(server) {}
 
-RestApi::~RestApi() { stop(); }
+    RestApi::~RestApi() { stop(); }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Lifecycle
-// ─────────────────────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Lifecycle
+    // ─────────────────────────────────────────────────────────────────────────────
 
-bool RestApi::start(int port) {
-    if (running_.load()) return true;
+    bool RestApi::start(int port)
+    {
+        if (running_.load())
+            return true;
 
-    port_ = port;
-    httpServer_ = std::make_unique<httplib::Server>();
+        port_ = port;
+        httpServer_ = std::make_unique<httplib::Server>();
 
-    registerRoutes();
+        registerRoutes();
 
-    running_ = true;
-    httpThread_ = std::thread([this]() {
+        running_ = true;
+        httpThread_ = std::thread([this]()
+                                  {
         LOG_INFO("REST API listening on 0.0.0.0:{}", port_);
         httpServer_->listen("0.0.0.0", port_);
         running_ = false;
-        LOG_INFO("REST API stopped");
-    });
+        LOG_INFO("REST API stopped"); });
 
-    return true;
-}
+        return true;
+    }
 
-void RestApi::stop() {
-    if (httpServer_) httpServer_->stop();
-    if (httpThread_.joinable()) httpThread_.join();
-    running_ = false;
-}
+    void RestApi::stop()
+    {
+        if (httpServer_)
+            httpServer_->stop();
+        if (httpThread_.joinable())
+            httpThread_.join();
+        running_ = false;
+    }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Route Registration
-// ─────────────────────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Route Registration
+    // ─────────────────────────────────────────────────────────────────────────────
 
-void RestApi::registerRoutes() {
-    using Req = httplib::Request;
-    using Res = httplib::Response;
+    void RestApi::registerRoutes()
+    {
+        using Req = httplib::Request;
+        using Res = httplib::Response;
 
-    // ── CORS preflight handler ──
-    httpServer_->Options(".*", [this](const Req&, Res& res) {
+        // ── CORS preflight handler ──
+        httpServer_->Options(".*", [this](const Req &, Res &res)
+                             {
         addCorsHeaders(res);
-        res.status = 204;
-    });
+        res.status = 204; });
 
-    // ── Auth ──
-    httpServer_->Post("/api/auth/login", [this](const Req& req, Res& res) {
+        // ── Auth ──
+        httpServer_->Post("/api/auth/login", [this](const Req &req, Res &res)
+                          {
         addCorsHeaders(res);
-        handleLogin(req, res);
-    });
+        handleLogin(req, res); });
 
-    // ── Agents ──
-    httpServer_->Get("/api/agents", [this](const Req& req, Res& res) {
+        // ── Agents ──
+        httpServer_->Get("/api/agents", [this](const Req &req, Res &res)
+                         {
         addCorsHeaders(res);
         if (!authenticate(req, res)) return;
-        handleGetAgents(req, res);
-    });
+        handleGetAgents(req, res); });
 
-    httpServer_->Get(R"(/api/agents/([^/]+))", [this](const Req& req, Res& res) {
+        httpServer_->Get(R"(/api/agents/([^/]+))", [this](const Req &req, Res &res)
+                         {
         addCorsHeaders(res);
         if (!authenticate(req, res)) return;
-        handleGetAgent(req, res);
-    });
+        handleGetAgent(req, res); });
 
-    httpServer_->Delete(R"(/api/agents/([^/]+))", [this](const Req& req, Res& res) {
+        httpServer_->Delete(R"(/api/agents/([^/]+))", [this](const Req &req, Res &res)
+                            {
         addCorsHeaders(res);
         if (!authenticate(req, res)) return;
-        handleDeleteAgent(req, res);
-    });
+        handleDeleteAgent(req, res); });
 
-    httpServer_->Get(R"(/api/agents/([^/]+)/status)", [this](const Req& req, Res& res) {
+        httpServer_->Get(R"(/api/agents/([^/]+)/status)", [this](const Req &req, Res &res)
+                         {
         addCorsHeaders(res);
         if (!authenticate(req, res)) return;
-        handleGetAgentStatus(req, res);
-    });
+        handleGetAgentStatus(req, res); });
 
-    // ── Module Commands ──
-    httpServer_->Post(R"(/api/agents/([^/]+)/module-command)", [this](const Req& req, Res& res) {
+        // ── Module Commands ──
+        httpServer_->Post(R"(/api/agents/([^/]+)/module-command)", [this](const Req &req, Res &res)
+                          {
         addCorsHeaders(res);
         if (!authenticate(req, res)) return;
-        handlePostModuleCommand(req, res);
-    });
+        handlePostModuleCommand(req, res); });
 
-    httpServer_->Get("/api/commands/module", [this](const Req& req, Res& res) {
+        httpServer_->Get("/api/commands/module", [this](const Req &req, Res &res)
+                         {
         addCorsHeaders(res);
         if (!authenticate(req, res)) return;
-        handleGetModuleCommands(req, res);
-    });
+        handleGetModuleCommands(req, res); });
 
-    // ── Policy Commands ──
-    httpServer_->Post(R"(/api/agents/([^/]+)/policy)", [this](const Req& req, Res& res) {
+        // ── Policy Commands ──
+        httpServer_->Post(R"(/api/agents/([^/]+)/policy)", [this](const Req &req, Res &res)
+                          {
         addCorsHeaders(res);
         if (!authenticate(req, res)) return;
-        handlePostPolicyCommand(req, res);
-    });
+        handlePostPolicyCommand(req, res); });
 
-    httpServer_->Get("/api/commands/policy", [this](const Req& req, Res& res) {
+        httpServer_->Get("/api/commands/policy", [this](const Req &req, Res &res)
+                         {
         addCorsHeaders(res);
         if (!authenticate(req, res)) return;
-        handleGetPolicyCommands(req, res);
-    });
+        handleGetPolicyCommands(req, res); });
 
-    // ── Endpoint Management ──
-    httpServer_->Get(R"(/api/agents/([^/]+)/endpoint/users)", [this](const Req& req, Res& res) {
+        httpServer_->Get("/api/antivirus/metrics", [this](const Req &req, Res &res)
+                         {
         addCorsHeaders(res);
         if (!authenticate(req, res)) return;
-        handleEndpointCommand(req, res, "user_list");
-    });
-    httpServer_->Get(R"(/api/agents/([^/]+)/endpoint/groups)", [this](const Req& req, Res& res) {
-        addCorsHeaders(res);
-        if (!authenticate(req, res)) return;
-        handleEndpointCommand(req, res, "group_list");
-    });
-    httpServer_->Get(R"(/api/agents/([^/]+)/endpoint/sessions)", [this](const Req& req, Res& res) {
-        addCorsHeaders(res);
-        if (!authenticate(req, res)) return;
-        handleEndpointCommand(req, res, "session_list");
-    });
-    httpServer_->Get(R"(/api/agents/([^/]+)/endpoint/inventory)", [this](const Req& req, Res& res) {
-        addCorsHeaders(res);
-        if (!authenticate(req, res)) return;
-        handleEndpointCommand(req, res, "inventory_collect");
-    });
-    httpServer_->Get(R"(/api/agents/([^/]+)/endpoint/password-policy)", [this](const Req& req, Res& res) {
-        addCorsHeaders(res);
-        if (!authenticate(req, res)) return;
-        handleEndpointCommand(req, res, "password_policy_get");
-    });
-    httpServer_->Post(R"(/api/agents/([^/]+)/endpoint/password-policy)", [this](const Req& req, Res& res) {
-        addCorsHeaders(res);
-        if (!authenticate(req, res)) return;
-        handleEndpointCommand(req, res, "password_policy_set");
-    });
-    
-    // Additional User Routes
-    httpServer_->Post(R"(/api/agents/([^/]+)/endpoint/users)", [this](const Req& req, Res& res) {
-        addCorsHeaders(res);
-        if (!authenticate(req, res)) return;
-        handleEndpointCommand(req, res, "user_create");
-    });
-    httpServer_->Delete(R"(/api/agents/([^/]+)/endpoint/users/([^/]+))", [this](const Req& req, Res& res) {
-        addCorsHeaders(res);
-        if (!authenticate(req, res)) return;
-        handleEndpointCommand(req, res, "user_delete", {{"username", req.matches[2]}});
-    });
-    httpServer_->Post(R"(/api/agents/([^/]+)/endpoint/users/([^/]+)/enable)", [this](const Req& req, Res& res) {
-        addCorsHeaders(res);
-        if (!authenticate(req, res)) return;
-        handleEndpointCommand(req, res, "user_enable", {{"username", req.matches[2]}});
-    });
-    httpServer_->Post(R"(/api/agents/([^/]+)/endpoint/users/([^/]+)/disable)", [this](const Req& req, Res& res) {
-        addCorsHeaders(res);
-        if (!authenticate(req, res)) return;
-        handleEndpointCommand(req, res, "user_disable", {{"username", req.matches[2]}});
-    });
-    httpServer_->Post(R"(/api/agents/([^/]+)/endpoint/users/([^/]+)/unlock)", [this](const Req& req, Res& res) {
-        addCorsHeaders(res);
-        if (!authenticate(req, res)) return;
-        handleEndpointCommand(req, res, "user_unlock", {{"username", req.matches[2]}});
-    });
-    httpServer_->Post(R"(/api/agents/([^/]+)/endpoint/users/([^/]+)/password)", [this](const Req& req, Res& res) {
-        addCorsHeaders(res);
-        if (!authenticate(req, res)) return;
-        handleEndpointCommand(req, res, "user_password_change", {{"username", req.matches[2]}});
-    });
+        handleGetAntivirusMetrics(req, res); });
 
-    // Additional Group Routes
-    httpServer_->Post(R"(/api/agents/([^/]+)/endpoint/groups/([^/]+)/users/([^/]+))", [this](const Req& req, Res& res) {
-        addCorsHeaders(res);
-        if (!authenticate(req, res)) return;
-        handleEndpointCommand(req, res, "group_add_user", {{"groupname", req.matches[2]}, {"username", req.matches[3]}});
-    });
-    httpServer_->Delete(R"(/api/agents/([^/]+)/endpoint/groups/([^/]+)/users/([^/]+))", [this](const Req& req, Res& res) {
-        addCorsHeaders(res);
-        if (!authenticate(req, res)) return;
-        handleEndpointCommand(req, res, "group_remove_user", {{"groupname", req.matches[2]}, {"username", req.matches[3]}});
-    });
+        // ── Endpoint Management ──
 
-    // Additional Session Routes
-    httpServer_->Post(R"(/api/agents/([^/]+)/endpoint/sessions/([^/]+)/logoff)", [this](const Req& req, Res& res) {
+        httpServer_->Get("/api/antivirus/by-system", [this](const Req &req, Res &res)
+                         {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleGetAntivirusBySystem(req, res); });
+
+        httpServer_->Get(R"(/api/agents/([^/]+)/endpoint/users)", [this](const Req &req, Res &res)
+                         {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleEndpointCommand(req, res, "user_list"); });
+        httpServer_->Get(R"(/api/agents/([^/]+)/endpoint/groups)", [this](const Req &req, Res &res)
+                         {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleEndpointCommand(req, res, "group_list"); });
+        httpServer_->Get(R"(/api/agents/([^/]+)/endpoint/sessions)", [this](const Req &req, Res &res)
+                         {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleEndpointCommand(req, res, "session_list"); });
+        httpServer_->Get(R"(/api/agents/([^/]+)/endpoint/inventory)", [this](const Req &req, Res &res)
+                         {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleEndpointCommand(req, res, "inventory_collect"); });
+        httpServer_->Get(R"(/api/agents/([^/]+)/endpoint/password-policy)", [this](const Req &req, Res &res)
+                         {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleEndpointCommand(req, res, "password_policy_get"); });
+        httpServer_->Post(R"(/api/agents/([^/]+)/endpoint/password-policy)", [this](const Req &req, Res &res)
+                          {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleEndpointCommand(req, res, "password_policy_set"); });
+
+        // Additional User Routes
+        httpServer_->Post(R"(/api/agents/([^/]+)/endpoint/users)", [this](const Req &req, Res &res)
+                          {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleEndpointCommand(req, res, "user_create"); });
+        httpServer_->Delete(R"(/api/agents/([^/]+)/endpoint/users/([^/]+))", [this](const Req &req, Res &res)
+                            {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleEndpointCommand(req, res, "user_delete", {{"username", req.matches[2]}}); });
+        httpServer_->Post(R"(/api/agents/([^/]+)/endpoint/users/([^/]+)/enable)", [this](const Req &req, Res &res)
+                          {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleEndpointCommand(req, res, "user_enable", {{"username", req.matches[2]}}); });
+        httpServer_->Post(R"(/api/agents/([^/]+)/endpoint/users/([^/]+)/disable)", [this](const Req &req, Res &res)
+                          {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleEndpointCommand(req, res, "user_disable", {{"username", req.matches[2]}}); });
+        httpServer_->Post(R"(/api/agents/([^/]+)/endpoint/users/([^/]+)/unlock)", [this](const Req &req, Res &res)
+                          {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleEndpointCommand(req, res, "user_unlock", {{"username", req.matches[2]}}); });
+        httpServer_->Post(R"(/api/agents/([^/]+)/endpoint/users/([^/]+)/password)", [this](const Req &req, Res &res)
+                          {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleEndpointCommand(req, res, "user_password_change", {{"username", req.matches[2]}}); });
+
+        // Additional Group Routes
+        httpServer_->Post(R"(/api/agents/([^/]+)/endpoint/groups/([^/]+)/users/([^/]+))", [this](const Req &req, Res &res)
+                          {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleEndpointCommand(req, res, "group_add_user", {{"groupname", req.matches[2]}, {"username", req.matches[3]}}); });
+        httpServer_->Delete(R"(/api/agents/([^/]+)/endpoint/groups/([^/]+)/users/([^/]+))", [this](const Req &req, Res &res)
+                            {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleEndpointCommand(req, res, "group_remove_user", {{"groupname", req.matches[2]}, {"username", req.matches[3]}}); });
+
+        // Additional Session Routes
+        httpServer_->Post(R"(/api/agents/([^/]+)/endpoint/sessions/([^/]+)/logoff)", [this](const Req &req, Res &res)
+                          {
         addCorsHeaders(res);
         if (!authenticate(req, res)) return;
         int sessionId = std::stoi(std::string(req.matches[2]));
-        handleEndpointCommand(req, res, "session_logoff", {{"session_id", sessionId}});
-    });
-    httpServer_->Post(R"(/api/agents/([^/]+)/endpoint/sessions/([^/]+)/disconnect)", [this](const Req& req, Res& res) {
+        handleEndpointCommand(req, res, "session_logoff", {{"session_id", sessionId}}); });
+        httpServer_->Post(R"(/api/agents/([^/]+)/endpoint/sessions/([^/]+)/disconnect)", [this](const Req &req, Res &res)
+                          {
         addCorsHeaders(res);
         if (!authenticate(req, res)) return;
         int sessionId = std::stoi(std::string(req.matches[2]));
-        handleEndpointCommand(req, res, "session_disconnect", {{"session_id", sessionId}});
-    });
-    httpServer_->Post(R"(/api/agents/([^/]+)/endpoint/workstation/lock)", [this](const Req& req, Res& res) {
+        handleEndpointCommand(req, res, "session_disconnect", {{"session_id", sessionId}}); });
+        httpServer_->Post(R"(/api/agents/([^/]+)/endpoint/workstation/lock)", [this](const Req &req, Res &res)
+                          {
         addCorsHeaders(res);
         if (!authenticate(req, res)) return;
-        handleEndpointCommand(req, res, "workstation_lock");
-    });
+        handleEndpointCommand(req, res, "workstation_lock"); });
 
-
-    // ── Unified command lookup ──
-    httpServer_->Get(R"(/api/commands/([^/]+))", [this](const Req& req, Res& res) {
+        // ── Unified command lookup ──
+        httpServer_->Get(R"(/api/commands/([^/]+))", [this](const Req &req, Res &res)
+                         {
         addCorsHeaders(res);
         if (!authenticate(req, res)) return;
-        handleGetCommandById(req, res);
-    });
+        handleGetCommandById(req, res); });
 
-    // ── Audit log ──
-    httpServer_->Get("/api/audit-log", [this](const Req& req, Res& res) {
+        // ── Live Patch Report ──
+        httpServer_->Get(R"(/api/patch/latest/([^/]+))", [this](const Req &req, Res &res)
+                         {
+    addCorsHeaders(res);
+    if (!authenticate(req, res)) return;
+    handleGetLatestPatchReport(req, res); });
+
+        // ── Audit log ──
+        httpServer_->Get("/api/audit-log", [this](const Req &req, Res &res)
+                         {
         addCorsHeaders(res);
         if (!authenticate(req, res)) return;
-        handleGetAuditLog(req, res);
-    });
+        handleGetAuditLog(req, res); });
 
-    // ── Settings ──
-    httpServer_->Get("/api/settings", [this](const Req& req, Res& res) {
+        // ── Settings ──
+        httpServer_->Get("/api/settings", [this](const Req &req, Res &res)
+                         {
         addCorsHeaders(res);
         if (!authenticate(req, res)) return;
-        handleGetSettings(req, res);
-    });
+        handleGetSettings(req, res); });
 
-    httpServer_->Put("/api/settings", [this](const Req& req, Res& res) {
+        httpServer_->Put("/api/settings", [this](const Req &req, Res &res)
+                         {
         addCorsHeaders(res);
         if (!authenticate(req, res)) return;
-        handlePutSettings(req, res);
-    });
+        handlePutSettings(req, res); });
 
-    // ── Health check (no auth required) ──
-    httpServer_->Get("/api/health", [this](const Req& req, Res& res) {
+        // ── Health check (no auth required) ──
+        httpServer_->Get("/api/health", [this](const Req &req, Res &res)
+                         {
         addCorsHeaders(res);
-        handleHealthCheck(req, res);
-    });
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CORS
-// ─────────────────────────────────────────────────────────────────────────────
-
-void RestApi::addCorsHeaders(httplib::Response& res) {
-    res.set_header("Access-Control-Allow-Origin",  "*");
-    res.set_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-    res.set_header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Authentication
-// ─────────────────────────────────────────────────────────────────────────────
-
-bool RestApi::authenticate(const httplib::Request& req, httplib::Response& res) {
-    auto it = req.headers.find("Authorization");
-    if (it == req.headers.end()) {
-        res.status = 401;
-        res.set_content(R"({"error":"Missing Authorization header"})", "application/json");
-        return false;
+        handleHealthCheck(req, res); });
     }
 
-    std::string header = it->second;
-    if (header.substr(0, 7) != "Bearer ") {
-        res.status = 401;
-        res.set_content(R"({"error":"Invalid Authorization format, expected: Bearer <token>"})", "application/json");
-        return false;
+    // ─────────────────────────────────────────────────────────────────────────────
+    // CORS
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    void RestApi::addCorsHeaders(httplib::Response &res)
+    {
+        res.set_header("Access-Control-Allow-Origin", "*");
+        res.set_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+        res.set_header("Access-Control-Allow-Headers", "Content-Type, Authorization");
     }
 
-    std::string token = header.substr(7);
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Authentication
+    // ─────────────────────────────────────────────────────────────────────────────
 
-    std::lock_guard<std::mutex> lk(tokenMutex_);
-    auto tit = tokens_.find(token);
-    if (tit == tokens_.end()) {
-        res.status = 401;
-        res.set_content(R"({"error":"Invalid token"})", "application/json");
-        return false;
-    }
-    if (std::chrono::system_clock::now() > tit->second.expiresAt) {
-        tokens_.erase(tit);
-        res.status = 401;
-        res.set_content(R"({"error":"Token expired"})", "application/json");
-        return false;
-    }
-
-    return true;
-}
-
-void RestApi::handleLogin(const httplib::Request& req, httplib::Response& res) {
-    try {
-        auto body = nlohmann::json::parse(req.body);
-        std::string username = body.value("username", "");
-        std::string password = body.value("password", "");
-
-        // Validate credentials against the operators table in the DB.
-        // Falls back to a hardcoded admin account if no operators table
-        // exists yet (bootstrap scenario).
-        bool valid = db_.authenticateOperator(username, password);
-
-        if (!valid) {
+    bool RestApi::authenticate(const httplib::Request &req, httplib::Response &res)
+    {
+        auto it = req.headers.find("Authorization");
+        if (it == req.headers.end())
+        {
             res.status = 401;
-            res.set_content(R"({"error":"Invalid credentials"})", "application/json");
+            res.set_content(R"({"error":"Missing Authorization header"})", "application/json");
+            return false;
+        }
+
+        std::string header = it->second;
+        if (header.substr(0, 7) != "Bearer ")
+        {
+            res.status = 401;
+            res.set_content(R"({"error":"Invalid Authorization format, expected: Bearer <token>"})", "application/json");
+            return false;
+        }
+
+        std::string token = header.substr(7);
+
+        std::lock_guard<std::mutex> lk(tokenMutex_);
+        auto tit = tokens_.find(token);
+        if (tit == tokens_.end())
+        {
+            res.status = 401;
+            res.set_content(R"({"error":"Invalid token"})", "application/json");
+            return false;
+        }
+        if (std::chrono::system_clock::now() > tit->second.expiresAt)
+        {
+            tokens_.erase(tit);
+            res.status = 401;
+            res.set_content(R"({"error":"Token expired"})", "application/json");
+            return false;
+        }
+
+        return true;
+    }
+
+    void RestApi::handleLogin(const httplib::Request &req, httplib::Response &res)
+    {
+        try
+        {
+            auto body = nlohmann::json::parse(req.body);
+            std::string username = body.value("username", "");
+            std::string password = body.value("password", "");
+
+            // Validate credentials against the operators table in the DB.
+            // Falls back to a hardcoded admin account if no operators table
+            // exists yet (bootstrap scenario).
+            bool valid = db_.authenticateOperator(username, password);
+
+            if (!valid)
+            {
+                res.status = 401;
+                res.set_content(R"({"error":"Invalid credentials"})", "application/json");
+                return;
+            }
+
+            std::string token = generateToken();
+            {
+                std::lock_guard<std::mutex> lk(tokenMutex_);
+                tokens_[token] = {
+                    username,
+                    std::chrono::system_clock::now() + std::chrono::hours(8)};
+            }
+
+            nlohmann::json resp;
+            resp["token"] = token;
+            resp["username"] = username;
+            resp["expires_in"] = 8 * 3600; // 8 hours in seconds
+
+            res.set_content(resp.dump(), "application/json");
+            LOG_INFO("REST API: login successful for user '{}'", username);
+        }
+        catch (const std::exception &e)
+        {
+            res.status = 400;
+            nlohmann::json err;
+            err["error"] = std::string("Invalid request: ") + e.what();
+            res.set_content(err.dump(), "application/json");
+        }
+    }
+
+    std::string RestApi::generateToken()
+    {
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<uint32_t> dist(0, 0xFFFFFFFF);
+
+        std::ostringstream ss;
+        for (int i = 0; i < 8; ++i)
+        {
+            ss << std::hex << std::setfill('0') << std::setw(8) << dist(gen);
+        }
+        return ss.str();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Agent Endpoints
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    void RestApi::handleGetAgents(const httplib::Request &, httplib::Response &res)
+    {
+        auto agents = db_.listAgents();
+
+        nlohmann::json arr = nlohmann::json::array();
+        for (const auto &a : agents)
+        {
+            nlohmann::json j;
+            j["agent_id"] = a.agentId;
+            j["hostname"] = a.hostname;
+            j["os_type"] = a.osType;
+            j["os_version"] = a.osVersion;
+            j["agent_version"] = a.agentVersion;
+            j["status"] = a.status;
+            j["ip_address"] = a.ipAddress;
+            j["registered_at"] = a.registeredAt;
+            j["last_seen_at"] = a.lastSeenAt;
+            j["online"] = server_.isAgentOnline(a.agentId);
+            arr.push_back(std::move(j));
+        }
+
+        int maxAgents = db_.getMaxAgentLimit();
+
+        nlohmann::json resp;
+        resp["agents"] = arr;
+        resp["count"] = arr.size();
+        resp["max_agents"] = maxAgents;
+        resp["limit_reached"] = (static_cast<int>(arr.size()) >= maxAgents);
+        res.set_content(resp.dump(), "application/json");
+    }
+
+    void RestApi::handleGetAgent(const httplib::Request &req, httplib::Response &res)
+    {
+        std::string agentId = req.matches[1];
+        auto agent = db_.getAgent(agentId);
+
+        if (!agent)
+        {
+            res.status = 404;
+            res.set_content(R"({"error":"Agent not found"})", "application/json");
             return;
         }
 
-        std::string token = generateToken();
+        nlohmann::json j;
+        j["agent_id"] = agent->agentId;
+        j["hostname"] = agent->hostname;
+        j["os_type"] = agent->osType;
+        j["os_version"] = agent->osVersion;
+        j["agent_version"] = agent->agentVersion;
+        j["status"] = agent->status;
+        j["cert_serial"] = agent->certSerial;
+        j["ip_address"] = agent->ipAddress;
+        j["registered_at"] = agent->registeredAt;
+        j["last_seen_at"] = agent->lastSeenAt;
+        j["online"] = server_.isAgentOnline(agentId);
+
+        // Include license info
+        auto license = db_.getLicense(agentId);
+        if (license)
         {
-            std::lock_guard<std::mutex> lk(tokenMutex_);
-            tokens_[token] = {
-                username,
-                std::chrono::system_clock::now() + std::chrono::hours(8)
-            };
+            nlohmann::json lic;
+            lic["type"] = license->licenseType;
+            lic["valid_from"] = license->validFrom;
+            lic["valid_until"] = license->validUntil;
+            j["license"] = lic;
         }
 
-        nlohmann::json resp;
-        resp["token"]      = token;
-        resp["username"]   = username;
-        resp["expires_in"] = 8 * 3600; // 8 hours in seconds
-
-        res.set_content(resp.dump(), "application/json");
-        LOG_INFO("REST API: login successful for user '{}'", username);
-
-    } catch (const std::exception& e) {
-        res.status = 400;
-        nlohmann::json err;
-        err["error"] = std::string("Invalid request: ") + e.what();
-        res.set_content(err.dump(), "application/json");
-    }
-}
-
-std::string RestApi::generateToken() {
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<uint32_t> dist(0, 0xFFFFFFFF);
-
-    std::ostringstream ss;
-    for (int i = 0; i < 8; ++i) {
-        ss << std::hex << std::setfill('0') << std::setw(8) << dist(gen);
-    }
-    return ss.str();
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Agent Endpoints
-// ─────────────────────────────────────────────────────────────────────────────
-
-void RestApi::handleGetAgents(const httplib::Request&, httplib::Response& res) {
-    auto agents = db_.listAgents();
-
-    nlohmann::json arr = nlohmann::json::array();
-    for (const auto& a : agents) {
-        nlohmann::json j;
-        j["agent_id"]       = a.agentId;
-        j["hostname"]       = a.hostname;
-        j["os_type"]        = a.osType;
-        j["os_version"]     = a.osVersion;
-        j["agent_version"]  = a.agentVersion;
-        j["status"]         = a.status;
-        j["ip_address"]     = a.ipAddress;
-        j["registered_at"]  = a.registeredAt;
-        j["last_seen_at"]   = a.lastSeenAt;
-        j["online"]         = server_.isAgentOnline(a.agentId);
-        arr.push_back(std::move(j));
-    }
-
-    int maxAgents = db_.getMaxAgentLimit();
-
-    nlohmann::json resp;
-    resp["agents"]        = arr;
-    resp["count"]         = arr.size();
-    resp["max_agents"]    = maxAgents;
-    resp["limit_reached"] = (static_cast<int>(arr.size()) >= maxAgents);
-    res.set_content(resp.dump(), "application/json");
-}
-
-void RestApi::handleGetAgent(const httplib::Request& req, httplib::Response& res) {
-    std::string agentId = req.matches[1];
-    auto agent = db_.getAgent(agentId);
-
-    if (!agent) {
-        res.status = 404;
-        res.set_content(R"({"error":"Agent not found"})", "application/json");
-        return;
-    }
-
-    nlohmann::json j;
-    j["agent_id"]       = agent->agentId;
-    j["hostname"]       = agent->hostname;
-    j["os_type"]        = agent->osType;
-    j["os_version"]     = agent->osVersion;
-    j["agent_version"]  = agent->agentVersion;
-    j["status"]         = agent->status;
-    j["cert_serial"]    = agent->certSerial;
-    j["ip_address"]     = agent->ipAddress;
-    j["registered_at"]  = agent->registeredAt;
-    j["last_seen_at"]   = agent->lastSeenAt;
-    j["online"]         = server_.isAgentOnline(agentId);
-
-    // Include license info
-    auto license = db_.getLicense(agentId);
-    if (license) {
-        nlohmann::json lic;
-        lic["type"]        = license->licenseType;
-        lic["valid_from"]  = license->validFrom;
-        lic["valid_until"] = license->validUntil;
-        j["license"] = lic;
-    }
-
-    res.set_content(j.dump(), "application/json");
-}
-
-void RestApi::handleDeleteAgent(const httplib::Request& req, httplib::Response& res) {
-    std::string agentId = req.matches[1];
-    
-    // First check if agent exists
-    if (!db_.agentExists(agentId)) {
-        res.status = 404;
-        res.set_content(R"({"error":"Agent not found"})", "application/json");
-        return;
-    }
-
-    // Remove from database
-    if (db_.removeAgent(agentId)) {
-        res.set_content(R"({"success":true,"message":"Agent removed successfully"})", "application/json");
-    } else {
-        res.status = 500;
-        res.set_content(R"({"error":"Failed to remove agent from database"})", "application/json");
-    }
-}
-
-void RestApi::handleGetAgentStatus(const httplib::Request& req, httplib::Response& res) {
-    std::string agentId = req.matches[1];
-
-    auto reports = db_.getLatestStatusReports(agentId, 20);
-
-    nlohmann::json arr = nlohmann::json::array();
-    for (const auto& r : reports) {
-        nlohmann::json j;
-        j["report_type"] = r.reportType;
-        j["report_data"] = nlohmann::json::parse(r.reportData, nullptr, false);
-        j["created_at"]  = r.createdAt;
-        arr.push_back(std::move(j));
-    }
-
-    nlohmann::json resp;
-    resp["agent_id"] = agentId;
-    resp["online"]   = server_.isAgentOnline(agentId);
-    resp["reports"]  = arr;
-    res.set_content(resp.dump(), "application/json");
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Module Command Endpoints
-// ─────────────────────────────────────────────────────────────────────────────
-
-void RestApi::handlePostModuleCommand(const httplib::Request& req, httplib::Response& res) {
-    try {
-        std::string agentId = req.matches[1];
-        auto body = nlohmann::json::parse(req.body);
-
-        std::string verb = body.at("verb").get<std::string>();
-        auto params = body.value("params", nlohmann::json::object());
-
-        // Generate a unique commandId
-        std::string commandId = agentId + "-" + verb + "-" +
-            std::to_string(time(nullptr)) + "-" +
-            generateToken().substr(0, 8);
-
-        // Resolve operator identity from token
-        std::string operatorName = "unknown";
-        {
-            auto it = req.headers.find("Authorization");
-            if (it != req.headers.end() && it->second.size() > 7) {
-                std::string token = it->second.substr(7);
-                std::lock_guard<std::mutex> lk(tokenMutex_);
-                auto tit = tokens_.find(token);
-                if (tit != tokens_.end()) operatorName = tit->second.username;
-            }
-        }
-
-        // Record in DB with operator identity (write-ahead audit)
-        db_.recordModuleCommandWithOperator(agentId, commandId, verb,
-                                             params.dump(), operatorName, true);
-
-        // Attempt immediate dispatch via the ManagerServer
-        server_.dispatchModuleCommandFromApi(agentId, commandId, verb, params);
-
-        nlohmann::json resp;
-        resp["command_id"]   = commandId;
-        resp["agent_id"]     = agentId;
-        resp["verb"]         = verb;
-        resp["status"]       = "queued";
-        resp["initiated_by"] = operatorName;
-        res.set_content(resp.dump(), "application/json");
-
-        LOG_INFO("REST API: module command queued: verb={} agent={} by={}",
-                 verb, agentId, operatorName);
-
-    } catch (const std::exception& e) {
-        res.status = 400;
-        nlohmann::json err;
-        err["error"] = std::string("Invalid request: ") + e.what();
-        res.set_content(err.dump(), "application/json");
-    }
-}
-
-void RestApi::handleGetModuleCommands(const httplib::Request& req, httplib::Response& res) {
-    std::string agentId = req.get_param_value("agent_id");
-    int limit  = 50;
-    int offset = 0;
-    try { limit  = std::stoi(req.get_param_value("limit")); } catch (...) {}
-    try { offset = std::stoi(req.get_param_value("offset")); } catch (...) {}
-
-    auto commands = db_.listModuleCommands(agentId, limit, offset);
-
-    nlohmann::json arr = nlohmann::json::array();
-    for (const auto& c : commands) {
-        nlohmann::json j;
-        j["id"]             = c.id;
-        j["agent_id"]       = c.agentId;
-        j["command_id"]     = c.commandId;
-        j["verb"]           = c.verb;
-        j["params"]         = nlohmann::json::parse(c.params, nullptr, false);
-        j["status"]         = c.status;
-        j["ack_status"]     = c.ackStatus;
-        j["result_payload"] = c.resultPayload;
-        j["created_at"]     = c.createdAt;
-        arr.push_back(std::move(j));
-    }
-
-    nlohmann::json resp;
-    resp["commands"] = arr;
-    resp["count"]    = arr.size();
-    res.set_content(resp.dump(), "application/json");
-}
-
-void RestApi::handleEndpointCommand(const httplib::Request& req, httplib::Response& res, const std::string& verb, nlohmann::json extraParams) {
-    try {
-        std::string agentId = req.matches[1];
-        nlohmann::json params = nlohmann::json::object();
-        
-        if (req.method == "POST" && !req.body.empty()) {
-            params = nlohmann::json::parse(req.body);
-        }
-        
-        // Merge extra parameters (like path variables)
-        for (auto& el : extraParams.items()) {
-            params[el.key()] = el.value();
-        }
-
-        // Generate a unique commandId
-        std::string commandId = agentId + "-" + verb + "-" +
-            std::to_string(time(nullptr)) + "-" +
-            generateToken().substr(0, 8);
-
-        // Resolve operator identity from token
-        std::string operatorName = "unknown";
-        {
-            auto it = req.headers.find("Authorization");
-            if (it != req.headers.end() && it->second.size() > 7) {
-                std::string token = it->second.substr(7);
-                std::lock_guard<std::mutex> lk(tokenMutex_);
-                auto tit = tokens_.find(token);
-                if (tit != tokens_.end()) operatorName = tit->second.username;
-            }
-        }
-
-        // Record in DB with operator identity
-        db_.recordModuleCommandWithOperator(agentId, commandId, verb,
-                                             params.dump(), operatorName, true);
-
-        // Attempt immediate dispatch
-        server_.dispatchModuleCommandFromApi(agentId, commandId, verb, params);
-
-        nlohmann::json resp;
-        resp["command_id"]   = commandId;
-        resp["agent_id"]     = agentId;
-        resp["verb"]         = verb;
-        resp["status"]       = "queued";
-        resp["initiated_by"] = operatorName;
-        res.set_content(resp.dump(), "application/json");
-
-        LOG_INFO("REST API: endpoint command queued: verb={} agent={} by={}",
-                 verb, agentId, operatorName);
-
-    } catch (const std::exception& e) {
-        res.status = 400;
-        nlohmann::json err;
-        err["error"] = std::string("Invalid request: ") + e.what();
-        res.set_content(err.dump(), "application/json");
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Policy Command Endpoints
-// ─────────────────────────────────────────────────────────────────────────────
-
-void RestApi::handlePostPolicyCommand(const httplib::Request& req, httplib::Response& res) {
-    try {
-        std::string agentId = req.matches[1];
-        auto body = nlohmann::json::parse(req.body);
-
-        std::string policyType = body.at("policy_type").get<std::string>();
-        auto policyData = body.at("policy_data");
-
-        // Resolve operator
-        std::string operatorName = "unknown";
-        {
-            auto it = req.headers.find("Authorization");
-            if (it != req.headers.end() && it->second.size() > 7) {
-                std::string token = it->second.substr(7);
-                std::lock_guard<std::mutex> lk(tokenMutex_);
-                auto tit = tokens_.find(token);
-                if (tit != tokens_.end()) operatorName = tit->second.username;
-            }
-        }
-
-        // Dispatch via ManagerServer's existing dispatchCommand path
-        // (which generates a commandId and records to DB)
-        std::string commandId = server_.dispatchPolicyFromApi(agentId, policyType, policyData, operatorName);
-
-        nlohmann::json resp;
-        resp["command_id"]   = commandId;
-        resp["agent_id"]     = agentId;
-        resp["policy_type"]  = policyType;
-        resp["status"]       = "queued";
-        resp["initiated_by"] = operatorName;
-        res.set_content(resp.dump(), "application/json");
-
-        LOG_INFO("REST API: policy command queued: type={} agent={} by={}",
-                 policyType, agentId, operatorName);
-
-    } catch (const std::exception& e) {
-        res.status = 400;
-        nlohmann::json err;
-        err["error"] = std::string("Invalid request: ") + e.what();
-        res.set_content(err.dump(), "application/json");
-    }
-}
-
-void RestApi::handleGetPolicyCommands(const httplib::Request& req, httplib::Response& res) {
-    std::string agentId = req.get_param_value("agent_id");
-    int limit  = 50;
-    int offset = 0;
-    try { limit  = std::stoi(req.get_param_value("limit")); } catch (...) {}
-    try { offset = std::stoi(req.get_param_value("offset")); } catch (...) {}
-
-    auto commands = db_.listPolicyCommands(agentId, limit, offset);
-
-    nlohmann::json arr = nlohmann::json::array();
-    for (const auto& c : commands) {
-        nlohmann::json j;
-        j["id"]           = c.id;
-        j["agent_id"]     = c.agentId;
-        j["command_id"]   = c.commandId;
-        j["policy_type"]  = c.policyType;
-        j["policy_data"]  = nlohmann::json::parse(c.policyData, nullptr, false);
-        j["status"]       = c.status;
-        j["created_at"]   = c.createdAt;
-        arr.push_back(std::move(j));
-    }
-
-    nlohmann::json resp;
-    resp["commands"] = arr;
-    resp["count"]    = arr.size();
-    res.set_content(resp.dump(), "application/json");
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Unified Command Lookup
-// ─────────────────────────────────────────────────────────────────────────────
-
-void RestApi::handleGetCommandById(const httplib::Request& req, httplib::Response& res) {
-    std::string commandId = req.matches[1];
-
-    // Try module_commands first, then policy_commands
-    auto mcmd = db_.getModuleCommandByCommandId(commandId);
-    if (mcmd) {
-        nlohmann::json j;
-        j["type"]           = "module";
-        j["id"]             = mcmd->id;
-        j["agent_id"]       = mcmd->agentId;
-        j["command_id"]     = mcmd->commandId;
-        j["verb"]           = mcmd->verb;
-        j["params"]         = nlohmann::json::parse(mcmd->params, nullptr, false);
-        j["status"]         = mcmd->status;
-        j["ack_status"]     = mcmd->ackStatus;
-        if (!mcmd->resultPayload.empty()) {
-            j["result_payload"] = nlohmann::json::parse(mcmd->resultPayload, nullptr, false);
-        } else {
-            j["result_payload"] = nullptr;
-        }
-        j["created_at"]     = mcmd->createdAt;
         res.set_content(j.dump(), "application/json");
-        return;
     }
 
-    auto pcmd = db_.getPolicyCommandByCommandId(commandId);
-    if (pcmd) {
-        nlohmann::json j;
-        j["type"]           = "policy";
-        j["id"]             = pcmd->id;
-        j["agent_id"]       = pcmd->agentId;
-        j["command_id"]     = pcmd->commandId;
-        j["policy_type"]    = pcmd->policyType;
-        j["policy_data"]    = nlohmann::json::parse(pcmd->policyData, nullptr, false);
-        j["status"]         = pcmd->status;
-        j["created_at"]     = pcmd->createdAt;
-        res.set_content(j.dump(), "application/json");
-        return;
-    }
+    void RestApi::handleDeleteAgent(const httplib::Request &req, httplib::Response &res)
+    {
+        std::string agentId = req.matches[1];
 
-    res.status = 404;
-    res.set_content(R"({"error":"Command not found"})", "application/json");
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Audit Log
-// ─────────────────────────────────────────────────────────────────────────────
-
-void RestApi::handleGetAuditLog(const httplib::Request& req, httplib::Response& res) {
-    std::string agentId = req.get_param_value("agent_id");
-    int limit  = 100;
-    int offset = 0;
-    try { limit  = std::stoi(req.get_param_value("limit")); } catch (...) {}
-    try { offset = std::stoi(req.get_param_value("offset")); } catch (...) {}
-
-    auto entries = db_.getAuditLog(agentId, limit, offset);
-
-    nlohmann::json resp;
-    resp["entries"] = entries;
-    resp["count"]   = entries.size();
-    res.set_content(resp.dump(), "application/json");
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Health Check
-// ─────────────────────────────────────────────────────────────────────────────
-
-void RestApi::handleHealthCheck(const httplib::Request&, httplib::Response& res) {
-    nlohmann::json j;
-    j["status"]     = "healthy";
-    j["db_connected"] = db_.isConnected();
-    j["server_running"] = server_.isRunning();
-
-    time_t now = time(nullptr);
-    char buf[64];
-    strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
-    j["timestamp"] = buf;
-
-    res.set_content(j.dump(), "application/json");
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Settings
-// ─────────────────────────────────────────────────────────────────────────────
-
-void RestApi::handleGetSettings(const httplib::Request&, httplib::Response& res) {
-    nlohmann::json resp;
-    resp["max_agents"]          = db_.getMaxAgentLimit();
-    resp["current_agent_count"] = db_.getTotalAgentCount();
-    res.set_content(resp.dump(), "application/json");
-}
-
-void RestApi::handlePutSettings(const httplib::Request& req, httplib::Response& res) {
-    try {
-        auto body = nlohmann::json::parse(req.body);
-
-        if (body.contains("max_agents")) {
-            int maxAgents = body["max_agents"].get<int>();
-            if (maxAgents < 0) {
-                res.status = 400;
-                res.set_content(R"({"error":"max_agents must be >= 0"})", "application/json");
-                return;
-            }
-            if (!db_.setMaxAgentLimit(maxAgents)) {
-                res.status = 500;
-                res.set_content(R"({"error":"Failed to update max_agents setting"})", "application/json");
-                return;
-            }
+        // First check if agent exists
+        if (!db_.agentExists(agentId))
+        {
+            res.status = 404;
+            res.set_content(R"({"error":"Agent not found"})", "application/json");
+            return;
         }
 
-        // Return updated settings
+        // Remove from database
+        if (db_.removeAgent(agentId))
+        {
+            res.set_content(R"({"success":true,"message":"Agent removed successfully"})", "application/json");
+        }
+        else
+        {
+            res.status = 500;
+            res.set_content(R"({"error":"Failed to remove agent from database"})", "application/json");
+        }
+    }
+
+    void RestApi::handleGetAgentStatus(const httplib::Request &req, httplib::Response &res)
+    {
+        std::string agentId = req.matches[1];
+
+        auto reports = db_.getLatestStatusReports(agentId, 20);
+
+        nlohmann::json arr = nlohmann::json::array();
+        for (const auto &r : reports)
+        {
+            nlohmann::json j;
+            j["report_type"] = r.reportType;
+            j["report_data"] = nlohmann::json::parse(r.reportData, nullptr, false);
+            j["created_at"] = r.createdAt;
+            arr.push_back(std::move(j));
+        }
+
         nlohmann::json resp;
-        resp["max_agents"]          = db_.getMaxAgentLimit();
+        resp["agent_id"] = agentId;
+        resp["online"] = server_.isAgentOnline(agentId);
+        resp["reports"] = arr;
+        res.set_content(resp.dump(), "application/json");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Module Command Endpoints
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    void RestApi::handlePostModuleCommand(const httplib::Request &req, httplib::Response &res)
+    {
+        try
+        {
+            std::string agentId = req.matches[1];
+            auto body = nlohmann::json::parse(req.body);
+
+            std::string verb = body.at("verb").get<std::string>();
+            auto params = body.value("params", nlohmann::json::object());
+
+            // Generate a unique commandId
+            std::string commandId = agentId + "-" + verb + "-" +
+                                    std::to_string(time(nullptr)) + "-" +
+                                    generateToken().substr(0, 8);
+
+            // Resolve operator identity from token
+            std::string operatorName = "unknown";
+            {
+                auto it = req.headers.find("Authorization");
+                if (it != req.headers.end() && it->second.size() > 7)
+                {
+                    std::string token = it->second.substr(7);
+                    std::lock_guard<std::mutex> lk(tokenMutex_);
+                    auto tit = tokens_.find(token);
+                    if (tit != tokens_.end())
+                        operatorName = tit->second.username;
+                }
+            }
+
+            // Record in DB with operator identity (write-ahead audit)
+            db_.recordModuleCommandWithOperator(agentId, commandId, verb,
+                                                params.dump(), operatorName, true);
+
+            // Attempt immediate dispatch via the ManagerServer
+            server_.dispatchModuleCommandFromApi(agentId, commandId, verb, params);
+
+            nlohmann::json resp;
+            resp["command_id"] = commandId;
+            resp["agent_id"] = agentId;
+            resp["verb"] = verb;
+            resp["status"] = "queued";
+            resp["initiated_by"] = operatorName;
+            res.set_content(resp.dump(), "application/json");
+
+            LOG_INFO("REST API: module command queued: verb={} agent={} by={}",
+                     verb, agentId, operatorName);
+        }
+        catch (const std::exception &e)
+        {
+            res.status = 400;
+            nlohmann::json err;
+            err["error"] = std::string("Invalid request: ") + e.what();
+            res.set_content(err.dump(), "application/json");
+        }
+    }
+
+    void RestApi::handleGetModuleCommands(const httplib::Request &req, httplib::Response &res)
+    {
+        std::string agentId = req.get_param_value("agent_id");
+        int limit = 50;
+        int offset = 0;
+        try
+        {
+            limit = std::stoi(req.get_param_value("limit"));
+        }
+        catch (...)
+        {
+        }
+        try
+        {
+            offset = std::stoi(req.get_param_value("offset"));
+        }
+        catch (...)
+        {
+        }
+
+        auto commands = db_.listModuleCommands(agentId, limit, offset);
+
+        nlohmann::json arr = nlohmann::json::array();
+        for (const auto &c : commands)
+        {
+            nlohmann::json j;
+            j["id"] = c.id;
+            j["agent_id"] = c.agentId;
+            j["command_id"] = c.commandId;
+            j["verb"] = c.verb;
+            j["params"] = nlohmann::json::parse(c.params, nullptr, false);
+            j["status"] = c.status;
+            j["ack_status"] = c.ackStatus;
+            j["result_payload"] = c.resultPayload;
+            j["created_at"] = c.createdAt;
+            arr.push_back(std::move(j));
+        }
+
+        nlohmann::json resp;
+        resp["commands"] = arr;
+        resp["count"] = arr.size();
+        res.set_content(resp.dump(), "application/json");
+    }
+
+    void RestApi::handleEndpointCommand(const httplib::Request &req, httplib::Response &res, const std::string &verb, nlohmann::json extraParams)
+    {
+        try
+        {
+            std::string agentId = req.matches[1];
+            nlohmann::json params = nlohmann::json::object();
+
+            if (req.method == "POST" && !req.body.empty())
+            {
+                params = nlohmann::json::parse(req.body);
+            }
+
+            // Merge extra parameters (like path variables)
+            for (auto &el : extraParams.items())
+            {
+                params[el.key()] = el.value();
+            }
+
+            // Generate a unique commandId
+            std::string commandId = agentId + "-" + verb + "-" +
+                                    std::to_string(time(nullptr)) + "-" +
+                                    generateToken().substr(0, 8);
+
+            // Resolve operator identity from token
+            std::string operatorName = "unknown";
+            {
+                auto it = req.headers.find("Authorization");
+                if (it != req.headers.end() && it->second.size() > 7)
+                {
+                    std::string token = it->second.substr(7);
+                    std::lock_guard<std::mutex> lk(tokenMutex_);
+                    auto tit = tokens_.find(token);
+                    if (tit != tokens_.end())
+                        operatorName = tit->second.username;
+                }
+            }
+
+            // Record in DB with operator identity
+            db_.recordModuleCommandWithOperator(agentId, commandId, verb,
+                                                params.dump(), operatorName, true);
+
+            // Attempt immediate dispatch
+            server_.dispatchModuleCommandFromApi(agentId, commandId, verb, params);
+
+            nlohmann::json resp;
+            resp["command_id"] = commandId;
+            resp["agent_id"] = agentId;
+            resp["verb"] = verb;
+            resp["status"] = "queued";
+            resp["initiated_by"] = operatorName;
+            res.set_content(resp.dump(), "application/json");
+
+            LOG_INFO("REST API: endpoint command queued: verb={} agent={} by={}",
+                     verb, agentId, operatorName);
+        }
+        catch (const std::exception &e)
+        {
+            res.status = 400;
+            nlohmann::json err;
+            err["error"] = std::string("Invalid request: ") + e.what();
+            res.set_content(err.dump(), "application/json");
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Policy Command Endpoints
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    void RestApi::handleGetAntivirusMetrics(const httplib::Request &, httplib::Response &res)
+    {
+        auto agents = db_.listAgents();
+        int totalScans = 0;
+        int infectedScans = 0;
+        int cleanScans = 0;
+        int totalThreats = 0;
+        int agentsWithThreats = 0;
+        int activeScans = 0;
+        std::string lastScan = "";
+
+        for (const auto &agent : agents)
+        {
+            auto reports = db_.getLatestStatusReports(agent.agentId, 20);
+            auto it = std::find_if(reports.begin(), reports.end(), [](const PostgresClient::StatusReportRecord &r)
+                                   { return r.reportType == "av_scan"; });
+            if (it == reports.end())
+                continue;
+
+            nlohmann::json reportData = nlohmann::json::parse(it->reportData, nullptr, false);
+            if (reportData.is_discarded())
+                reportData = nlohmann::json::object();
+
+            totalScans++;
+            std::string status = reportData.value("status", "completed");
+            int threats = reportData.value("totalThreats", reportData.value("threats", reportData.value("threatsFound", 0)));
+            if (threats > 0)
+            {
+                infectedScans++;
+                agentsWithThreats++;
+            }
+            else
+            {
+                cleanScans++;
+            }
+            totalThreats += threats;
+            if (status != "completed" && status != "error" && status != "cancelled")
+            {
+                activeScans++;
+            }
+            std::string scanTime = reportData.value("last_scan", it->createdAt);
+            if (scanTime > lastScan)
+                lastScan = scanTime;
+        }
+
+        nlohmann::json resp;
+        resp["success"] = true;
+        resp["metrics"] = {
+            {"total_scans", totalScans},
+            {"infected_scans", infectedScans},
+            {"clean_scans", cleanScans},
+            {"total_threats", totalThreats},
+            {"agents_with_threats", agentsWithThreats},
+            {"active_scans", activeScans},
+            {"last_scan", lastScan}};
+        res.set_content(resp.dump(), "application/json");
+    }
+
+    void RestApi::handleGetAntivirusBySystem(const httplib::Request &, httplib::Response &res)
+    {
+        auto agents = db_.listAgents();
+        nlohmann::json systems = nlohmann::json::array();
+
+        for (const auto &agent : agents)
+        {
+            auto reports = db_.getLatestStatusReports(agent.agentId, 20);
+            auto it = std::find_if(reports.begin(), reports.end(), [](const PostgresClient::StatusReportRecord &r)
+                                   { return r.reportType == "av_scan"; });
+
+            nlohmann::json item;
+            item["agent_id"] = agent.agentId;
+            item["hostname"] = agent.hostname;
+
+            if (it != reports.end())
+            {
+                nlohmann::json reportData = nlohmann::json::parse(it->reportData, nullptr, false);
+                if (reportData.is_discarded())
+                    reportData = nlohmann::json::object();
+
+                item["last_scan"] = reportData.value("last_scan", it->createdAt);
+                item["files_scanned"] = reportData.value("filesScanned", 0);
+                item["threats_found"] = reportData.value("threatsFound", reportData.value("threats", 0));
+                item["total_threats"] = reportData.value("totalThreats", reportData.value("threats", 0));
+                item["scan_duration"] = reportData.value("scanDuration", 0);
+                item["data_scanned"] = reportData.value("dataScanned", reportData.value("data_scanned", 0));
+                item["status"] = reportData.value("status", "completed");
+                item["scan_path"] = reportData.value("scanPath", "");
+            }
+            else
+            {
+                item["last_scan"] = nullptr;
+                item["files_scanned"] = 0;
+                item["threats_found"] = 0;
+                item["total_threats"] = 0;
+                item["scan_duration"] = 0;
+                item["data_scanned"] = 0;
+                item["status"] = "unknown";
+                item["scan_path"] = "";
+            }
+            systems.push_back(std::move(item));
+        }
+
+        nlohmann::json resp;
+        resp["success"] = true;
+        resp["systems"] = systems;
+        resp["by_system"] = systems;
+        resp["count"] = systems.size();
+        res.set_content(resp.dump(), "application/json");
+    }
+
+    void RestApi::handlePostPolicyCommand(const httplib::Request &req, httplib::Response &res)
+    {
+        try
+        {
+            std::string agentId = req.matches[1];
+            auto body = nlohmann::json::parse(req.body);
+
+            std::string policyType = body.at("policy_type").get<std::string>();
+            auto policyData = body.at("policy_data");
+
+            // Resolve operator
+            std::string operatorName = "unknown";
+            {
+                auto it = req.headers.find("Authorization");
+                if (it != req.headers.end() && it->second.size() > 7)
+                {
+                    std::string token = it->second.substr(7);
+                    std::lock_guard<std::mutex> lk(tokenMutex_);
+                    auto tit = tokens_.find(token);
+                    if (tit != tokens_.end())
+                        operatorName = tit->second.username;
+                }
+            }
+
+            // Dispatch via ManagerServer's existing dispatchCommand path
+            // (which generates a commandId and records to DB)
+            std::string commandId = server_.dispatchPolicyFromApi(agentId, policyType, policyData, operatorName);
+
+            nlohmann::json resp;
+            resp["command_id"] = commandId;
+            resp["agent_id"] = agentId;
+            resp["policy_type"] = policyType;
+            resp["status"] = "queued";
+            resp["initiated_by"] = operatorName;
+            res.set_content(resp.dump(), "application/json");
+
+            LOG_INFO("REST API: policy command queued: type={} agent={} by={}",
+                     policyType, agentId, operatorName);
+        }
+        catch (const std::exception &e)
+        {
+            res.status = 400;
+            nlohmann::json err;
+            err["error"] = std::string("Invalid request: ") + e.what();
+            res.set_content(err.dump(), "application/json");
+        }
+    }
+
+    void RestApi::handleGetPolicyCommands(const httplib::Request &req, httplib::Response &res)
+    {
+        std::string agentId = req.get_param_value("agent_id");
+        int limit = 50;
+        int offset = 0;
+        try
+        {
+            limit = std::stoi(req.get_param_value("limit"));
+        }
+        catch (...)
+        {
+        }
+        try
+        {
+            offset = std::stoi(req.get_param_value("offset"));
+        }
+        catch (...)
+        {
+        }
+
+        auto commands = db_.listPolicyCommands(agentId, limit, offset);
+
+        nlohmann::json arr = nlohmann::json::array();
+        for (const auto &c : commands)
+        {
+            nlohmann::json j;
+            j["id"] = c.id;
+            j["agent_id"] = c.agentId;
+            j["command_id"] = c.commandId;
+            j["policy_type"] = c.policyType;
+            j["policy_data"] = nlohmann::json::parse(c.policyData, nullptr, false);
+            j["status"] = c.status;
+            j["created_at"] = c.createdAt;
+            arr.push_back(std::move(j));
+        }
+
+        nlohmann::json resp;
+        resp["commands"] = arr;
+        resp["count"] = arr.size();
+        res.set_content(resp.dump(), "application/json");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Unified Command Lookup
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    void RestApi::handleGetCommandById(const httplib::Request &req, httplib::Response &res)
+    {
+        std::string commandId = req.matches[1];
+
+        // Try module_commands first, then policy_commands
+        auto mcmd = db_.getModuleCommandByCommandId(commandId);
+        if (mcmd)
+        {
+            nlohmann::json j;
+            j["type"] = "module";
+            j["id"] = mcmd->id;
+            j["agent_id"] = mcmd->agentId;
+            j["command_id"] = mcmd->commandId;
+            j["verb"] = mcmd->verb;
+            j["params"] = nlohmann::json::parse(mcmd->params, nullptr, false);
+            j["status"] = mcmd->status;
+            j["ack_status"] = mcmd->ackStatus;
+            if (!mcmd->resultPayload.empty())
+            {
+                j["result_payload"] = nlohmann::json::parse(mcmd->resultPayload, nullptr, false);
+            }
+            else
+            {
+                j["result_payload"] = nullptr;
+            }
+            j["created_at"] = mcmd->createdAt;
+            res.set_content(j.dump(), "application/json");
+            return;
+        }
+
+        auto pcmd = db_.getPolicyCommandByCommandId(commandId);
+        if (pcmd)
+        {
+            nlohmann::json j;
+            j["type"] = "policy";
+            j["id"] = pcmd->id;
+            j["agent_id"] = pcmd->agentId;
+            j["command_id"] = pcmd->commandId;
+            j["policy_type"] = pcmd->policyType;
+            j["policy_data"] = nlohmann::json::parse(pcmd->policyData, nullptr, false);
+            j["status"] = pcmd->status;
+            j["created_at"] = pcmd->createdAt;
+            res.set_content(j.dump(), "application/json");
+            return;
+        }
+
+        res.status = 404;
+        res.set_content(R"({"error":"Command not found"})", "application/json");
+    }
+
+    void RestApi::handleGetLatestPatchReport(const httplib::Request &req,
+                                             httplib::Response &res)
+    {
+        std::string agentId = req.matches[1];
+
+        nlohmann::json report;
+
+        if (!server_.getLatestPatchReport(agentId, report))
+        {
+            res.status = 404;
+            res.set_content(
+                R"({"success":false,"error":"No live patch report available"})",
+                "application/json");
+            return;
+        }
+
+        nlohmann::json resp;
+        resp["success"] = true;
+        resp["agent_id"] = agentId;
+        resp["report"] = report;
+
+        res.set_content(resp.dump(), "application/json");
+    }
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Audit Log
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    void RestApi::handleGetAuditLog(const httplib::Request &req, httplib::Response &res)
+    {
+        std::string agentId = req.get_param_value("agent_id");
+        int limit = 100;
+        int offset = 0;
+        try
+        {
+            limit = std::stoi(req.get_param_value("limit"));
+        }
+        catch (...)
+        {
+        }
+        try
+        {
+            offset = std::stoi(req.get_param_value("offset"));
+        }
+        catch (...)
+        {
+        }
+
+        auto entries = db_.getAuditLog(agentId, limit, offset);
+
+        nlohmann::json resp;
+        resp["entries"] = entries;
+        resp["count"] = entries.size();
+        res.set_content(resp.dump(), "application/json");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Health Check
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    void RestApi::handleHealthCheck(const httplib::Request &, httplib::Response &res)
+    {
+        nlohmann::json j;
+        j["status"] = "healthy";
+        j["db_connected"] = db_.isConnected();
+        j["server_running"] = server_.isRunning();
+
+        time_t now = time(nullptr);
+        char buf[64];
+        strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+        j["timestamp"] = buf;
+
+        res.set_content(j.dump(), "application/json");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Settings
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    void RestApi::handleGetSettings(const httplib::Request &, httplib::Response &res)
+    {
+        nlohmann::json resp;
+        resp["max_agents"] = db_.getMaxAgentLimit();
         resp["current_agent_count"] = db_.getTotalAgentCount();
-        resp["success"]             = true;
         res.set_content(resp.dump(), "application/json");
-
-    } catch (const std::exception& e) {
-        res.status = 400;
-        nlohmann::json err;
-        err["error"] = std::string("Invalid request body: ") + e.what();
-        res.set_content(err.dump(), "application/json");
     }
-}
+
+    void RestApi::handlePutSettings(const httplib::Request &req, httplib::Response &res)
+    {
+        try
+        {
+            auto body = nlohmann::json::parse(req.body);
+
+            if (body.contains("max_agents"))
+            {
+                int maxAgents = body["max_agents"].get<int>();
+                if (maxAgents < 0)
+                {
+                    res.status = 400;
+                    res.set_content(R"({"error":"max_agents must be >= 0"})", "application/json");
+                    return;
+                }
+                if (!db_.setMaxAgentLimit(maxAgents))
+                {
+                    res.status = 500;
+                    res.set_content(R"({"error":"Failed to update max_agents setting"})", "application/json");
+                    return;
+                }
+            }
+
+            // Return updated settings
+            nlohmann::json resp;
+            resp["max_agents"] = db_.getMaxAgentLimit();
+            resp["current_agent_count"] = db_.getTotalAgentCount();
+            resp["success"] = true;
+            res.set_content(resp.dump(), "application/json");
+        }
+        catch (const std::exception &e)
+        {
+            res.status = 400;
+            nlohmann::json err;
+            err["error"] = std::string("Invalid request body: ") + e.what();
+            res.set_content(err.dump(), "application/json");
+        }
+    }
 
 } // namespace ResolutePulse

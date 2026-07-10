@@ -31,7 +31,13 @@ void BatchSender::start() {
     
     stopRequested_ = false;
     running_ = true;
-    
+
+    // Clear the TCP sender's stop flag so reconnects work after a license-driven restart
+    auto* tcpSender = dynamic_cast<TcpSender*>(&sender_);
+    if (tcpSender) {
+        tcpSender->resetStop();
+    }
+
     senderThread_ = std::thread(&BatchSender::senderLoop, this);
     
     LOG_INFO("BatchSender started (batch size: {}, flush interval: {}s)", 

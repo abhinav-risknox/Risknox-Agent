@@ -48,6 +48,9 @@ public:
     
     // Signal the sender to abort any pending connection attempts immediately
     void requestStop() { stopRequested_ = true; }
+
+    // Clear the stop flag so the sender can reconnect after being restarted
+    void resetStop() { stopRequested_ = false; }
     
     // Get last error message
     const std::string& getLastError() const override { return lastError_; }

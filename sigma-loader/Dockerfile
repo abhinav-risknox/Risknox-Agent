@@ -9,6 +9,7 @@ COPY scripts/provision.sh /etc/sigma/provision.sh
 COPY scripts/provision.py /etc/sigma/provision.py
 COPY scripts/template.json /etc/sigma/template.json
 
+
 # Ensure scripts are executable
 RUN chmod +x /etc/sigma/provision.sh
 

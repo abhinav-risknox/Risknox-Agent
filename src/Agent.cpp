@@ -334,7 +334,7 @@ bool Agent::initialize(const std::string& configPath) {
                                 nlohmann::json policy;
                                 policy["action"] = "quick_scan";
                                 policy["path"]   = fimEvent.path;
-                                policyManager_->handlePolicyUpdate("antivirus", policy);
+                                policyManager_->handlePolicyUpdate("antivirus", policy,"");
                             }
                         }
                     }
@@ -404,7 +404,7 @@ bool Agent::initialize(const std::string& configPath) {
             policy["action"] = "quick_scan";
             policy["path"]   = drive.driveLetter + "\\";
             if (policyManager_) {
-                policyManager_->handlePolicyUpdate("antivirus", policy);
+                policyManager_->handlePolicyUpdate("antivirus", policy,"");
             }
         });
         usbMonitor_->setRemovalCallback([](const std::string& driveLetter) {
@@ -867,7 +867,8 @@ void Agent::avScanLoop() {
     if (avCfg.auto_update_definitions && policyManager_) {
         LOG_INFO("AV: running initial definition update...");
         policyManager_->handlePolicyUpdate("antivirus",
-            nlohmann::json{ {"action", "update_definitions"} });
+            nlohmann::json{ {"action", "update_definitions"} }
+        );
     }
 
     auto lastDefUpdate = std::chrono::steady_clock::now();
@@ -1091,7 +1092,7 @@ void Agent::managementLoop() {
                                 policyData = nlohmann::json::parse(raw, nullptr, false);
                                 if (policyData.is_discarded()) policyData = nlohmann::json{};
                             }
-                            policyManager_->handlePolicyUpdate(policyType, policyData);
+                            policyManager_->handlePolicyUpdate(policyType, policyData,commandId);
                         }
                     }
                 }

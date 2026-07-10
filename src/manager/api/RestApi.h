@@ -24,81 +24,90 @@
 #include <mutex>
 #include <chrono>
 
-namespace ResolutePulse {
+namespace ResolutePulse
+{
 
-class RestApi {
-public:
-    RestApi(PostgresClient& db, ManagerServer& server);
-    ~RestApi();
+    class RestApi
+    {
+    public:
+        RestApi(PostgresClient &db, ManagerServer &server);
+        ~RestApi();
 
-    // Start the HTTP server on the given port (blocks in a background thread)
-    bool start(int port = 8080);
+        // Start the HTTP server on the given port (blocks in a background thread)
+        bool start(int port = 8080);
 
-    // Stop the HTTP server
-    void stop();
+        // Stop the HTTP server
+        void stop();
 
-    bool isRunning() const { return running_.load(); }
+        bool isRunning() const { return running_.load(); }
 
-private:
-    // ── Route registration ──
-    void registerRoutes();
+    private:
+        // ── Route registration ──
+        void registerRoutes();
 
-    // ── Middleware ──
-    void addCorsHeaders(httplib::Response& res);
-    bool authenticate(const httplib::Request& req, httplib::Response& res);
+        // ── Middleware ──
+        void addCorsHeaders(httplib::Response &res);
+        bool authenticate(const httplib::Request &req, httplib::Response &res);
 
-    // ── Auth endpoints ──
-    void handleLogin(const httplib::Request& req, httplib::Response& res);
+        // ── Auth endpoints ──
+        void handleLogin(const httplib::Request &req, httplib::Response &res);
 
-    // ── Agent endpoints ──
-    void handleGetAgents(const httplib::Request& req, httplib::Response& res);
-    void handleGetAgent(const httplib::Request& req, httplib::Response& res);
-    void handleGetAgentStatus(const httplib::Request& req, httplib::Response& res);
-    void handleDeleteAgent(const httplib::Request& req, httplib::Response& res);
+        // ── Agent endpoints ──
+        void handleGetAgents(const httplib::Request &req, httplib::Response &res);
+        void handleGetAgent(const httplib::Request &req, httplib::Response &res);
+        void handleGetAgentStatus(const httplib::Request &req, httplib::Response &res);
+        void handleDeleteAgent(const httplib::Request &req, httplib::Response &res);
 
-    // ── Module command endpoints ──
-    void handlePostModuleCommand(const httplib::Request& req, httplib::Response& res);
-    void handleGetModuleCommands(const httplib::Request& req, httplib::Response& res);
+        // ── Module command endpoints ──
+        void handlePostModuleCommand(const httplib::Request &req, httplib::Response &res);
+        void handleGetModuleCommands(const httplib::Request &req, httplib::Response &res);
 
-    // ── Endpoint Management endpoints ──
-    void handleEndpointCommand(const httplib::Request& req, httplib::Response& res, const std::string& verb, nlohmann::json extraParams = nlohmann::json::object());
+        // ── Endpoint Management endpoints ──
+        void handleEndpointCommand(const httplib::Request &req, httplib::Response &res, const std::string &verb, nlohmann::json extraParams = nlohmann::json::object());
 
-    // ── Policy command endpoints ──
-    void handlePostPolicyCommand(const httplib::Request& req, httplib::Response& res);
-    void handleGetPolicyCommands(const httplib::Request& req, httplib::Response& res);
+        // ── Policy command endpoints ──
+        void handlePostPolicyCommand(const httplib::Request &req, httplib::Response &res);
+        void handleGetPolicyCommands(const httplib::Request &req, httplib::Response &res);
 
-    // ── Unified command lookup ──
-    void handleGetCommandById(const httplib::Request& req, httplib::Response& res);
+        // ── Antivirus endpoints ──
+        void handleGetAntivirusMetrics(const httplib::Request &req, httplib::Response &res);
+        void handleGetAntivirusBySystem(const httplib::Request &req, httplib::Response &res);
+        // ── Unified command lookup ──
+        void handleGetCommandById(const httplib::Request &req, httplib::Response &res);
 
-    // ── Audit log ──
-    void handleGetAuditLog(const httplib::Request& req, httplib::Response& res);
+        void handleGetLatestPatchReport(const httplib::Request &req,
+                                        httplib::Response &res);
 
-    // ── Settings ──
-    void handleGetSettings(const httplib::Request& req, httplib::Response& res);
-    void handlePutSettings(const httplib::Request& req, httplib::Response& res);
+        // ── Audit log ──
+        void handleGetAuditLog(const httplib::Request &req, httplib::Response &res);
 
-    // ── Health ──
-    void handleHealthCheck(const httplib::Request& req, httplib::Response& res);
+        // ── Settings ──
+        void handleGetSettings(const httplib::Request &req, httplib::Response &res);
+        void handlePutSettings(const httplib::Request &req, httplib::Response &res);
 
-    // ── Internals ──
-    PostgresClient&  db_;
-    ManagerServer&   server_;
+        // ── Health ──
+        void handleHealthCheck(const httplib::Request &req, httplib::Response &res);
 
-    std::unique_ptr<httplib::Server> httpServer_;
-    std::thread                      httpThread_;
-    std::atomic<bool>                running_{false};
-    int                              port_ = 8080;
+        // ── Internals ──
+        PostgresClient &db_;
+        ManagerServer &server_;
 
-    // Simple token store  { token -> { username, expires_at } }
-    struct TokenInfo {
-        std::string username;
-        std::chrono::system_clock::time_point expiresAt;
+        std::unique_ptr<httplib::Server> httpServer_;
+        std::thread httpThread_;
+        std::atomic<bool> running_{false};
+        int port_ = 8080;
+
+        // Simple token store  { token -> { username, expires_at } }
+        struct TokenInfo
+        {
+            std::string username;
+            std::chrono::system_clock::time_point expiresAt;
+        };
+        std::unordered_map<std::string, TokenInfo> tokens_;
+        std::mutex tokenMutex_;
+
+        // Generate a random hex token
+        static std::string generateToken();
     };
-    std::unordered_map<std::string, TokenInfo> tokens_;
-    std::mutex                                  tokenMutex_;
-
-    // Generate a random hex token
-    static std::string generateToken();
-};
 
 } // namespace ResolutePulse
