@@ -46,10 +46,10 @@ def req(method, path, data=None, timeout=180):
 FIELD_MAPPINGS = {
     # ── Existing mapped fields (48) ───────────────────────────────────────────
     "winlog.event_id":                          "EventID",
-    "winlog.provider_name":                     "ProviderName",
+    "winlog.provider_name":                     "Provider_Name",
     "winlog.channel":                           "Channel",
     "winlog.computer_name":                     "ComputerName",
-    "winlog.computerObject.name":               "AccountName",
+    "winlog.computerObject.name":               "ObjectName",
     "winlog.keywords":                          "Keywords",
     "winlog.event_data.SubjectUserSid":         "SubjectUserSid",
     "winlog.event_data.SubjectUserName":        "SubjectUserName",
@@ -102,14 +102,14 @@ FIELD_MAPPINGS = {
     "winlog.event_data.IntegrityLevel":         "IntegrityLevel",
     "winlog.event_data.Hashes":                 "Hashes",
     "winlog.event_data.Hash":                   "Hash",
-    "winlog.event_data.OriginalFileName":       "OriginalFileName",
+    "winlog.event_data.OriginalFileName":       "OriginalFilename",
     "winlog.event_data.OriginalName":           "OriginalName",
     "winlog.event_data.Company":                "Company",
     "winlog.event_data.Product":                "Product",
     "winlog.event_data.FileVersion":            "FileVersion",
     "winlog.event_data.Description":            "Description",
     "winlog.event_data.LogonId":                "LogonId",
-    "winlog.event_data.Commandline":            "CommandLine",
+    "winlog.event_data.Commandline":            "Commandline",
 
     # Sysmon File Events (EID 2, 11, 15, 23, 26)
     "winlog.event_data.TargetFilename":         "TargetFilename",
@@ -124,14 +124,13 @@ FIELD_MAPPINGS = {
     "winlog.event_data.Initiated":              "Initiated",
     "winlog.event_data.SourceHostname":         "SourceHostname",
     "destination.ip":                           "DestinationIp",
-    "destination.port":                         "DestinationPort",
-    "source.ip":                                "SourceIp",
+    "destination.port":                         "DestPort",
+    "source.ip":                                "SourceAddress",
     "source.port":                              "SourcePort",
 
     # Sysmon Registry (EID 12, 13, 14)
     "winlog.event_data.TargetObject":           "TargetObject",
     "winlog.event_data.Detail":                 "Details",
-    "winlog.event_data.Details":                "Details",
     "winlog.event_data.NewValue":               "NewValue",
     "winlog.event_data.OldValue":               "OldValue",
     "winlog.event_data.EventType":              "EventType",
@@ -269,15 +268,16 @@ FIELD_MAPPINGS = {
     "winlog.event_data.payload":                "payload",
 
     # ECS-level aliases
-    "host.hostname":                            "ComputerName",
-    "host.name":                                "ComputerName",
+    "host.hostname":                            "hostname",
+    "host.name":                                "HostName",
     "hash.sha1":                                "sha1",
     "hash.md5":                                 "md5",
     "hash.sha256":                              "sha256",
-    "windows.message":                          "Message",
-    "winlog.user.name":                         "SubjectUserName",
+    "windows.message":                          "message",
+    "winlog.user.name":                         "UserName",
     "winlog.user.type":                         "Type",
-    "winlog.task":                              "Task",
+    "winlog.task":                              "TaskName",
+    "timestamp":                                "creationTime",
 }
 
 
@@ -347,48 +347,165 @@ def discover_windows_rule_ids():
 
 # ─────────────────────────────────────────────
 # 3. Query OSSA for unmapped rule fields and
-#    build the complete field_mappings list
+#    apply mappings only for recognized fields
 # ─────────────────────────────────────────────
-def build_detector_field_mappings():
-    """
-    Query the OSSA mappings API to find ALL detection rule fields for the
-    'windows' log type and the current index, then auto-generate the
-    field_mappings array for the detector payload.
+def get_index_fields():
+    """Return the set of concrete field names in the index mapping."""
+    res, err = req("GET", f"/{INDEX_NAME}/_mapping")
+    if not res:
+        print(f"  -> Could not read index mapping: {err}", flush=True)
+        return set()
+    # Navigate: { "rp-events": { "mappings": { "properties": { "Image": {...}, ... } } } }
+    for idx_name, idx_data in res.items():
+        props = idx_data.get("mappings", {}).get("properties", {})
+        return set(props.keys())
+    return set()
 
-    Falls back to the hardcoded FIELD_MAPPINGS dict if the API call fails.
+
+def apply_field_mappings():
     """
-    # Try to get the OSSA mapping view for our index
-    mappings_payload = {
+    Query OSSA for unmapped detection rule fields, cross-reference with
+    FIELD_MAPPINGS, and apply only valid mappings.
+    
+    Returns the number of successfully applied mappings.
+    """
+    # 1. Get the OSSA mapping view to find what's unmapped
+    res, err = req("GET", f"/_plugins/_security_analytics/mappings/view?index_name={INDEX_NAME}&rule_topic=windows")
+    if not res or "response" not in res:
+        print(f"  -> Could not query OSSA mappings view: {err}", flush=True)
+        print(f"  -> Falling back to bulk mapping attempt...", flush=True)
+        return apply_field_mappings_bulk()
+
+    response = res["response"]
+    already_mapped = response.get("properties", {})
+    unmapped_rules = response.get("unmapped_field_aliases", [])
+    unmapped_index = response.get("unmapped_index_fields", [])
+
+    print(f"  -> Already mapped: {len(already_mapped)}", flush=True)
+    print(f"  -> Unmapped rule fields: {len(unmapped_rules)}", flush=True)
+    print(f"  -> Unmapped index fields: {len(unmapped_index)}", flush=True)
+
+    if not unmapped_rules:
+        print(f"  -> All rule fields are already mapped!", flush=True)
+        return len(already_mapped)
+
+    # 2. Get concrete index fields to validate paths
+    index_fields = get_index_fields()
+    print(f"  -> Index has {len(index_fields)} concrete fields.", flush=True)
+
+    # 3. Build mappings only for fields OSSA says are unmapped AND
+    #    where we have a known mapping AND the target exists in the index
+    to_map = {}
+    skipped_no_mapping = []
+    skipped_no_field = []
+
+    for rule_field in unmapped_rules:
+        if rule_field in FIELD_MAPPINGS:
+            raw_field = FIELD_MAPPINGS[rule_field]
+            if raw_field in index_fields:
+                to_map[rule_field] = raw_field
+            else:
+                skipped_no_field.append(f"{rule_field} -> {raw_field}")
+        else:
+            skipped_no_mapping.append(rule_field)
+
+    if skipped_no_mapping:
+        print(f"  -> {len(skipped_no_mapping)} rule fields have no mapping in FIELD_MAPPINGS (ignored).", flush=True)
+    if skipped_no_field:
+        print(f"  -> {len(skipped_no_field)} mappings skipped (index field not found).", flush=True)
+        for s in skipped_no_field[:5]:
+            print(f"     {s}", flush=True)
+
+    if not to_map:
+        print(f"  -> No new mappings to apply.", flush=True)
+        return len(already_mapped)
+
+    print(f"  -> Applying {len(to_map)} field mappings...", flush=True)
+
+    # 4. Apply mappings via OSSA API
+    mappings_body = {
         "index_name": INDEX_NAME,
-        "rule_topic": "windows"
+        "rule_topic": "windows",
+        "partial": True,
+        "alias_mappings": {
+            "properties": {
+                rule_field: {"type": "alias", "path": raw_field}
+                for rule_field, raw_field in to_map.items()
+            }
+        }
     }
-    res, err = req("POST", "/_plugins/_security_analytics/mappings/view", mappings_payload)
 
-    mapped = []
-    if res and "properties" in res.get("response", {}):
-        # OSSA returned its mapping view — use existing mapped fields
-        props = res["response"]["properties"]
-        for alias_name, info in props.items():
-            raw_field = info.get("path", "")
-            if raw_field:
-                mapped.append({
-                    "ruleFieldName": alias_name,
-                    "indexFieldName": raw_field
-                })
-        print(f"  -> OSSA API: {len(mapped)} fields already mapped.", flush=True)
+    map_res, map_err = req("POST", "/_plugins/_security_analytics/mappings",
+                           mappings_body, timeout=60)
+    if map_res:
+        print(f"  -> Field mappings applied successfully ({len(to_map)} fields).", flush=True)
+        return len(already_mapped) + len(to_map)
+    else:
+        print(f"  -> Bulk mapping failed: {map_err}", flush=True)
+        print(f"  -> Trying one-by-one to isolate bad mappings...", flush=True)
+        return apply_field_mappings_incremental(to_map, len(already_mapped))
 
-    # Build the full mapping list from our hardcoded table
-    # This covers ALL fields including the unmapped ones
-    seen_rules = {m["ruleFieldName"] for m in mapped}
+
+def apply_field_mappings_incremental(to_map, already_count):
+    """Apply mappings one at a time to identify which specific fields fail."""
+    success = 0
+    failures = []
+    for rule_field, raw_field in to_map.items():
+        body = {
+            "index_name": INDEX_NAME,
+            "rule_topic": "windows",
+            "partial": True,
+            "alias_mappings": {
+                "properties": {
+                    rule_field: {"type": "alias", "path": raw_field}
+                }
+            }
+        }
+        r, e = req("POST", "/_plugins/_security_analytics/mappings", body, timeout=15)
+        if r:
+            success += 1
+        else:
+            failures.append(f"{rule_field} -> {raw_field}: {e}")
+
+    print(f"  -> Incremental: {success}/{len(to_map)} succeeded, {len(failures)} failed.", flush=True)
+    if failures:
+        for f in failures[:10]:
+            print(f"     FAIL: {f}", flush=True)
+    return already_count + success
+
+
+def apply_field_mappings_bulk():
+    """Fallback: apply all FIELD_MAPPINGS without querying unmapped list first."""
+    index_fields = get_index_fields()
+    to_map = {}
     for rule_field, raw_field in FIELD_MAPPINGS.items():
-        if rule_field not in seen_rules:
-            mapped.append({
-                "ruleFieldName": rule_field,
-                "indexFieldName": raw_field
-            })
+        if raw_field in index_fields:
+            to_map[rule_field] = raw_field
 
-    print(f"  -> Total field mappings for detector: {len(mapped)}", flush=True)
-    return mapped
+    if not to_map:
+        print(f"  -> No index fields found to map.", flush=True)
+        return 0
+
+    print(f"  -> Bulk fallback: applying {len(to_map)} mappings...", flush=True)
+    mappings_body = {
+        "index_name": INDEX_NAME,
+        "rule_topic": "windows",
+        "partial": True,
+        "alias_mappings": {
+            "properties": {
+                rule_field: {"type": "alias", "path": raw_field}
+                for rule_field, raw_field in to_map.items()
+            }
+        }
+    }
+    r, e = req("POST", "/_plugins/_security_analytics/mappings", mappings_body, timeout=60)
+    if r:
+        print(f"  -> Bulk mapping applied ({len(to_map)} fields).", flush=True)
+        return len(to_map)
+    else:
+        print(f"  -> Bulk failed: {e}", flush=True)
+        print(f"  -> Trying incremental...", flush=True)
+        return apply_field_mappings_incremental(to_map, 0)
 
 
 # ─────────────────────────────────────────────
@@ -418,9 +535,11 @@ def create_detector(rule_ids):
         print("[3/3] No rule IDs — cannot create detector.", flush=True)
         return ""
 
-    # Build auto-mapped field mappings
-    print("[3/3] Building field mappings...", flush=True)
-    field_mappings = build_detector_field_mappings()
+    # Apply field mappings BEFORE detector creation
+    print("[3/3] Applying field mappings...", flush=True)
+    mapped_count = apply_field_mappings()
+    print(f"[3/3] Total mapped fields: {mapped_count}", flush=True)
+    time.sleep(2)
 
     payload = {
         "name": DETECTOR_NAME,
@@ -445,33 +564,6 @@ def create_detector(rule_ids):
             "actions": [],
         }],
     }
-
-    # ── Apply field mappings via the mappings API first ──────────────────
-    # OSSA requires field mappings to be set on the index BEFORE or DURING
-    # detector creation. We use the mappings API to set them.
-    print(f"[3/3] Applying {len(field_mappings)} field mappings via OSSA mappings API...", flush=True)
-    mappings_body = {
-        "index_name": INDEX_NAME,
-        "rule_topic": "windows",
-        "partial": True,
-        "alias_mappings": {
-            "properties": {}
-        }
-    }
-    for fm in field_mappings:
-        mappings_body["alias_mappings"]["properties"][fm["ruleFieldName"]] = {
-            "type": "alias",
-            "path": fm["indexFieldName"]
-        }
-
-    map_res, map_err = req("POST", "/_plugins/_security_analytics/mappings", mappings_body, timeout=60)
-    if map_res:
-        print(f"[3/3] Field mappings applied successfully.", flush=True)
-    else:
-        print(f"[3/3] Field mappings warning: {map_err}", flush=True)
-        print("[3/3] Proceeding with detector creation anyway...", flush=True)
-
-    time.sleep(2)
 
     print(f"[3/3] Creating detector with {len(rule_ids)} rules (may take 60-120s)...", flush=True)
     res, err = req("POST", "/_plugins/_security_analytics/detectors", payload, timeout=300)
@@ -511,3 +603,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
