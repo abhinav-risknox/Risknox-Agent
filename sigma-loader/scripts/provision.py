@@ -84,7 +84,6 @@ FIELD_MAPPINGS = {
     "winlog.event_data.LogonType":              "LogonType",
     "winlog.event_data.ImagePath":              "ImagePath",
     "winlog.event_data.Path":                   "Path",
-    "process.command_line":                     "CommandLine",
     "winlog.event_data.PasswordLastSet":        "PasswordLastSet",
     "winlog.event_data.State":                  "State",
     "winlog.event_data.ProcessName":            "ProcessName",
@@ -277,7 +276,6 @@ FIELD_MAPPINGS = {
     "winlog.user.name":                         "UserName",
     "winlog.user.type":                         "Type",
     "winlog.task":                              "TaskName",
-    "timestamp":                                "creationTime",
 }
 
 
@@ -560,6 +558,14 @@ def create_detector(rule_ids):
             "types": ["windows"],
             "ids": [],
             "sev_levels": ["critical", "high"],
+            "tags": [],
+            "actions": [],
+        }, {
+            "name": "Low Severity Alert",
+            "severity": "4",
+            "types": ["windows"],
+            "ids": [],
+            "sev_levels": ["medium", "low"],
             "tags": [],
             "actions": [],
         }],
