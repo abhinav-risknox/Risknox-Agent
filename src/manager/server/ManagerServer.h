@@ -2,6 +2,7 @@
 
 #include "manager/ca/CertificateAuthority.h"
 #include "manager/db/PostgresClient.h"
+#include "manager/geo/GeoWorker.h"
 #include "nlohmann/json.hpp"
 
 #include <string>
@@ -57,6 +58,8 @@ namespace ResolutePulse
 
         // Check if running
         bool isRunning() const { return running_.load(); }
+
+        void triggerGeoCycle();
 
         // ── Session registry (called by AgentHandler) ──
         // Register an authenticated agent's live SSL socket
@@ -165,6 +168,9 @@ namespace ResolutePulse
         // Server certificate paths (issued by the CA for the manager itself)
         std::string serverCertPath_;
         std::string serverKeyPath_;
+
+        // Background geo-resolution worker
+        std::unique_ptr<GeoWorker> geoWorker_;
     };
 
 } // namespace ResolutePulse

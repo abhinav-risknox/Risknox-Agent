@@ -80,19 +80,20 @@ bool PostgresClient::insertAgent(const AgentRecord& agent) {
         return false;
     }
 
-    const char* paramValues[6] = {
+    const char* paramValues[7] = {
         agent.agentId.c_str(),
         agent.hostname.c_str(),
         agent.osType.c_str(),
         agent.osVersion.c_str(),
         agent.agentVersion.c_str(),
-        agent.ipAddress.c_str()
+        agent.ipAddress.c_str(),
+        agent.macAddress.c_str()
     };
 
     PGresult* res = PQexecParams(conn_,
-        "INSERT INTO agents (agent_id, hostname, os_type, os_version, agent_version, ip_address, status) "
-        "VALUES ($1, $2, $3, $4, $5, $6, 'ACTIVE')",
-        6, nullptr, paramValues, nullptr, nullptr, 0);
+        "INSERT INTO agents (agent_id, hostname, os_type, os_version, agent_version, ip_address, mac_address, status) "
+        "VALUES ($1, $2, $3, $4, $5, $6, $7, 'ACTIVE')",
+        7, nullptr, paramValues, nullptr, nullptr, 0);
 
     if (PQresultStatus(res) != PGRES_COMMAND_OK) {
         lastError_ = "Insert agent failed: " + std::string(PQerrorMessage(conn_));
@@ -113,9 +114,20 @@ std::optional<AgentRecord> PostgresClient::getAgent(const std::string& agentId) 
     const char* paramValues[1] = { agentId.c_str() };
 
     PGresult* res = PQexecParams(conn_,
-        "SELECT id, agent_id, hostname, os_type, os_version, agent_version, "
-        "status, cert_serial, registered_at::text, last_seen_at::text, ip_address "
-        "FROM agents WHERE agent_id = $1",
+        "SELECT a.id, a.agent_id, a.hostname, a.os_type, a.os_version, a.agent_version, "
+        "       a.status, a.cert_serial, a.registered_at::text, a.last_seen_at::text, "
+        "       a.ip_address, a.mac_address, "
+        "       COALESCE(a.public_ip, ''), COALESCE(a.public_ip_updated_at::text, ''), "
+        "       COALESCE(g.country, ''), COALESCE(g.country_code, ''), "
+        "       COALESCE(g.city, ''), COALESCE(g.region_name, ''), "
+        "       COALESCE(g.lat::text, ''), COALESCE(g.lon::text, ''), "
+        "       COALESCE(g.isp, ''), COALESCE(g.org, ''), "
+        "       COALESCE(g.proxy::text, 'false'), COALESCE(g.hosting::text, 'false'), "
+        "       COALESCE(g.timezone, '') "
+        "FROM agents a "
+        "LEFT JOIN ip_geolocation g "
+        "       ON g.ip_address = COALESCE(NULLIF(a.public_ip,''), a.ip_address) "
+        "WHERE a.agent_id = $1",
         1, nullptr, paramValues, nullptr, nullptr, 0);
 
     if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
@@ -135,6 +147,20 @@ std::optional<AgentRecord> PostgresClient::getAgent(const std::string& agentId) 
     agent.registeredAt = PQgetisnull(res, 0, 8) ? "" : PQgetvalue(res, 0, 8);
     agent.lastSeenAt   = PQgetisnull(res, 0, 9) ? "" : PQgetvalue(res, 0, 9);
     agent.ipAddress    = PQgetisnull(res, 0, 10) ? "" : PQgetvalue(res, 0, 10);
+    agent.macAddress   = PQgetisnull(res, 0, 11) ? "" : PQgetvalue(res, 0, 11);
+    agent.publicIp     = PQgetisnull(res, 0, 12) ? "" : PQgetvalue(res, 0, 12);
+    agent.publicIpUpdatedAt = PQgetisnull(res, 0, 13) ? "" : PQgetvalue(res, 0, 13);
+    agent.geoCountry   = PQgetisnull(res, 0, 14) ? "" : PQgetvalue(res, 0, 14);
+    agent.geoCountryCode = PQgetisnull(res, 0, 15) ? "" : PQgetvalue(res, 0, 15);
+    agent.geoCity      = PQgetisnull(res, 0, 16) ? "" : PQgetvalue(res, 0, 16);
+    agent.geoRegion    = PQgetisnull(res, 0, 17) ? "" : PQgetvalue(res, 0, 17);
+    agent.geoLat       = PQgetisnull(res, 0, 18) ? "" : PQgetvalue(res, 0, 18);
+    agent.geoLon       = PQgetisnull(res, 0, 19) ? "" : PQgetvalue(res, 0, 19);
+    agent.geoIsp       = PQgetisnull(res, 0, 20) ? "" : PQgetvalue(res, 0, 20);
+    agent.geoOrg       = PQgetisnull(res, 0, 21) ? "" : PQgetvalue(res, 0, 21);
+    agent.geoProxy     = !PQgetisnull(res, 0, 22) && std::string(PQgetvalue(res, 0, 22)) == "true";
+    agent.geoHosting   = !PQgetisnull(res, 0, 23) && std::string(PQgetvalue(res, 0, 23)) == "true";
+    agent.geoTimezone  = PQgetisnull(res, 0, 24) ? "" : PQgetvalue(res, 0, 24);
 
     PQclear(res);
     return agent;
@@ -850,9 +876,20 @@ std::vector<AgentRecord> PostgresClient::listAgents() {
     if (!isConnected() && !reconnect()) return agents;
 
     PGresult* res = PQexec(conn_,
-        "SELECT id, agent_id, hostname, os_type, os_version, agent_version, "
-        "status, cert_serial, registered_at::text, last_seen_at::text, ip_address "
-        "FROM agents ORDER BY last_seen_at DESC NULLS LAST");
+        "SELECT a.id, a.agent_id, a.hostname, a.os_type, a.os_version, a.agent_version, "
+        "       a.status, a.cert_serial, a.registered_at::text, a.last_seen_at::text, "
+        "       a.ip_address, a.mac_address, "
+        "       COALESCE(a.public_ip, ''), COALESCE(a.public_ip_updated_at::text, ''), "
+        "       COALESCE(g.country, ''), COALESCE(g.country_code, ''), "
+        "       COALESCE(g.city, ''), COALESCE(g.region_name, ''), "
+        "       COALESCE(g.lat::text, ''), COALESCE(g.lon::text, ''), "
+        "       COALESCE(g.isp, ''), COALESCE(g.org, ''), "
+        "       COALESCE(g.proxy::text, 'false'), COALESCE(g.hosting::text, 'false'), "
+        "       COALESCE(g.timezone, '') "
+        "FROM agents a "
+        "LEFT JOIN ip_geolocation g "
+        "       ON g.ip_address = COALESCE(NULLIF(a.public_ip,''), a.ip_address) "
+        "ORDER BY a.last_seen_at DESC NULLS LAST");
 
     if (PQresultStatus(res) != PGRES_TUPLES_OK) {
         lastError_ = "listAgents failed: " + std::string(PQerrorMessage(conn_));
@@ -876,6 +913,20 @@ std::vector<AgentRecord> PostgresClient::listAgents() {
         a.registeredAt = PQgetisnull(res, i, 8) ? "" : PQgetvalue(res, i, 8);
         a.lastSeenAt   = PQgetisnull(res, i, 9) ? "" : PQgetvalue(res, i, 9);
         a.ipAddress    = PQgetisnull(res, i, 10) ? "" : PQgetvalue(res, i, 10);
+        a.macAddress   = PQgetisnull(res, i, 11) ? "" : PQgetvalue(res, i, 11);
+        a.publicIp     = PQgetisnull(res, i, 12) ? "" : PQgetvalue(res, i, 12);
+        a.publicIpUpdatedAt = PQgetisnull(res, i, 13) ? "" : PQgetvalue(res, i, 13);
+        a.geoCountry   = PQgetisnull(res, i, 14) ? "" : PQgetvalue(res, i, 14);
+        a.geoCountryCode = PQgetisnull(res, i, 15) ? "" : PQgetvalue(res, i, 15);
+        a.geoCity      = PQgetisnull(res, i, 16) ? "" : PQgetvalue(res, i, 16);
+        a.geoRegion    = PQgetisnull(res, i, 17) ? "" : PQgetvalue(res, i, 17);
+        a.geoLat       = PQgetisnull(res, i, 18) ? "" : PQgetvalue(res, i, 18);
+        a.geoLon       = PQgetisnull(res, i, 19) ? "" : PQgetvalue(res, i, 19);
+        a.geoIsp       = PQgetisnull(res, i, 20) ? "" : PQgetvalue(res, i, 20);
+        a.geoOrg       = PQgetisnull(res, i, 21) ? "" : PQgetvalue(res, i, 21);
+        a.geoProxy     = !PQgetisnull(res, i, 22) && std::string(PQgetvalue(res, i, 22)) == "true";
+        a.geoHosting   = !PQgetisnull(res, i, 23) && std::string(PQgetvalue(res, i, 23)) == "true";
+        a.geoTimezone  = PQgetisnull(res, i, 24) ? "" : PQgetvalue(res, i, 24);
         agents.push_back(std::move(a));
     }
 
@@ -1396,6 +1447,217 @@ bool PostgresClient::setMaxAgentLimit(int limit) {
     PQclear(res);
     LOG_INFO("Max agent limit set to {}", limit);
     return true;
+}
+
+bool PostgresClient::updateAgentPublicIp(const std::string& agentId, const std::string& publicIp) {
+    std::lock_guard<std::recursive_mutex> lock(dbMutex_);
+    if (!isConnected() && !reconnect()) return false;
+
+    const char* paramValues[2] = { publicIp.c_str(), agentId.c_str() };
+
+    PGresult* res = PQexecParams(conn_,
+        "UPDATE agents SET public_ip = $1, public_ip_updated_at = NOW() WHERE agent_id = $2",
+        2, nullptr, paramValues, nullptr, nullptr, 0);
+
+    bool ok = PQresultStatus(res) == PGRES_COMMAND_OK;
+    if (!ok) {
+        lastError_ = "Update agent public IP failed: " + std::string(PQerrorMessage(conn_));
+        LOG_ERROR("{}", lastError_);
+    }
+    PQclear(res);
+    return ok;
+}
+
+std::optional<GeoRecord> PostgresClient::getGeoForIp(const std::string& ip) {
+    std::lock_guard<std::recursive_mutex> lock(dbMutex_);
+    if (!isConnected() && !reconnect()) return std::nullopt;
+
+    const char* paramValues[1] = { ip.c_str() };
+
+    PGresult* res = PQexecParams(conn_,
+        "SELECT ip_address, country, country_code, region_name, city, "
+        "       lat, lon, timezone, isp, org, hosting, proxy, query_status, last_updated::text "
+        "FROM ip_geolocation WHERE ip_address = $1",
+        1, nullptr, paramValues, nullptr, nullptr, 0);
+
+    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
+        PQclear(res);
+        return std::nullopt;
+    }
+
+    GeoRecord geo;
+    geo.ipAddress   = PQgetvalue(res, 0, 0);
+    geo.country     = PQgetisnull(res, 0, 1) ? "" : PQgetvalue(res, 0, 1);
+    geo.countryCode = PQgetisnull(res, 0, 2) ? "" : PQgetvalue(res, 0, 2);
+    geo.regionName  = PQgetisnull(res, 0, 3) ? "" : PQgetvalue(res, 0, 3);
+    geo.city        = PQgetisnull(res, 0, 4) ? "" : PQgetvalue(res, 0, 4);
+    geo.lat         = PQgetisnull(res, 0, 5) ? 0.0 : std::stod(PQgetvalue(res, 0, 5));
+    geo.lon         = PQgetisnull(res, 0, 6) ? 0.0 : std::stod(PQgetvalue(res, 0, 6));
+    geo.timezone    = PQgetisnull(res, 0, 7) ? "" : PQgetvalue(res, 0, 7);
+    geo.isp         = PQgetisnull(res, 0, 8) ? "" : PQgetvalue(res, 0, 8);
+    geo.org         = PQgetisnull(res, 0, 9) ? "" : PQgetvalue(res, 0, 9);
+    geo.hosting     = !PQgetisnull(res, 0, 10) && std::string(PQgetvalue(res, 0, 10)) == "t";
+    geo.proxy       = !PQgetisnull(res, 0, 11) && std::string(PQgetvalue(res, 0, 11)) == "t";
+    geo.queryStatus = PQgetisnull(res, 0, 12) ? "" : PQgetvalue(res, 0, 12);
+    geo.lastUpdated = PQgetisnull(res, 0, 13) ? "" : PQgetvalue(res, 0, 13);
+
+    PQclear(res);
+    return geo;
+}
+
+nlohmann::json PostgresClient::getGeoStats() {
+    std::lock_guard<std::recursive_mutex> lock(dbMutex_);
+    nlohmann::json stats = nlohmann::json::object();
+    stats["total_agents_with_geo"] = 0;
+    stats["proxies_detected"] = 0;
+    stats["hosting_detected"] = 0;
+    stats["by_country"] = nlohmann::json::array();
+
+    if (!isConnected() && !reconnect()) return stats;
+
+    // By country
+    PGresult* res = PQexec(conn_,
+        "SELECT g.country, g.country_code, MAX(g.lat), MAX(g.lon), COUNT(a.id) as agent_count "
+        "FROM agents a "
+        "JOIN ip_geolocation g ON g.ip_address = COALESCE(NULLIF(a.public_ip,''), a.ip_address) "
+        "WHERE g.country IS NOT NULL "
+        "GROUP BY g.country, g.country_code "
+        "ORDER BY agent_count DESC");
+
+    if (PQresultStatus(res) == PGRES_TUPLES_OK) {
+        int rows = PQntuples(res);
+        int total = 0;
+        for (int i = 0; i < rows; i++) {
+            nlohmann::json c;
+            c["country"]      = PQgetvalue(res, i, 0);
+            c["country_code"] = PQgetvalue(res, i, 1);
+            c["lat"]          = std::stod(PQgetvalue(res, i, 2));
+            c["lon"]          = std::stod(PQgetvalue(res, i, 3));
+            c["count"]        = std::stoi(PQgetvalue(res, i, 4));
+            total += static_cast<int>(c["count"]);
+            stats["by_country"].push_back(c);
+        }
+        stats["total_agents_with_geo"] = total;
+    }
+    PQclear(res);
+
+    // Proxies/Hosting
+    PGresult* res2 = PQexec(conn_,
+        "SELECT "
+        "  SUM(CASE WHEN g.proxy THEN 1 ELSE 0 END) as proxies, "
+        "  SUM(CASE WHEN g.hosting THEN 1 ELSE 0 END) as hosting "
+        "FROM agents a "
+        "JOIN ip_geolocation g ON g.ip_address = COALESCE(NULLIF(a.public_ip,''), a.ip_address)");
+
+    if (PQresultStatus(res2) == PGRES_TUPLES_OK && PQntuples(res2) > 0) {
+        stats["proxies_detected"] = PQgetisnull(res2, 0, 0) ? 0 : std::stoi(PQgetvalue(res2, 0, 0));
+        stats["hosting_detected"] = PQgetisnull(res2, 0, 1) ? 0 : std::stoi(PQgetvalue(res2, 0, 1));
+    }
+    PQclear(res2);
+
+    return stats;
+}
+
+std::vector<std::pair<std::string, std::string>>
+PostgresClient::getAgentsNeedingGeo(int staleAfterHours) {
+    std::lock_guard<std::recursive_mutex> lock(dbMutex_);
+    std::vector<std::pair<std::string, std::string>> result;
+    if (!isConnected() && !reconnect()) return result;
+
+    std::string interval = std::to_string(staleAfterHours) + " hours";
+    const char* paramValues[1] = { interval.c_str() };
+
+    PGresult* res = PQexecParams(conn_,
+        "SELECT a.agent_id, a.public_ip "
+        "FROM agents a "
+        "LEFT JOIN ip_geolocation g ON g.ip_address = a.public_ip "
+        "WHERE a.public_ip IS NOT NULL "
+        "  AND a.public_ip != '' "
+        "  AND a.public_ip NOT LIKE '10.%' "
+        "  AND a.public_ip NOT LIKE '192.168.%' "
+        "  AND a.public_ip NOT LIKE '172.16.%' "
+        "  AND a.public_ip NOT LIKE '172.17.%' "
+        "  AND a.public_ip NOT LIKE '172.18.%' "
+        "  AND a.public_ip NOT LIKE '172.19.%' "
+        "  AND a.public_ip NOT LIKE '172.2_.%' "
+        "  AND a.public_ip NOT LIKE '172.30.%' "
+        "  AND a.public_ip NOT LIKE '172.31.%' "
+        "  AND a.public_ip NOT LIKE '127.%' "
+        "  AND (g.ip_address IS NULL "
+        "       OR g.last_updated < NOW() - ($1::interval)) "
+        "ORDER BY g.last_updated ASC NULLS FIRST",
+        1, nullptr, paramValues, nullptr, nullptr, 0);
+
+    if (PQresultStatus(res) == PGRES_TUPLES_OK) {
+        int rows = PQntuples(res);
+        result.reserve(rows);
+        for (int i = 0; i < rows; i++) {
+            std::string agentId = PQgetvalue(res, i, 0);
+            std::string publicIp = PQgetvalue(res, i, 1);
+            result.emplace_back(std::move(agentId), std::move(publicIp));
+        }
+    } else {
+        lastError_ = "getAgentsNeedingGeo failed: " + std::string(PQerrorMessage(conn_));
+        LOG_ERROR("{}", lastError_);
+    }
+    PQclear(res);
+    return result;
+}
+
+bool PostgresClient::upsertGeoRecord(const GeoRecord& geo) {
+    std::lock_guard<std::recursive_mutex> lock(dbMutex_);
+    if (!isConnected() && !reconnect()) return false;
+
+    std::string latStr  = std::to_string(geo.lat);
+    std::string lonStr  = std::to_string(geo.lon);
+    std::string hosting = geo.hosting ? "true" : "false";
+    std::string proxy   = geo.proxy   ? "true" : "false";
+
+    const char* paramValues[13] = {
+        geo.ipAddress.c_str(),
+        geo.country.c_str(),
+        geo.countryCode.c_str(),
+        geo.regionName.c_str(),
+        geo.city.c_str(),
+        latStr.c_str(),
+        lonStr.c_str(),
+        geo.timezone.c_str(),
+        geo.isp.c_str(),
+        geo.org.c_str(),
+        hosting.c_str(),
+        proxy.c_str(),
+        geo.queryStatus.c_str()
+    };
+
+    PGresult* res = PQexecParams(conn_,
+        "INSERT INTO ip_geolocation "
+        "  (ip_address, country, country_code, region_name, city, "
+        "   lat, lon, timezone, isp, org, hosting, proxy, query_status, last_updated) "
+        "VALUES ($1,$2,$3,$4,$5,$6::double precision,$7::double precision,"
+        "        $8,$9,$10,$11::boolean,$12::boolean,$13, NOW()) "
+        "ON CONFLICT (ip_address) DO UPDATE SET "
+        "  country      = EXCLUDED.country, "
+        "  country_code = EXCLUDED.country_code, "
+        "  region_name  = EXCLUDED.region_name, "
+        "  city         = EXCLUDED.city, "
+        "  lat          = EXCLUDED.lat, "
+        "  lon          = EXCLUDED.lon, "
+        "  timezone     = EXCLUDED.timezone, "
+        "  isp          = EXCLUDED.isp, "
+        "  org          = EXCLUDED.org, "
+        "  hosting      = EXCLUDED.hosting, "
+        "  proxy        = EXCLUDED.proxy, "
+        "  query_status = EXCLUDED.query_status, "
+        "  last_updated = NOW()",
+        13, nullptr, paramValues, nullptr, nullptr, 0);
+
+    bool ok = PQresultStatus(res) == PGRES_COMMAND_OK;
+    if (!ok) {
+        lastError_ = "upsertGeoRecord failed: " + std::string(PQerrorMessage(conn_));
+        LOG_ERROR("{}", lastError_);
+    }
+    PQclear(res);
+    return ok;
 }
 
 } // namespace ResolutePulse

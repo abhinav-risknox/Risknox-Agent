@@ -8,9 +8,27 @@ export interface Agent {
   agent_version: string;
   status: string;
   ip_address: string;
+  mac_address?: string;
+  public_ip?: string;
+  public_ip_updated_at?: string;
+  geo?: AgentGeo | null;
   registered_at: string;
   last_seen_at: string;
   online: boolean;
+}
+
+export interface AgentGeo {
+  country: string;
+  country_code: string;
+  city: string;
+  region_name: string;
+  lat: number;
+  lon: number;
+  isp: string;
+  org: string;
+  timezone: string;
+  proxy: boolean;
+  hosting: boolean;
 }
 
 export interface SettingsResponse {
@@ -73,6 +91,21 @@ export const endpoints = {
   
   audit: {
     list: (params: any) => api.get('/audit-log', { params }),
+  },
+  
+  geo: {
+    agentGeo: (id: string) => api.get<{
+      agent_id: string;
+      public_ip: string;
+      lookup_ip: string;
+      geo: AgentGeo | null;
+    }>(`/agents/${id}/geo`),
+    stats: () => api.get<{
+      total_agents_with_geo: number;
+      proxies_detected: number;
+      hosting_detected: number;
+      by_country: { country: string; country_code: string; count: number; lat: number; lon: number }[];
+    }>('/geo/stats'),
   },
 
   settings: {

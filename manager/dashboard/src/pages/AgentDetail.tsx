@@ -15,6 +15,11 @@ import { CommandHistoryTab } from '../components/agent/CommandHistoryTab';
 import { StatusReportsTab } from '../components/agent/StatusReportsTab';
 import { ModuleControlTab } from '../components/agent/ModuleControlTab';
 
+const countryFlag = (cc: string) => {
+  if (!cc) return '';
+  return cc.toUpperCase().split('').map(c => String.fromCodePoint(0x1F1E6 - 65 + c.charCodeAt(0))).join('');
+};
+
 export const AgentDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
@@ -96,7 +101,8 @@ export const AgentDetail: React.FC = () => {
                   </span>
                 </div>
                 <p className="text-muted mb-0 fs-12 font-monospace">
-                  {agent.agent_id} &bull; {agent.ip_address}
+                  {agent.agent_id} &bull; IP: {agent.ip_address} {agent.mac_address ? `\u2022 MAC: ${agent.mac_address}` : ''}
+                  {agent.public_ip && ` \u2022 PubIP: ${agent.public_ip}`}
                 </p>
               </div>
             </div>
@@ -111,6 +117,19 @@ export const AgentDetail: React.FC = () => {
                 <p className="text-muted text-uppercase fw-bold tracking-widest fs-10 mb-1">Agent Version</p>
                 <p className="mb-0 fs-13 fw-semibold">{agent.agent_version}</p>
               </div>
+              {agent.geo && (
+                <div className="text-end bg-light p-2 rounded border">
+                  <p className="text-muted text-uppercase fw-bold tracking-widest fs-10 mb-1">Location</p>
+                  <p className="mb-0 fs-13 fw-semibold">
+                    {countryFlag(agent.geo.country_code)} {agent.geo.city}, {agent.geo.country_code}
+                  </p>
+                  <div className="d-flex align-items-center justify-content-end gap-1 mt-1">
+                    <p className="text-muted fs-10 mb-0 text-truncate" style={{maxWidth: '80px'}}>{agent.geo.isp}</p>
+                    {agent.geo.proxy && <span className="badge bg-warning-subtle text-warning fs-9 px-1">PROXY</span>}
+                    {agent.geo.hosting && <span className="badge bg-info-subtle text-info fs-9 px-1">HOSTING</span>}
+                  </div>
+                </div>
+              )}
               <Button 
                 color="primary" 
                 className="d-flex align-items-center gap-2 fw-semibold"

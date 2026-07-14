@@ -21,13 +21,11 @@ services:
       - risknox-net
 
   fluent-bit:
-    image: fluent/fluent-bit:3.2
+    image: abhinavrisknox/fluent-bit:latest
+    pull_policy: always
     container_name: fluent-bit
     ports:
       - 5170:5170
-    volumes:
-      - ./fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
-      - ./fluent-bit-scripts:/fluent-bit/scripts:ro
     networks:
       - risknox-net
     depends_on:
@@ -35,17 +33,15 @@ services:
       - data-prepper
 
   data-prepper:
-    image: opensearchproject/data-prepper:latest
+    image: abhinavrisknox/data-prepper:latest
+    pull_policy: always
     container_name: data-prepper
     ports:
       - 2021:2021
     environment:
       - OPENSEARCH_USERNAME=admin
       - OPENSEARCH_PASSWORD=Opensearch@123
-    volumes:
-      - ./data-prepper/pipelines.yaml:/usr/share/data-prepper/pipelines/pipelines.yaml:ro
-      - ./data-prepper/data-prepper-config.yaml:/usr/share/data-prepper/config/data-prepper-config.yaml:ro
-      - ./data-prepper/windows-event-normalizer/build/libs/windows-event-normalizer-1.0-SNAPSHOT.jar:/usr/share/data-prepper/lib/windows-event-normalizer-1.0-SNAPSHOT.jar:ro
+
     networks:
       - risknox-net
     depends_on:
@@ -65,7 +61,8 @@ services:
       - risknox-net
 
   postgres:
-    image: postgres:16-alpine
+    image: abhinavrisknox/postgres:latest
+    pull_policy: always
     container_name: postgres
     environment:
       - POSTGRES_USER=postgres
@@ -75,7 +72,6 @@ services:
       - 5432:5432
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./db/migrations/001_certificates.sql:/docker-entrypoint-initdb.d/001_certificates.sql:ro
     networks:
       - risknox-net
 
@@ -111,6 +107,19 @@ services:
       - manager
     restart: unless-stopped
 
+  sigma-loader:
+    image: abhinavrisknox/sigma-loader:latest
+    pull_policy: always
+    container_name: sigma-loader
+    environment:
+      - OPENSEARCH_URL=http://opensearch:9200
+      - INDEX_NAME=rp-events
+      - DETECTOR_NAME=Windows-Threat-Detector
+    networks:
+      - risknox-net
+    depends_on:
+      - opensearch
+
   # ── Watchtower: polls Docker Hub every 5 min, auto-restarts manager on new image
   watchtower:
     image: containrrr/watchtower
@@ -123,8 +132,8 @@ services:
       - WATCHTOWER_POLL_INTERVAL=300
       - WATCHTOWER_CLEANUP=true
       - WATCHTOWER_LABEL_ENABLE=false
-    # Watch both manager and dashboard
-    command: resolutepulse-manager resolutepulse-dashboard
+    # Watch manager, dashboard, data-prepper, fluent-bit, sigma-loader, and postgres
+    command: resolutepulse-manager resolutepulse-dashboard data-prepper fluent-bit sigma-loader postgres
     networks:
       - risknox-net
     restart: unless-stopped

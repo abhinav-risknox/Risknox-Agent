@@ -89,6 +89,9 @@ CREATE TABLE public.agents (
     registered_at timestamp with time zone DEFAULT now() NOT NULL,
     last_seen_at timestamp with time zone,
     ip_address character varying(45),
+    mac_address character varying(17),
+    public_ip character varying(45),
+    public_ip_updated_at timestamp with time zone,
     CONSTRAINT chk_agent_status CHECK (((status)::text = ANY ((ARRAY['ACTIVE'::character varying, 'INACTIVE'::character varying, 'REVOKED'::character varying, 'PENDING'::character varying])::text[])))
 );
 
@@ -660,3 +663,29 @@ ALTER TABLE public.manager_settings OWNER TO postgres;
 -- Seed default agent limit
 INSERT INTO public.manager_settings (key, value) VALUES ('max_agents', '100')
     ON CONFLICT (key) DO NOTHING;
+
+--
+-- Geo Location Table
+--
+CREATE TABLE IF NOT EXISTS public.ip_geolocation (
+    id           SERIAL PRIMARY KEY,
+    ip_address   VARCHAR(45)  NOT NULL UNIQUE,
+    country      VARCHAR(100),
+    country_code VARCHAR(10),
+    region_name  VARCHAR(100),
+    city         VARCHAR(100),
+    lat          DOUBLE PRECISION,
+    lon          DOUBLE PRECISION,
+    timezone     VARCHAR(100),
+    isp          VARCHAR(200),
+    org          VARCHAR(200),
+    hosting      BOOLEAN DEFAULT FALSE,
+    proxy        BOOLEAN DEFAULT FALSE,
+    query_status VARCHAR(20),
+    raw_response JSONB,
+    last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_at   TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ip_geolocation_ip ON public.ip_geolocation(ip_address);
+

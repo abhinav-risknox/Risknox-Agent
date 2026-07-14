@@ -53,9 +53,13 @@ struct RegisterRequest {
     std::string osVersion;
     std::string agentVersion;
     std::string publicKeyPem;   // Agent's ECC public key in PEM format
+    std::string macAddress;     // Primary network adapter MAC address (optional, older agents omit)
+    std::string ipAddress;      // Agent's own LAN/private IP address (optional, older agents omit)
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(RegisterRequest,
-        agentId, hostname, osType, osVersion, agentVersion, publicKeyPem)
+    // WITH_DEFAULT: missing fields use default (empty string) instead of throwing.
+    // This ensures old agent binaries that predate macAddress/ipAddress still register.
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE_WITH_DEFAULT(RegisterRequest,
+        agentId, hostname, osType, osVersion, agentVersion, publicKeyPem, macAddress, ipAddress)
 };
 
 struct RegisterAccept {

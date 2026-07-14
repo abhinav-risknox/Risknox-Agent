@@ -31,6 +31,39 @@ struct AgentRecord {
     std::string registeredAt;
     std::string lastSeenAt;
     std::string ipAddress;
+    std::string macAddress;
+    std::string publicIp;
+    std::string publicIpUpdatedAt;
+
+    // Geo fields
+    std::string geoCountry;
+    std::string geoCountryCode;
+    std::string geoCity;
+    std::string geoRegion;
+    std::string geoLat;
+    std::string geoLon;
+    std::string geoIsp;
+    std::string geoOrg;
+    bool        geoProxy = false;
+    bool        geoHosting = false;
+    std::string geoTimezone;
+};
+
+struct GeoRecord {
+    std::string ipAddress;
+    std::string country;
+    std::string countryCode;
+    std::string regionName;
+    std::string city;
+    double      lat = 0.0;
+    double      lon = 0.0;
+    std::string timezone;
+    std::string isp;
+    std::string org;
+    bool        hosting = false;
+    bool        proxy   = false;
+    std::string queryStatus;
+    std::string lastUpdated;
 };
 
 struct CertificateRecord {
@@ -126,6 +159,23 @@ public:
 
     // Remove an agent
     bool removeAgent(const std::string& agentId);
+
+    // Update agent public IP and MAC
+    bool updateAgentPublicIp(const std::string& agentId, const std::string& publicIp);
+
+    // Get geo record for a single IP
+    std::optional<GeoRecord> getGeoForIp(const std::string& ip);
+
+    // Get geo stats (aggregated by country)
+    nlohmann::json getGeoStats();
+
+    // Get list of (agent_id, public_ip) pairs that need geo lookup
+    // Returns IPs where ip_geolocation has no entry or entry is older than staleAfterHours
+    std::vector<std::pair<std::string, std::string>>
+        getAgentsNeedingGeo(int staleAfterHours = 24);
+
+    // Upsert a geo record into ip_geolocation (INSERT ... ON CONFLICT DO UPDATE)
+    bool upsertGeoRecord(const GeoRecord& geo);
 
     // ── Certificate operations ──
 

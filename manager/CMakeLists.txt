@@ -24,6 +24,7 @@ set(MANAGER_SOURCES
     src/manager/registry/AgentRegistry.cpp
     src/manager/registry/LicenseManager.cpp
     src/manager/api/RestApi.cpp
+    src/manager/geo/GeoWorker.cpp
     src/utils/Logger.cpp
 )
 
@@ -35,6 +36,7 @@ set(MANAGER_HEADERS
     src/manager/registry/AgentRegistry.h
     src/manager/registry/LicenseManager.h
     src/manager/api/RestApi.h
+    src/manager/geo/GeoWorker.h
     src/utils/Logger.h
     src/common/Protocol.h
 )

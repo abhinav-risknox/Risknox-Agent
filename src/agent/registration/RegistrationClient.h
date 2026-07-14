@@ -27,6 +27,8 @@ public:
                              const std::string& osType,
                              const std::string& osVersion,
                              const std::string& agentVersion,
+                             const std::string& macAddress,
+                             const std::string& ipAddress,
                              CertificateStore& certStore);
 
     // Get the generated public key PEM

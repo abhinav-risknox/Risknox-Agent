@@ -567,6 +567,65 @@ bool Agent::performRegistration() {
     
     // Get OS version
     std::string osVersion = "Windows";
+
+    // Get primary MAC address and LAN IP from first active, non-loopback adapter
+    std::string primaryMac;
+    std::string primaryLanIp;
+    {
+        ULONG outBufLen = 15000;
+        auto* pAddresses = reinterpret_cast<PIP_ADAPTER_ADDRESSES>(
+            HeapAlloc(GetProcessHeap(), 0, outBufLen));
+        if (pAddresses) {
+            DWORD dwRet = GetAdaptersAddresses(
+                AF_UNSPEC,
+                GAA_FLAG_INCLUDE_GATEWAYS | GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST,
+                NULL, pAddresses, &outBufLen);
+            if (dwRet == ERROR_BUFFER_OVERFLOW) {
+                HeapFree(GetProcessHeap(), 0, pAddresses);
+                pAddresses = reinterpret_cast<PIP_ADAPTER_ADDRESSES>(
+                    HeapAlloc(GetProcessHeap(), 0, outBufLen));
+                if (pAddresses)
+                    dwRet = GetAdaptersAddresses(
+                        AF_UNSPEC,
+                        GAA_FLAG_INCLUDE_GATEWAYS | GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST,
+                        NULL, pAddresses, &outBufLen);
+            }
+            if (pAddresses && dwRet == NO_ERROR) {
+                for (auto* p = pAddresses; p && primaryMac.empty(); p = p->Next) {
+                    if (p->OperStatus == IfOperStatusUp
+                        && p->IfType != IF_TYPE_SOFTWARE_LOOPBACK
+                        && p->PhysicalAddressLength > 0) {
+                        // MAC address
+                        char mac[18] = {};
+                        snprintf(mac, sizeof(mac), "%02X:%02X:%02X:%02X:%02X:%02X",
+                            p->PhysicalAddress[0], p->PhysicalAddress[1],
+                            p->PhysicalAddress[2], p->PhysicalAddress[3],
+                            p->PhysicalAddress[4], p->PhysicalAddress[5]);
+                        primaryMac = mac;
+
+                        // First IPv4 unicast address on this adapter = LAN IP
+                        for (auto* uni = p->FirstUnicastAddress;
+                             uni && primaryLanIp.empty();
+                             uni = uni->Next) {
+                            auto* sa = uni->Address.lpSockaddr;
+                            if (sa->sa_family == AF_INET) {
+                                char ipStr[INET_ADDRSTRLEN] = {};
+                                inet_ntop(AF_INET,
+                                    &reinterpret_cast<sockaddr_in*>(sa)->sin_addr,
+                                    ipStr, sizeof(ipStr));
+                                primaryLanIp = ipStr;
+                            }
+                        }
+                    }
+                }
+            }
+            if (pAddresses) HeapFree(GetProcessHeap(), 0, pAddresses);
+        }
+        if (primaryMac.empty())
+            LOG_WARN("Could not determine primary MAC address");
+        else
+            LOG_INFO("Primary MAC: {}  LAN IP: {}", primaryMac, primaryLanIp);
+    }
     
     // Read manager settings from config
     const auto& mgrConfig = config.getManagerConfig();
@@ -581,6 +640,8 @@ bool Agent::performRegistration() {
             "windows",
             osVersion,
             "1.0.0",
+            primaryMac,
+            primaryLanIp,
             *certStore_)) {
         LOG_ERROR("Registration with manager failed: {}", regClient.getLastError());
         return false;

@@ -236,6 +236,7 @@ if(EXISTS "${LIBPQ_DLL}" AND LIBPQ_INCLUDE_DIR
         src/manager/registry/AgentRegistry.cpp
         src/manager/registry/LicenseManager.cpp
         src/manager/api/RestApi.cpp
+        src/manager/geo/GeoWorker.cpp
         src/utils/Logger.cpp
     )
 
@@ -355,6 +356,7 @@ add_executable(test_manager_server
     src/manager/server/AgentHandler.cpp
     src/manager/ca/CertificateAuthority.cpp
     src/manager/db/PostgresClient.cpp
+    src/manager/geo/GeoWorker.cpp
     src/utils/Logger.cpp
 )
 
@@ -377,6 +379,7 @@ target_link_libraries(test_manager_server PRIVATE
     OpenSSL::Crypto
     ws2_32
     advapi32
+    crypt32
 )
 
 # =============================================================================
@@ -429,6 +432,8 @@ target_link_libraries(test_license_manager PRIVATE ws2_32 advapi32)
 add_executable(test_agent_handler
     tests/test_agent_handler.cpp
     src/manager/server/AgentHandler.cpp
+    src/manager/server/ManagerServer.cpp
+    src/manager/geo/GeoWorker.cpp
     src/manager/ca/CertificateAuthority.cpp
     src/manager/db/PostgresClient.cpp
     src/utils/Logger.cpp
@@ -449,6 +454,7 @@ target_link_libraries(test_agent_handler PRIVATE
     OpenSSL::Crypto
     ws2_32
     advapi32
+    crypt32
 )
 
 # =============================================================================

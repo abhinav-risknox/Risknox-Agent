@@ -80,6 +80,18 @@ namespace ResolutePulse
         if (!authenticate(req, res)) return;
         handleGetAgents(req, res); });
 
+        httpServer_->Get(R"(/api/agents/([^/]+)/geo)", [this](const Req &req, Res &res)
+                         {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleGetAgentGeo(req, res); });
+
+        httpServer_->Get("/api/geo/stats", [this](const Req &req, Res &res)
+                         {
+        addCorsHeaders(res);
+        if (!authenticate(req, res)) return;
+        handleGetGeoStats(req, res); });
+
         httpServer_->Get(R"(/api/agents/([^/]+))", [this](const Req &req, Res &res)
                          {
         addCorsHeaders(res);
@@ -405,9 +417,31 @@ namespace ResolutePulse
             j["agent_version"] = a.agentVersion;
             j["status"] = a.status;
             j["ip_address"] = a.ipAddress;
+            j["mac_address"] = a.macAddress;
+            j["public_ip"] = a.publicIp;
+            j["public_ip_updated_at"] = a.publicIpUpdatedAt;
             j["registered_at"] = a.registeredAt;
             j["last_seen_at"] = a.lastSeenAt;
             j["online"] = server_.isAgentOnline(a.agentId);
+
+            if (!a.geoCountry.empty()) {
+                nlohmann::json geo;
+                geo["country"]      = a.geoCountry;
+                geo["country_code"] = a.geoCountryCode;
+                geo["city"]         = a.geoCity;
+                geo["region_name"]  = a.geoRegion;
+                try { geo["lat"] = std::stod(a.geoLat); } catch(...) { geo["lat"] = 0.0; }
+                try { geo["lon"] = std::stod(a.geoLon); } catch(...) { geo["lon"] = 0.0; }
+                geo["isp"]          = a.geoIsp;
+                geo["org"]          = a.geoOrg;
+                geo["proxy"]        = a.geoProxy;
+                geo["hosting"]      = a.geoHosting;
+                geo["timezone"]     = a.geoTimezone;
+                j["geo"] = geo;
+            } else {
+                j["geo"] = nullptr;
+            }
+
             arr.push_back(std::move(j));
         }
 
@@ -442,9 +476,30 @@ namespace ResolutePulse
         j["status"] = agent->status;
         j["cert_serial"] = agent->certSerial;
         j["ip_address"] = agent->ipAddress;
+        j["mac_address"] = agent->macAddress;
+        j["public_ip"] = agent->publicIp;
+        j["public_ip_updated_at"] = agent->publicIpUpdatedAt;
         j["registered_at"] = agent->registeredAt;
         j["last_seen_at"] = agent->lastSeenAt;
         j["online"] = server_.isAgentOnline(agentId);
+
+        if (!agent->geoCountry.empty()) {
+            nlohmann::json geo;
+            geo["country"]      = agent->geoCountry;
+            geo["country_code"] = agent->geoCountryCode;
+            geo["city"]         = agent->geoCity;
+            geo["region_name"]  = agent->geoRegion;
+            try { geo["lat"] = std::stod(agent->geoLat); } catch(...) { geo["lat"] = 0.0; }
+            try { geo["lon"] = std::stod(agent->geoLon); } catch(...) { geo["lon"] = 0.0; }
+            geo["isp"]          = agent->geoIsp;
+            geo["org"]          = agent->geoOrg;
+            geo["proxy"]        = agent->geoProxy;
+            geo["hosting"]      = agent->geoHosting;
+            geo["timezone"]     = agent->geoTimezone;
+            j["geo"] = geo;
+        } else {
+            j["geo"] = nullptr;
+        }
 
         // Include license info
         auto license = db_.getLicense(agentId);
@@ -482,6 +537,53 @@ namespace ResolutePulse
             res.status = 500;
             res.set_content(R"({"error":"Failed to remove agent from database"})", "application/json");
         }
+    }
+
+    void RestApi::handleGetAgentGeo(const httplib::Request &req, httplib::Response &res)
+    {
+        std::string agentId = req.matches[1];
+        auto agent = db_.getAgent(agentId);
+        if (!agent)
+        {
+            res.status = 404;
+            res.set_content(R"({"error":"Agent not found"})", "application/json");
+            return;
+        }
+
+        std::string lookupIp = agent->publicIp.empty() ? agent->ipAddress : agent->publicIp;
+        auto geo = db_.getGeoForIp(lookupIp);
+
+        nlohmann::json j;
+        j["agent_id"]             = agentId;
+        j["public_ip"]            = agent->publicIp;
+        j["public_ip_updated_at"] = agent->publicIpUpdatedAt;
+        j["lookup_ip"]            = lookupIp;
+
+        if (geo) {
+            nlohmann::json g;
+            g["country"]      = geo->country;
+            g["country_code"] = geo->countryCode;
+            g["city"]         = geo->city;
+            g["region_name"]  = geo->regionName;
+            g["lat"]          = geo->lat;
+            g["lon"]          = geo->lon;
+            g["isp"]          = geo->isp;
+            g["org"]          = geo->org;
+            g["proxy"]        = geo->proxy;
+            g["hosting"]      = geo->hosting;
+            g["timezone"]     = geo->timezone;
+            j["geo"] = g;
+        } else {
+            j["geo"] = nullptr;
+        }
+
+        res.set_content(j.dump(), "application/json");
+    }
+
+    void RestApi::handleGetGeoStats(const httplib::Request &req, httplib::Response &res)
+    {
+        auto stats = db_.getGeoStats();
+        res.set_content(stats.dump(), "application/json");
     }
 
     void RestApi::handleGetAgentStatus(const httplib::Request &req, httplib::Response &res)

@@ -57,6 +57,8 @@ namespace ResolutePulse
         void handleGetAgent(const httplib::Request &req, httplib::Response &res);
         void handleGetAgentStatus(const httplib::Request &req, httplib::Response &res);
         void handleDeleteAgent(const httplib::Request &req, httplib::Response &res);
+        void handleGetAgentGeo(const httplib::Request &req, httplib::Response &res);
+        void handleGetGeoStats(const httplib::Request &req, httplib::Response &res);
 
         // ── Module command endpoints ──
         void handlePostModuleCommand(const httplib::Request &req, httplib::Response &res);

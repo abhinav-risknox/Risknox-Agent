@@ -1,11 +1,24 @@
 import React from 'react';
 import { Container, Row, Col, Card, CardBody, CardHeader, Table, Button, Spinner } from 'reactstrap';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { endpoints } from '../api/endpoints';
 import { StatCard } from '../components/dashboard/StatCard';
+import { WorldMap } from '../components/dashboard/WorldMap';
 import { useAgents } from '../hooks/useAgents';
+
+const countryFlag = (cc: string) => {
+  if (!cc) return '';
+  return cc.toUpperCase().split('').map(c => String.fromCodePoint(0x1F1E6 - 65 + c.charCodeAt(0))).join('');
+};
 
 export const Dashboard: React.FC = () => {
   const { data, isLoading, isError, refetch, isFetching } = useAgents();
+  const { data: geoStats, isLoading: geoLoading } = useQuery({
+    queryKey: ['geo-stats'],
+    queryFn: () => endpoints.geo.stats().then(r => r.data),
+    refetchInterval: 60_000,
+  });
 
   const totalAgents = data?.count || 0;
   const onlineAgents = data?.agents.filter(a => a.online).length || 0;
@@ -83,6 +96,7 @@ export const Dashboard: React.FC = () => {
             />
           </Col>
         </Row>
+
 
         <Row>
           {/* Main Agent Table Preview */}
@@ -175,39 +189,89 @@ export const Dashboard: React.FC = () => {
             </Card>
           </Col>
 
-          {/* Recent Activity Sidebar */}
+          {/* Geo Distribution Sidebar */}
           <Col xl={4}>
             <Card>
               <CardHeader className="align-items-center d-flex">
-                <h4 className="card-title mb-0 flex-grow-1">Recent Activity</h4>
+                <h4 className="card-title mb-0 flex-grow-1">Top Countries</h4>
               </CardHeader>
               <CardBody>
-                <div className="profile-timeline">
-                  <div className="accordion accordion-flush" id="accordionFlushExample">
-                    {[1, 2, 3, 4].map((i) => (
-                      <div className="accordion-item border-0" key={i}>
-                        <div className="accordion-header">
-                          <a className="accordion-button p-2 shadow-none" href="#">
-                            <div className="d-flex align-items-center">
-                              <div className="flex-shrink-0 avatar-xs">
-                                <div className="avatar-title bg-primary-subtle text-primary rounded-circle">
-                                  <i className="ri-terminal-box-line"></i>
-                                </div>
-                              </div>
-                              <div className="flex-grow-1 ms-3">
-                                <h6 className="fs-14 mb-0">Module Control</h6>
-                                <small className="text-muted">Command status_request sent to agent cluster</small>
-                              </div>
-                            </div>
-                          </a>
-                        </div>
-                      </div>
-                    ))}
+                {geoLoading ? (
+                  <div className="text-center py-4">
+                    <Spinner size="sm" color="primary" />
                   </div>
+                ) : !geoStats || geoStats.by_country.length === 0 ? (
+                  <div className="text-center py-4 text-muted">
+                    No geo data available yet.
+                  </div>
+                ) : (
+                  <div>
+                    <div className="d-flex justify-content-between text-muted fs-11 fw-semibold text-uppercase tracking-widest mb-2 px-2">
+                      <span>Country</span>
+                      <span>Agents</span>
+                    </div>
+                    <div className="d-flex flex-column gap-2">
+                      {geoStats.by_country.slice(0, 8).map((c, i) => (
+                        <div key={i} className="d-flex align-items-center justify-content-between bg-light p-2 rounded transition-all hover-shadow">
+                          <div className="d-flex align-items-center gap-2">
+                            <span className="fs-16">{countryFlag(c.country_code)}</span>
+                            <span className="fs-13 fw-medium">{c.country}</span>
+                          </div>
+                          <span className="fs-13 fw-bold">{c.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {geoStats && (geoStats.proxies_detected > 0 || geoStats.hosting_detected > 0) && (
+                  <div className="mt-4 pt-3 border-top">
+                    <h6 className="fs-12 text-muted fw-semibold text-uppercase tracking-widest mb-3">Network Insights</h6>
+                    <Row className="g-2">
+                      <Col xs={6}>
+                        <div className="bg-warning-subtle text-warning p-2 rounded text-center">
+                          <h4 className="mb-0 fs-18 fw-bold">{geoStats.proxies_detected}</h4>
+                          <span className="fs-10 tracking-widest">PROXIES</span>
+                        </div>
+                      </Col>
+                      <Col xs={6}>
+                        <div className="bg-info-subtle text-info p-2 rounded text-center">
+                          <h4 className="mb-0 fs-18 fw-bold">{geoStats.hosting_detected}</h4>
+                          <span className="fs-10 tracking-widest">HOSTING</span>
+                        </div>
+                      </Col>
+                    </Row>
+                  </div>
+                )}
+              </CardBody>
+            </Card>
+          </Col>
+        </Row>
+
+        <Row>
+          <Col xs={12}>
+            <Card>
+              <CardHeader className="align-items-center d-flex">
+                <h4 className="card-title mb-0 flex-grow-1">Global Agent Distribution</h4>
+                <div className="flex-shrink-0">
+                  <span className="badge bg-primary-subtle text-primary">
+                    <i className="ri-map-pin-2-fill fs-10 align-middle me-1 pulse-success"></i>
+                    {geoStats?.total_agents_with_geo || 0} mapped
+                  </span>
                 </div>
-                <div className="mt-3 text-center">
-                  <Link to="/audit" className="text-muted text-decoration-underline">View all Activity</Link>
-                </div>
+              </CardHeader>
+              <CardBody>
+                {geoLoading ? (
+                  <div className="text-center py-4">
+                    <Spinner size="sm" color="primary" />
+                  </div>
+                ) : !geoStats || geoStats.by_country.length === 0 ? (
+                  <div className="text-center py-4 text-muted">
+                    No geo data available yet.
+                  </div>
+                ) : (
+                  <WorldMap data={geoStats.by_country} agents={data?.agents || []} />
+                )}
               </CardBody>
             </Card>
           </Col>

@@ -212,7 +212,10 @@ namespace ResolutePulse
 
             // Update existing agent record instead of inserting
             db_.updateAgentStatus(request.agentId, "ACTIVE");
-            LOG_INFO("Agent {} re-registered successfully", request.agentId);
+            // Refresh public IP from TCP socket (agent may have moved networks)
+            db_.updateAgentPublicIp(request.agentId, clientAddr);
+            if (server_) server_->triggerGeoCycle();
+            LOG_INFO("Agent {} re-registered. Public IP: {}", request.agentId, clientAddr);
         }
         else
         {
@@ -237,12 +240,13 @@ namespace ResolutePulse
 
             // Insert agent record
             AgentRecord agent;
-            agent.agentId = request.agentId;
-            agent.hostname = request.hostname;
-            agent.osType = request.osType;
-            agent.osVersion = request.osVersion;
+            agent.agentId      = request.agentId;
+            agent.hostname     = request.hostname;
+            agent.osType       = request.osType;
+            agent.osVersion    = request.osVersion;
             agent.agentVersion = request.agentVersion;
-            agent.ipAddress = clientAddr;
+            agent.ipAddress    = request.ipAddress.empty() ? clientAddr : request.ipAddress; // LAN IP
+            agent.macAddress   = request.macAddress;
 
             if (!db_.insertAgent(agent))
             {
@@ -257,6 +261,14 @@ namespace ResolutePulse
                                nlohmann::json(reject).dump());
                 return;
             }
+
+            // Store public IP from TCP socket (authoritative — cannot be spoofed by agent)
+            db_.updateAgentPublicIp(request.agentId, clientAddr);
+            if (server_) server_->triggerGeoCycle();
+            LOG_INFO("Agent {} registered. LAN IP: {}  Public IP: {}",
+                     request.agentId,
+                     agent.ipAddress,
+                     clientAddr);
         } // end else (new registration)
 
         // Calculate certificate expiry - always 365 days (identity only, decoupled from license)

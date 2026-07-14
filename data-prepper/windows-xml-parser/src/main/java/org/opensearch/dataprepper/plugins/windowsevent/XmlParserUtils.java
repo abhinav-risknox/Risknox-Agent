@@ -170,6 +170,7 @@ public class XmlParserUtils {
                     if (attrValue != null && !attrValue.isEmpty()) {
                         systemFields.put(attrName, attrValue);
                     }
+                }
                 break;
             default:
                 // Other system tags (EventID, Level, etc.) are text-content based,

@@ -2,6 +2,7 @@
 #include "AgentHandler.h"
 #include "common/Protocol.h"
 #include "utils/Logger.h"
+#include "manager/geo/GeoWorker.h"
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -40,6 +41,13 @@ namespace ResolutePulse
 #endif
     }
 
+    void ManagerServer::triggerGeoCycle()
+    {
+        if (geoWorker_) {
+            geoWorker_->triggerCycle();
+        }
+    }
+
     bool ManagerServer::initialize(int port,
                                    CertificateAuthority &ca,
                                    PostgresClient &db)
@@ -47,6 +55,9 @@ namespace ResolutePulse
         port_ = port;
         ca_ = &ca;
         db_ = &db;
+
+        // Create the geo worker (started later in start())
+        geoWorker_ = std::make_unique<GeoWorker>(db);
 
         LOG_INFO("Initializing Manager Server on port {}", port_);
 
@@ -295,14 +306,18 @@ namespace ResolutePulse
         }
 
         running_ = true;
-        acceptThread_ = std::thread(&ManagerServer::acceptLoop, this);
+        acceptThread_       = std::thread(&ManagerServer::acceptLoop, this);
         commandIngestThread_ = std::thread(&ManagerServer::commandIngestLoop, this);
+        geoWorker_->start();
         return true;
     }
 
     void ManagerServer::stop()
     {
         running_ = false;
+
+        // Stop GeoWorker first (no socket dependency)
+        if (geoWorker_) geoWorker_->stop();
 
 #ifdef _WIN32
         if (listenSocket_ != INVALID_SOCKET)

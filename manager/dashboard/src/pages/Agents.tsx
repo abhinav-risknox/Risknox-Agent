@@ -4,6 +4,11 @@ import { Link } from 'react-router-dom';
 import { Container, Row, Col, Card, CardHeader, CardBody, Table, Input, Button, Spinner, InputGroup, InputGroupText, UncontrolledDropdown, DropdownToggle, DropdownMenu, DropdownItem } from 'reactstrap';
 import { endpoints } from '../api/endpoints';
 
+const countryFlag = (cc: string) => {
+  if (!cc) return '';
+  return cc.toUpperCase().split('').map(c => String.fromCodePoint(0x1F1E6 - 65 + c.charCodeAt(0))).join('');
+};
+
 export const Agents: React.FC = () => {
   const { data, isLoading, isFetching, refetch, isError } = useAgents();
 
@@ -89,7 +94,8 @@ export const Agents: React.FC = () => {
                         <tr className="text-muted text-uppercase tracking-wide fs-11 fw-semibold">
                           <th scope="col">Status</th>
                           <th scope="col">Agent Identifier</th>
-                          <th scope="col">Hostname & IP</th>
+                          <th scope="col">Network</th>
+                          <th scope="col">Location</th>
                           <th scope="col">Operating System</th>
                           <th scope="col">Last Seen</th>
                           <th scope="col" className="text-end">Actions</th>
@@ -117,14 +123,24 @@ export const Agents: React.FC = () => {
                                   </div>
                                 </div>
                                 <div className="flex-grow-1">
-                                  <h6 className="fs-14 mb-1">{agent.agent_id.substring(0, 8)}...</h6>
-                                  <p className="text-muted fs-11 font-monospace mb-0 tracking-tight">VER: {agent.agent_version}</p>
+                                  <h6 className="fs-14 mb-1">{agent.hostname}</h6>
+                                  <p className="text-muted fs-11 font-monospace mb-0 tracking-tight">{agent.agent_id.substring(0, 8)}... | {agent.agent_version}</p>
                                 </div>
                               </div>
                             </td>
                             <td>
-                              <h6 className="fs-14 mb-1">{agent.hostname}</h6>
-                              <p className="text-muted fs-12 mb-0">{agent.ip_address}</p>
+                              <p className="fs-13 font-monospace mb-1">{agent.ip_address} <span className="text-muted fs-11">({agent.mac_address || 'NO MAC'})</span></p>
+                              {agent.public_ip && <p className="text-primary fs-12 mb-0 font-monospace">Pub: {agent.public_ip}</p>}
+                            </td>
+                            <td>
+                              {agent.geo ? (
+                                <>
+                                  <h6 className="fs-13 mb-1">{countryFlag(agent.geo.country_code)} {agent.geo.city}, {agent.geo.country_code}</h6>
+                                  <p className="text-muted fs-11 mb-0 text-truncate" style={{maxWidth: '120px'}}>{agent.geo.isp}</p>
+                                </>
+                              ) : (
+                                <p className="text-muted fs-12 mb-0">—</p>
+                              )}
                             </td>
                             <td>
                               <p className="fs-14 text-body mb-1">{agent.os_type}</p>

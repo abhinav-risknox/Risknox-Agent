@@ -97,6 +97,8 @@ bool RegistrationClient::registerWithManager(
     const std::string& osType,
     const std::string& osVersion,
     const std::string& agentVersion,
+    const std::string& macAddress,
+    const std::string& ipAddress,
     CertificateStore& certStore)
 {
     LOG_INFO("Registering with manager at host='{}', port={}...", host, port);
@@ -190,6 +192,8 @@ bool RegistrationClient::registerWithManager(
     request.osVersion    = osVersion;
     request.agentVersion = agentVersion;
     request.publicKeyPem = publicKeyPem_;
+    request.macAddress   = macAddress;
+    request.ipAddress    = ipAddress;
 
     std::string message = buildMessage(MessageType::REGISTER_REQUEST, request);
 
