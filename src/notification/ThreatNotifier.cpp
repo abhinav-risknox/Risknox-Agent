@@ -1,7 +1,10 @@
 #include "ThreatNotifier.h"
 #include "utils/Logger.h"
+#include "utils/SpawnInUserSession.h"
 
 #include <Windows.h>
+#include <WtsApi32.h>
+#include <UserEnv.h>
 #include <filesystem>
 #include <chrono>
 #include <ctime>
@@ -37,31 +40,58 @@ ThreatAction ThreatNotifier::notify(const ThreatNotification& info) const {
     std::string cmdStr = cmd.str();
     LOG_DEBUG("ThreatNotifier: Launching WPF: {}", cmdStr);
 
+    // Spawn in the active user session — works from both console and Service mode.
+    // WaitMs is driven by WaitForSingleObject below, so we pass 0 here and keep
+    // our own handle via the fallback path.  For the service path SpawnInUserSession
+    // does the wait internally only if waitMs > 0, so we duplicate the handle trick:
+    // instead just use a raw approach that returns the handle.
+
+    // ── find active session ──────────────────────────────────────────────────
+    DWORD sessionId = WTSGetActiveConsoleSessionId();
+    HANDLE hUserToken = nullptr;
+    bool hasToken = (sessionId != 0xFFFFFFFF) &&
+                    WTSQueryUserToken(sessionId, &hUserToken);
+
+    LPVOID pEnv = nullptr;
+    if (hasToken) CreateEnvironmentBlock(&pEnv, hUserToken, FALSE);
+
     STARTUPINFOA si = {};
-    si.cb          = sizeof(si);
-    si.dwFlags     = STARTF_USESHOWWINDOW;
-    si.wShowWindow = SW_HIDE;
+    si.cb           = sizeof(si);
+    si.dwFlags      = STARTF_USESHOWWINDOW;
+    si.wShowWindow  = SW_SHOW;
+    si.lpDesktop    = const_cast<LPSTR>("winsta0\\default");
 
     PROCESS_INFORMATION pi = {};
-    BOOL ok = CreateProcessA(
-        nullptr,
-        const_cast<char*>(cmdStr.c_str()),
-        nullptr, nullptr,
-        FALSE,
-        0,     // No CREATE_NO_WINDOW — WPF needs to create its own window
-        nullptr, nullptr,
-        &si, &pi
-    );
+    BOOL ok = FALSE;
+
+    if (hasToken) {
+        ok = CreateProcessAsUserA(
+            hUserToken, nullptr,
+            const_cast<char*>(cmdStr.c_str()),
+            nullptr, nullptr, FALSE,
+            CREATE_UNICODE_ENVIRONMENT,
+            pEnv, nullptr, &si, &pi
+        );
+    } else {
+        // Console / dev mode — no WTS session, plain spawn
+        ok = CreateProcessA(nullptr,
+            const_cast<char*>(cmdStr.c_str()),
+            nullptr, nullptr, FALSE, 0,
+            nullptr, nullptr, &si, &pi
+        );
+    }
+
+    if (pEnv)      DestroyEnvironmentBlock(pEnv);
+    if (hUserToken) CloseHandle(hUserToken);
 
     if (!ok) {
         LOG_ERROR("ThreatNotifier: Failed to launch ThreatNotification.exe: {}", GetLastError());
         return ThreatAction::Quarantine;
     }
 
-    // Allow the WPF window to come to foreground
     AllowSetForegroundWindow(pi.dwProcessId);
 
-    // Wait for the process to exit (max 120s — double the typical timeout)
+    // Wait for the user to respond (max 120s — double the typical timeout)
     DWORD waitResult = WaitForSingleObject(pi.hProcess, 120000);
 
     ThreatAction result = ThreatAction::Quarantine;
@@ -69,7 +99,7 @@ ThreatAction ThreatNotifier::notify(const ThreatNotification& info) const {
         DWORD exitCode = 0;
         GetExitCodeProcess(pi.hProcess, &exitCode);
         result = parseExitCode(exitCode);
-        LOG_INFO("ThreatNotifier: WPF exit code = {} → {}", exitCode,
+        LOG_INFO("ThreatNotifier: WPF exit code = {} \u2192 {}", exitCode,
                  exitCode == 0 ? "QUARANTINE" :
                  exitCode == 1 ? "IGNORE" :
                  exitCode == 2 ? "DETAILS" :

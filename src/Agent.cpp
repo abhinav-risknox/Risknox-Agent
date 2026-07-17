@@ -4,6 +4,7 @@
 #include "utils/MotwChecker.h"
 #include "service/ServiceMain.h"
 #include "fim/FimEvent.h"
+#include "utils/SpawnInUserSession.h"
 
 #include <nlohmann/json.hpp>
 #include <fstream>
@@ -293,6 +294,27 @@ bool Agent::initialize(const std::string& configPath) {
                     if (endsWith(lowerPath, ".crdownload") ||
                         endsWith(lowerPath, ".partial") ||
                         endsWith(lowerPath, ".tmp")) {
+                        
+                        if (fimEvent.changeType == FimChangeType::Created) {
+                            LOG_INFO("Download started: {} \u2014 showing scanning popup", fimEvent.path);
+                            std::filesystem::path agentDir = PathUtils::getExecutableDir();
+                            std::filesystem::path notifierExe = agentDir / "ThreatNotification.exe";
+                            if (std::filesystem::exists(notifierExe)) {
+                                std::string baseName = std::filesystem::path(fimEvent.path).filename().string();
+                                std::string lowerBase = baseName;
+                                std::transform(lowerBase.begin(), lowerBase.end(), lowerBase.begin(), ::tolower);
+                                
+                                if (endsWith(lowerBase, ".crdownload")) baseName = baseName.substr(0, baseName.size() - 11);
+                                else if (endsWith(lowerBase, ".partial")) baseName = baseName.substr(0, baseName.size() - 8);
+                                else if (endsWith(lowerBase, ".tmp")) baseName = baseName.substr(0, baseName.size() - 4);
+
+                                std::string cmdStr = "\"" + notifierExe.string() + "\""
+                                    " --mode scanning"
+                                    " --file \"" + baseName + "\""
+                                    " --timeout 120";
+                                SpawnInUserSession(cmdStr);
+                            }
+                        }
                         return;
                     }
 
@@ -313,29 +335,42 @@ bool Agent::initialize(const std::string& configPath) {
                         }
 
                         if (extOk) {
-                            // Skip files that no longer exist (race with browser rename)
-                            if (!std::filesystem::exists(fimEvent.path)) {
-                                LOG_DEBUG("Skipping vanished file: {}", fimEvent.path);
-                                return;
-                            }
+                            // Browsers rename .crdownload to the final file, which triggers the FIM event instantly,
+                            // but they take an extra few milliseconds to append the :Zone.Identifier stream.
+                            // We must debounce before checking MOTW to avoid a race condition.
+                            std::string path = fimEvent.path;
+                            bool motwOnly = dlCfg.motw_only;
+                            int debounce = dlCfg.debounce_seconds;
 
-                            // MotW check (immediate — browser writes Zone.Identifier at rename time)
-                            if (dlCfg.motw_only) {
-                                auto motw = checkMotw(fimEvent.path);
-                                if (!motw.hasMotw) {
-                                    LOG_INFO("Skipping (no MotW): {}", fimEvent.path);
+                            std::thread([this, path, motwOnly, debounce]() {
+                                if (debounce > 0) {
+                                    std::this_thread::sleep_for(std::chrono::seconds(debounce));
+                                }
+
+                                // Skip files that no longer exist (race with browser rename)
+                                if (!std::filesystem::exists(path)) {
+                                    LOG_DEBUG("Skipping vanished file: {}", path);
                                     return;
                                 }
-                                LOG_INFO("MotW confirmed (Zone {}): {}", motw.zoneId, fimEvent.path);
-                            }
 
-                            LOG_INFO("Download detected, requesting scan: {}", fimEvent.path);
-                            if (policyManager_) {
-                                nlohmann::json policy;
-                                policy["action"] = "quick_scan";
-                                policy["path"]   = fimEvent.path;
-                                policyManager_->handlePolicyUpdate("antivirus", policy,"");
-                            }
+                                // MotW check (after debounce gives browser time to write Zone.Identifier)
+                                if (motwOnly) {
+                                    auto motw = checkMotw(path);
+                                    if (!motw.hasMotw) {
+                                        LOG_INFO("Skipping (no MotW): {}", path);
+                                        return;
+                                    }
+                                    LOG_INFO("MotW confirmed (Zone {}): {}", motw.zoneId, path);
+                                }
+
+                                LOG_INFO("Download detected, requesting scan: {}", path);
+                                if (policyManager_) {
+                                    nlohmann::json policy;
+                                    policy["action"] = "quick_scan";
+                                    policy["path"]   = path;
+                                    policyManager_->handlePolicyUpdate("antivirus", policy,"");
+                                }
+                            }).detach();
                         }
                     }
                 }
@@ -391,22 +426,48 @@ bool Agent::initialize(const std::string& configPath) {
     // Note: rp-patch.exe and rp-antivirus.exe are on-demand workers spawned
     // per-request by PolicyManager, not persistent background processes.
 
-    // ── USB Auto-Scan ─────────────────────────────────────────────────────────
+    // ── USB Auto-Scan ──────────────────────────────────────────────────────────
     const auto& usbCfg = config.getUsbScanConfig();
     if (usbCfg.enabled && config.getAntivirusConfig().enabled) {
         LOG_INFO("Initializing USB monitor (auto-scan on insertion)...");
         usbMonitor_ = std::make_unique<UsbMonitor>();
         usbMonitor_->setScanDelaySeconds(usbCfg.scan_delay_seconds);
+
+        // ── Immediate popup: fires the moment the drive is detected ──────────
+        usbMonitor_->setConnectedCallback([](const std::string& driveLetter) {
+            LOG_INFO("USB connected: {} — showing scanning popup", driveLetter);
+            std::filesystem::path agentDir = PathUtils::getExecutableDir();
+            std::filesystem::path notifierExe = agentDir / "ThreatNotification.exe";
+            if (std::filesystem::exists(notifierExe)) {
+                std::string cmdStr = "\"" + notifierExe.string() + "\""
+                    " --mode scanning"
+                    " --file \"" + driveLetter + "\""
+                    " --timeout 60";
+                STARTUPINFOA si = {};
+                si.cb = sizeof(si);
+                si.dwFlags = STARTF_USESHOWWINDOW;
+                si.wShowWindow = SW_SHOW;
+                PROCESS_INFORMATION pi = {};
+                if (CreateProcessA(nullptr, const_cast<char*>(cmdStr.c_str()),
+                                   nullptr, nullptr, FALSE, 0,
+                                   nullptr, nullptr, &si, &pi)) {
+                    CloseHandle(pi.hProcess);
+                    CloseHandle(pi.hThread);
+                }
+            }
+        });
+
+        // ── Arrival callback: fires after scan delay, triggers the AV scan ───
         usbMonitor_->setArrivalCallback([this](const UsbDriveInfo& drive) {
-            LOG_INFO("USB inserted: {} ({}) — queuing AV scan", drive.driveLetter, drive.volumeName);
-            // Trigger an immediate AV scan on the USB drive
+            LOG_INFO("USB ready: {} ({}) — queuing AV scan", drive.driveLetter, drive.volumeName);
             nlohmann::json policy;
             policy["action"] = "quick_scan";
             policy["path"]   = drive.driveLetter + "\\";
             if (policyManager_) {
-                policyManager_->handlePolicyUpdate("antivirus", policy,"");
+                policyManager_->handlePolicyUpdate("antivirus", policy, "");
             }
         });
+
         usbMonitor_->setRemovalCallback([](const std::string& driveLetter) {
             LOG_INFO("USB removed: {}", driveLetter);
         });

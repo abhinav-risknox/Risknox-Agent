@@ -137,6 +137,12 @@ void UsbMonitor::handleArrival(unsigned long unitMask) {
 
     LOG_INFO("UsbMonitor: USB drive inserted: {}", driveLetter);
 
+    // Fire the connected callback immediately (before the scan delay) so the
+    // UI can show a "Scanning USB..." popup right away.
+    if (onConnected_) {
+        onConnected_(driveLetter);
+    }
+
     // Detach to a worker thread so we don't block the message pump
     // during the scan delay + callback
     std::thread([this, driveLetter]() {

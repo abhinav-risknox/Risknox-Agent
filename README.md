@@ -338,6 +338,17 @@ cd src/gui/RiskNoXMonitor
 dotnet publish -c Release -r win-x64 --self-contained
 ```
 
+### Threat Notification GUI (WPF)
+
+```powershell
+dotnet publish src\gui\notifications\ThreatNotification\ThreatNotification.csproj `
+    -c Release `
+    -r win-x64 `
+    --self-contained true `
+    -p:PublishSingleFile=true `
+    -o build
+```
+
 ### Windows Installer
 
 Build the Inno Setup installer using `installer.iss`:

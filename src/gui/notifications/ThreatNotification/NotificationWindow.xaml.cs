@@ -42,8 +42,10 @@ public partial class NotificationWindow : Window
     // ── Timers ──────────────────────────────────────────────────
     private readonly DispatcherTimer _countdownTimer  = new();
     private readonly DispatcherTimer _confirmTimer    = new();
+    private readonly DispatcherTimer _scanDotsTimer   = new();
     private int _tickCount = 0;
     private int _totalTicks;
+    private int _scanDotsTick = 0;
 
     // ── Cached Brushes ──────────────────────────────────────────
     private static readonly SolidColorBrush BrushCountdownOrange = new((Color)ColorConverter.ConvertFromString("#F97316"));
@@ -74,6 +76,15 @@ public partial class NotificationWindow : Window
         if (_mode.Equals("safe", StringComparison.OrdinalIgnoreCase))
         {
             ApplySafeMode();
+        }
+        else if (_mode.Equals("scanning", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyScanningMode();
+        }
+
+        if (!_mode.Equals("scanning", StringComparison.OrdinalIgnoreCase))
+        {
+            CloseExistingScanningPopups();
         }
 
         Loaded       += OnLoaded;
@@ -135,6 +146,59 @@ public partial class NotificationWindow : Window
     }
 
     // ═════════════════════════════════════════════════════════════
+    // FEATURE: SCANNING MODE
+    // ═════════════════════════════════════════════════════════════
+    private void ApplyScanningMode()
+    {
+        // ── Window Title (used to identify and kill this later) ──
+        this.Title = "Risknox Scanning";
+
+        // ── Accent → blue ─────────────────────────────────
+        AccentBar.Fill = BrushFromHex("#3B82F6");
+
+        // ── Icon tile → USB icon ───────────────────────────
+        IconTile.Background  = BrushFromHex("#0D1A2D");
+        IconTile.BorderBrush = BrushFromHex("#14253D");
+        ShieldGroup.Visibility = Visibility.Collapsed;
+        ScanGroup.Visibility   = Visibility.Visible;
+
+        // ── Text ─────────────────────────────────────────
+        bool isUsbDrive = _fileName.Length == 2 && _fileName.EndsWith(":");
+        RunMainPrefix.Text  = isUsbDrive ? "Scanning USB Drive \u2014 " : "Scanning Download \u2014 ";
+        RunFileName.Text    = _fileName;
+        RunThreatName.Text  = "●●●";
+        RunThreatName.Foreground = BrushFromHex("#3B82F6");
+        TxtPath.Text        = "Running virus scan, please wait...";
+        TxtPath.Foreground  = BrushFromHex("#A0A0A4");
+
+        // ── Hide action buttons ──────────────────────────
+        BtnQuarantine.Visibility = Visibility.Collapsed;
+        LnkIgnore.Visibility     = Visibility.Collapsed;
+        DotSep.Visibility        = Visibility.Collapsed;
+        LnkDetails.Visibility    = Visibility.Collapsed;
+        FileTypeBadge.Visibility = Visibility.Collapsed;
+        SeverityBadge.Visibility = Visibility.Collapsed;
+
+        // ── Countdown bar → blue ─────────────────────────
+        CountdownFill.Fill = BrushFromHex("#3B82F6");
+
+        // ── Animated pulsing dots (● ○ ○ → ● ● ○ → ● ● ● → ○ ○ ○) ──
+        _scanDotsTimer.Interval = TimeSpan.FromMilliseconds(400);
+        _scanDotsTimer.Tick += (_, _) =>
+        {
+            _scanDotsTick++;
+            RunThreatName.Text = (_scanDotsTick % 4) switch
+            {
+                0 => "●●●",
+                1 => "○○○",
+                2 => "●○○",
+                _ => "●●○"
+            };
+        };
+        _scanDotsTimer.Start();
+    }
+
+    // ═════════════════════════════════════════════════════════════
     // FEATURE: SAFE MODE OVERRIDE
     // ═════════════════════════════════════════════════════════════
     private void ApplySafeMode()
@@ -149,7 +213,7 @@ public partial class NotificationWindow : Window
         CheckGroup.Visibility  = Visibility.Visible;
 
         // ── Morph text ──────────────────────────────────────
-        RunMainPrefix.Text = "Download Verified Safe \u2014 ";
+        RunMainPrefix.Text = "Scan Complete \u2014 Safe: ";
         RunThreatName.Text = _fileName;
         TxtThreat.Visibility = Visibility.Collapsed;
         TxtPath.Text         = "No threats detected";
@@ -348,7 +412,10 @@ public partial class NotificationWindow : Window
         slideIn.Completed += (_, _) =>
         {
             SystemSounds.Hand.Play();
-            _countdownTimer.Start();
+            if (!_mode.Equals("scanning", StringComparison.OrdinalIgnoreCase))
+            {
+                _countdownTimer.Start();
+            }
         };
 
         BeginAnimation(TopProperty, slideIn);
@@ -398,20 +465,7 @@ public partial class NotificationWindow : Window
         => CloseWithResult(2, "DETAILS");
 
     private void LnkIgnore_Click(object sender, MouseButtonEventArgs e)
-    {
-        var identity  = WindowsIdentity.GetCurrent();
-        var principal = new WindowsPrincipal(identity);
-        if (principal.IsInRole(WindowsBuiltInRole.Administrator))
-        {
-            CloseWithResult(1, "IGNORE");
-        }
-        else
-        {
-            RunThreatName.Text       = "Run as Administrator to ignore";
-            RunThreatName.Foreground = BrushFromHex("#EF4444");
-            SeverityBadge.Visibility = Visibility.Collapsed;
-        }
-    }
+        => CloseWithResult(1, "IGNORE");
 
     private void LnkUndo_Click(object sender, MouseButtonEventArgs e)
     {
@@ -448,6 +502,22 @@ public partial class NotificationWindow : Window
             File.AppendAllText(LogFile, entry + Environment.NewLine);
         }
         catch { /* Silent */ }
+    }
+
+    private void CloseExistingScanningPopups()
+    {
+        try
+        {
+            int currentId = System.Diagnostics.Process.GetCurrentProcess().Id;
+            foreach (var proc in System.Diagnostics.Process.GetProcessesByName("ThreatNotification"))
+            {
+                if (proc.Id != currentId && proc.MainWindowTitle.Contains("Scanning"))
+                {
+                    proc.Kill();
+                }
+            }
+        }
+        catch { /* ignore */ }
     }
 
     // ═════════════════════════════════════════════════════════════

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 #include <filesystem>
 
 namespace ResolutePulse {
@@ -28,9 +29,23 @@ public:
     static std::filesystem::path getSystemDirectory();
 
     /**
-     * @return Path to the directory where the current executable is located
+     * @return Path to the directory where the current executable is located.
+     *         Returns empty path on failure.
      */
     static std::filesystem::path getExecutableDir();
+
+    /**
+     * @return Downloads folder for the currently-running user via KNOWNFOLDERID.
+     *         Returns empty path if the shell API fails.
+     */
+    static std::filesystem::path getUserDownloadsDir();
+
+    /**
+     * @return Downloads folder for every local user profile registered in
+     *         HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList.
+     *         Only returns paths that exist on disk.
+     */
+    static std::vector<std::filesystem::path> getAllUsersDownloadsDirs();
 
     /**
      * Ensures the agent data directory exists

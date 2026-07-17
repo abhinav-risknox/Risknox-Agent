@@ -108,6 +108,8 @@ set(AGENT_SOURCES
     src/usb/UsbMonitor.cpp
     # Threat notification
     src/notification/ThreatNotifier.cpp
+    # Download MoTW watcher (event-driven Zone.Identifier detection)
+    src/watchers/MoTwWatcher.cpp
 )
 
 set(AGENT_HEADERS

@@ -308,7 +308,11 @@ void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe,
         fs::path agentDir = PathUtils::getExecutableDir();
         fs::path notifierExe = agentDir / "ThreatNotification.exe";
         if (fs::exists(notifierExe)) {
+            // For drive roots (e.g. "E:\"), filename() returns empty — use the drive letter instead
             std::string fileName = fs::path(path).filename().string();
+            if (fileName.empty()) {
+                fileName = path; // e.g. "E:\" for USB drives
+            }
             std::string cmdStr = "\"" + notifierExe.string() + "\" --mode safe"
                                  " --file \"" + fileName + "\""
                                  " --timeout 5";

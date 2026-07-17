@@ -15,8 +15,9 @@ struct UsbDriveInfo {
     uint64_t    freeBytes  = 0;
 };
 
-using UsbArrivalCallback = std::function<void(const UsbDriveInfo&)>;
-using UsbRemovalCallback = std::function<void(const std::string& driveLetter)>;
+using UsbArrivalCallback   = std::function<void(const UsbDriveInfo&)>;
+using UsbRemovalCallback   = std::function<void(const std::string& driveLetter)>;
+using UsbConnectedCallback = std::function<void(const std::string& driveLetter)>; // fires immediately on insert
 
 /// Event-driven USB monitor using RegisterDeviceNotification.
 /// Zero CPU while idle — fires callbacks instantly on insertion/removal.
@@ -25,8 +26,9 @@ public:
     UsbMonitor() = default;
     ~UsbMonitor() { stop(); }
 
-    void setArrivalCallback(UsbArrivalCallback cb) { onArrival_ = std::move(cb); }
-    void setRemovalCallback(UsbRemovalCallback cb) { onRemoval_ = std::move(cb); }
+    void setArrivalCallback(UsbArrivalCallback cb)   { onArrival_   = std::move(cb); }
+    void setRemovalCallback(UsbRemovalCallback cb)   { onRemoval_   = std::move(cb); }
+    void setConnectedCallback(UsbConnectedCallback cb){ onConnected_ = std::move(cb); } // fires before scan delay
     void setScanDelaySeconds(int s)  { scanDelaySeconds_ = s; }
 
     bool start();
@@ -42,8 +44,9 @@ private:
     static char driveLetterFromMask(unsigned long unitMask);
     UsbDriveInfo getDriveInfo(const std::string& driveLetter) const;
 
-    UsbArrivalCallback onArrival_;
-    UsbRemovalCallback onRemoval_;
+    UsbArrivalCallback   onArrival_;
+    UsbRemovalCallback   onRemoval_;
+    UsbConnectedCallback onConnected_;
 
     int               scanDelaySeconds_ = 2;
     unsigned long     threadId_         = 0;

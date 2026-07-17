@@ -5,7 +5,7 @@ services:
     container_name: opensearch
     environment:
       - discovery.type=single-node
-      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+      - OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g
       - OPENSEARCH_INITIAL_ADMIN_PASSWORD=Opensearch@123
       - plugins.security.disabled=true
     ulimits:

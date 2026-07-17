@@ -63,10 +63,11 @@ Name: "{commonappdata}\Risknox Pulse\antivirus\database"; Permissions: users-mod
 Source: "build\ResolutePulse.exe";   DestDir: "{app}"; Flags: ignoreversion; Components: core
 
 ; Worker subprocess executables
-Source: "build\rp-webblock.exe";     DestDir: "{app}"; Flags: ignoreversion; Components: core
-Source: "build\rp-softblock.exe";    DestDir: "{app}"; Flags: ignoreversion; Components: core
-Source: "build\rp-patch.exe";        DestDir: "{app}"; Flags: ignoreversion; Components: core
-Source: "build\rp-antivirus.exe";    DestDir: "{app}"; Flags: ignoreversion; Components: antivirus
+Source: "build\rp-webblock.exe";          DestDir: "{app}"; Flags: ignoreversion; Components: core
+Source: "build\rp-softblock.exe";         DestDir: "{app}"; Flags: ignoreversion; Components: core
+Source: "build\rp-patch.exe";             DestDir: "{app}"; Flags: ignoreversion; Components: core
+Source: "build\rp-antivirus.exe";         DestDir: "{app}"; Flags: ignoreversion; Components: antivirus
+Source: "build\ThreatNotification.exe";   DestDir: "{app}"; Flags: ignoreversion; Components: antivirus
 
 ; OpenSSL Dependencies for Agent and Workers
 Source: "vendor\clamav\libcrypto-3-x64.dll"; DestDir: "{app}"; Flags: ignoreversion; Components: core
@@ -125,8 +126,9 @@ Filename: "{app}\ResolutePulse.exe"; Parameters: "--uninstall"; Flags: runhidden
 ; Force kill any remaining worker processes to ensure clean uninstallation
 Filename: "taskkill.exe"; Parameters: "/F /IM rp-webblock.exe /T"; Flags: runhidden; RunOnceId: "KillWebBlock"
 Filename: "taskkill.exe"; Parameters: "/F /IM rp-softblock.exe /T"; Flags: runhidden; RunOnceId: "KillSoftBlock"
-Filename: "taskkill.exe"; Parameters: "/F /IM rp-antivirus.exe /T"; Flags: runhidden; RunOnceId: "KillAV"
-Filename: "taskkill.exe"; Parameters: "/F /IM rp-patch.exe /T"; Flags: runhidden; RunOnceId: "KillPatch"
+Filename: "taskkill.exe"; Parameters: "/F /IM rp-antivirus.exe /T";       Flags: runhidden; RunOnceId: "KillAV"
+Filename: "taskkill.exe"; Parameters: "/F /IM ThreatNotification.exe /T"; Flags: runhidden; RunOnceId: "KillThreatNotif"
+Filename: "taskkill.exe"; Parameters: "/F /IM rp-patch.exe /T";          Flags: runhidden; RunOnceId: "KillPatch"
 Filename: "taskkill.exe"; Parameters: "/F /IM {#MyAppExeName} /T"; Flags: runhidden; RunOnceId: "KillMonitor"
 ; Remove the scheduled ClamAV update task
 Filename: "schtasks.exe"; Parameters: "/Delete /F /TN ""RisknoxClamAVUpdate"""; Flags: runhidden; RunOnceId: "RemoveClamTask"; Components: antivirus

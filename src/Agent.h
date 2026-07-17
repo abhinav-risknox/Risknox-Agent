@@ -17,6 +17,7 @@
 #include "workers/WorkerManager.h"
 #include "logtailer/LogTailer.h"
 #include "usb/UsbMonitor.h"
+#include "watchers/MoTwWatcher.h"
 
 #include <memory>
 #include <atomic>
@@ -66,6 +67,7 @@ private:
     std::unique_ptr<ModuleController> moduleController_;
     std::unique_ptr<LogTailer>      logTailer_;
     std::unique_ptr<UsbMonitor>     usbMonitor_;
+    std::unique_ptr<MoTwWatcher>    moTwWatcher_;
     
     // Registration components
     std::unique_ptr<CertificateStore> certStore_;

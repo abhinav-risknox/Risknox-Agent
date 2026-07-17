@@ -1039,9 +1039,13 @@ namespace RisknoxMonitor
                     }
                     else if (sc.Status == ServiceControllerStatus.Running)
                     {
-                        BtnAction.Content = "Stopping…";
-                        sc.Stop();
-                        await Task.Run(() => sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(15)));
+                        var dialog = new PasswordDialog { Owner = this };
+                        if (dialog.ShowDialog() == true)
+                        {
+                            BtnAction.Content = "Stopping…";
+                            sc.Stop();
+                            await Task.Run(() => sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(15)));
+                        }
                     }
                 }
             }

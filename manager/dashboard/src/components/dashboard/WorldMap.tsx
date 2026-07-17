@@ -65,7 +65,7 @@ export const WorldMap: React.FC<WorldMapProps> = ({ data, agents = [] }) => {
         <ZoomableGroup
           zoom={position.zoom}
           center={position.coordinates as [number, number]}
-          onMoveEnd={handleMoveEnd}
+          onMove={handleMoveEnd}
         >
           <Geographies geography={geoUrl}>
             {({ geographies }) =>
@@ -117,7 +117,7 @@ export const WorldMap: React.FC<WorldMapProps> = ({ data, agents = [] }) => {
                     fill="var(--vz-success)" 
                     stroke="#fff" 
                     strokeWidth={1.5 / position.zoom}
-                    onMouseEnter={() => setTooltipContent(`Agent: ${agent.agent_id.substring(0, 8)} (${agent.hostname})`)}
+                    onMouseEnter={() => setTooltipContent(`Agent: ${agent.hostname || agent.agent_id}`)}
                     onMouseLeave={() => setTooltipContent("")}
                     onClick={() => navigate(`/agents/${agent.agent_id}`)}
                     data-tooltip-id="map-tooltip"
