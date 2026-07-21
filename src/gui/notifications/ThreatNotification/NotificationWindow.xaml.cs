@@ -34,6 +34,7 @@ public partial class NotificationWindow : Window
     private int  _exitCode       = 0;
     private bool _closing        = false;
     private bool _confirmed      = false;
+    private bool _isScanningMode = false;
 
     // ── DPI ─────────────────────────────────────────────────────
     private double _dpiScale = 1.0;
@@ -43,6 +44,11 @@ public partial class NotificationWindow : Window
     private readonly DispatcherTimer _countdownTimer  = new();
     private readonly DispatcherTimer _confirmTimer    = new();
     private readonly DispatcherTimer _scanDotsTimer   = new();
+    private readonly DispatcherTimer _scanProgressTimer = new();
+
+    private long _lastLogOffset = -1;
+    private readonly string _logFilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Risknox Pulse", "antivirus", "clamscan.log");
+
     private int _tickCount = 0;
     private int _totalTicks;
     private int _scanDotsTick = 0;
@@ -86,6 +92,10 @@ public partial class NotificationWindow : Window
         {
             CloseExistingScanningPopups();
         }
+
+        // In scanning mode the countdown bar is replaced by an infinite pulse;
+        // never start the countdown timer for scanning popups.
+        _isScanningMode = _mode.Equals("scanning", StringComparison.OrdinalIgnoreCase);
 
         Loaded       += OnLoaded;
         Closing      += (_, _) => Environment.ExitCode = _exitCode;
@@ -156,7 +166,7 @@ public partial class NotificationWindow : Window
         // ── Accent → blue ─────────────────────────────────
         AccentBar.Fill = BrushFromHex("#3B82F6");
 
-        // ── Icon tile → USB icon ───────────────────────────
+        // ── Icon tile → USB/download icon ─────────────────
         IconTile.Background  = BrushFromHex("#0D1A2D");
         IconTile.BorderBrush = BrushFromHex("#14253D");
         ShieldGroup.Visibility = Visibility.Collapsed;
@@ -166,7 +176,7 @@ public partial class NotificationWindow : Window
         bool isUsbDrive = _fileName.Length == 2 && _fileName.EndsWith(":");
         RunMainPrefix.Text  = isUsbDrive ? "Scanning USB Drive \u2014 " : "Scanning Download \u2014 ";
         RunFileName.Text    = _fileName;
-        RunThreatName.Text  = "●●●";
+        RunThreatName.Text  = "●○○";
         RunThreatName.Foreground = BrushFromHex("#3B82F6");
         TxtPath.Text        = "Running virus scan, please wait...";
         TxtPath.Foreground  = BrushFromHex("#A0A0A4");
@@ -179,23 +189,81 @@ public partial class NotificationWindow : Window
         FileTypeBadge.Visibility = Visibility.Collapsed;
         SeverityBadge.Visibility = Visibility.Collapsed;
 
-        // ── Countdown bar → blue ─────────────────────────
-        CountdownFill.Fill = BrushFromHex("#3B82F6");
+        // ── Replace countdown bar with an infinite looping pulse ─
+        // Prevent the countdown from ever firing in scanning mode.
+        _totalTicks = int.MaxValue;
 
-        // ── Animated pulsing dots (● ○ ○ → ● ● ○ → ● ● ● → ○ ○ ○) ──
-        _scanDotsTimer.Interval = TimeSpan.FromMilliseconds(400);
+        CountdownFill.Fill  = BrushFromHex("#3B82F6");
+        CountdownFill.Width = 512;
+
+        // ── Animated pulsing dots ────────────────────────
+        _scanDotsTimer.Interval = TimeSpan.FromMilliseconds(500);
         _scanDotsTimer.Tick += (_, _) =>
         {
             _scanDotsTick++;
-            RunThreatName.Text = (_scanDotsTick % 4) switch
+            RunThreatName.Text = (_scanDotsTick % 3) switch
             {
-                0 => "●●●",
-                1 => "○○○",
-                2 => "●○○",
-                _ => "●●○"
+                0 => "●○○",
+                1 => "●●○",
+                _ => "●●●"
             };
         };
         _scanDotsTimer.Start();
+
+        // ── Real-time file scanning progress ─────────────
+        _scanProgressTimer.Interval = TimeSpan.FromMilliseconds(200);
+        _scanProgressTimer.Tick += ScanProgressTimer_Tick;
+        _scanProgressTimer.Start();
+    }
+
+    private void ScanProgressTimer_Tick(object sender, EventArgs e)
+    {
+        try
+        {
+            if (!File.Exists(_logFilePath)) return;
+
+            using var fs = new FileStream(_logFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            if (_lastLogOffset == -1 || fs.Length < _lastLogOffset)
+            {
+                // First tick, or file was truncated/restarted -> jump to end
+                _lastLogOffset = fs.Length;
+                return;
+            }
+
+            if (fs.Length == _lastLogOffset) return;
+
+            fs.Seek(_lastLogOffset, SeekOrigin.Begin);
+            using var reader = new StreamReader(fs);
+            string newContent = reader.ReadToEnd();
+            _lastLogOffset = fs.Length;
+
+            // Parse lines to find the last file scanned
+            string[] lines = newContent.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+            string lastFile = null;
+            foreach (var line in lines)
+            {
+                if (line.Contains(": OK") || line.Contains(": Empty file") || line.Contains("FOUND"))
+                {
+                    int colonIdx = line.LastIndexOf(':');
+                    if (colonIdx > 0)
+                    {
+                        lastFile = line.Substring(0, colonIdx).Trim();
+                    }
+                }
+                else if (line.StartsWith("Scanning ")) 
+                {
+                    lastFile = line.Substring(9).Trim();
+                }
+            }
+
+            if (!string.IsNullOrEmpty(lastFile))
+            {
+                string displayFile = Path.GetFileName(lastFile);
+                if (string.IsNullOrEmpty(displayFile)) displayFile = lastFile;
+                TxtPath.Text = "Scanning: " + displayFile;
+            }
+        }
+        catch { /* Ignore sharing violations etc */ }
     }
 
     // ═════════════════════════════════════════════════════════════
@@ -213,10 +281,48 @@ public partial class NotificationWindow : Window
         CheckGroup.Visibility  = Visibility.Visible;
 
         // ── Morph text ──────────────────────────────────────
-        RunMainPrefix.Text = "Scan Complete \u2014 Safe: ";
+        bool isUsbDrive = _fileName.Length == 2 && _fileName.EndsWith(":");
+        RunMainPrefix.Text = isUsbDrive ? "USB Drive Verified Safe \u2014 " : "Download Verified Safe \u2014 ";
         RunThreatName.Text = _fileName;
         TxtThreat.Visibility = Visibility.Collapsed;
-        TxtPath.Text         = "No threats detected";
+        
+        string summaryText = "No threats detected";
+        try
+        {
+            if (File.Exists(_logFilePath))
+            {
+                // Read the tail of the log file using a FileShare read stream
+                using var fs = new FileStream(_logFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                long startPos = Math.Max(0, fs.Length - 4096); // read last 4KB
+                fs.Seek(startPos, SeekOrigin.Begin);
+                using var reader = new StreamReader(fs);
+                string tail = reader.ReadToEnd();
+
+                // Look for the last SCAN SUMMARY block
+                int summaryIdx = tail.LastIndexOf("----------- SCAN SUMMARY -----------");
+                if (summaryIdx >= 0)
+                {
+                    string summaryBlock = tail.Substring(summaryIdx);
+                    
+                    string files = "", data = "", time = "";
+                    foreach (var line in summaryBlock.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        if (line.StartsWith("Scanned files:")) files = line.Substring(14).Trim();
+                        else if (line.StartsWith("Data scanned:")) data = line.Substring(13).Trim();
+                        else if (line.StartsWith("Time:")) time = line.Substring(5).Trim();
+                    }
+
+                    if (!string.IsNullOrEmpty(files) && !string.IsNullOrEmpty(time))
+                    {
+                        if (string.IsNullOrEmpty(data)) data = "0 MiB";
+                        summaryText = $"No threats detected\nScanned {files} files ({data}) in {time}";
+                    }
+                }
+            }
+        }
+        catch { /* ignore */ }
+
+        TxtPath.Text         = summaryText;
         TxtPath.Foreground   = BrushFromHex("#A0A0A4");
 
         // ── Hide buttons ────────────────────────────────────
@@ -255,6 +361,9 @@ public partial class NotificationWindow : Window
     private void SetupCountdown()
     {
         _totalTicks = _timeout * 10;
+        // Guard: _timeout 0 means "indefinite" for scanning mode; set a safe non-zero
+        // value so the timer body never divides by zero if somehow invoked.
+        if (_totalTicks <= 0) _totalTicks = int.MaxValue;
         _countdownTimer.Interval = TimeSpan.FromMilliseconds(100);
         _countdownTimer.Tick += (_, _) =>
         {
@@ -273,7 +382,8 @@ public partial class NotificationWindow : Window
                 CountdownFill.Fill = BrushCountdownOrange;
             // else stays default gray
 
-            if (_tickCount >= _totalTicks)
+            // In scanning mode _totalTicks == int.MaxValue — never auto-close.
+            if (_tickCount >= _totalTicks && !_isScanningMode)
             {
                 _countdownTimer.Stop();
                 CloseWithResult(_mode.Equals("safe", StringComparison.OrdinalIgnoreCase) ? 3 : 4, "TIMEOUT");
@@ -411,10 +521,34 @@ public partial class NotificationWindow : Window
 
         slideIn.Completed += (_, _) =>
         {
-            SystemSounds.Hand.Play();
-            if (!_mode.Equals("scanning", StringComparison.OrdinalIgnoreCase))
+            try { SystemSounds.Hand.Play(); } catch { /* audio may not be available */ }
+
+            // Don't start the countdown timer for scanning popups — they stay
+            // open indefinitely and are killed by the arriving result popup.
+            if (!_isScanningMode)
             {
                 _countdownTimer.Start();
+            }
+            else
+            {
+                // Start the pulsing bar animation AFTER the visual tree is fully
+                // attached. Use the Rectangle's own WidthProperty explicitly to
+                // avoid resolving it as Window.WidthProperty via inheritance.
+                var pulseAnim = new DoubleAnimation
+                {
+                    From           = 80,
+                    To             = 512,
+                    Duration       = TimeSpan.FromSeconds(1.4),
+                    AutoReverse    = true,
+                    RepeatBehavior = RepeatBehavior.Forever,
+                    EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
+                };
+                // WidthProperty must be taken from the Rectangle type directly —
+                // Window also inherits WidthProperty, so the unqualified name
+                // resolves to the same DependencyProperty, but being explicit
+                // prevents future ambiguity and potential runtime dispatch issues.
+                var widthDp = System.Windows.Shapes.Rectangle.WidthProperty;
+                CountdownFill.BeginAnimation(widthDp, pulseAnim);
             }
         };
 
@@ -431,6 +565,8 @@ public partial class NotificationWindow : Window
         _closing = true;
         _countdownTimer.Stop();
         _confirmTimer.Stop();
+        _scanProgressTimer.Stop();
+        _scanDotsTimer.Stop();
 
         var screen = SystemParameters.WorkArea;
 
@@ -511,7 +647,7 @@ public partial class NotificationWindow : Window
             int currentId = System.Diagnostics.Process.GetCurrentProcess().Id;
             foreach (var proc in System.Diagnostics.Process.GetProcessesByName("ThreatNotification"))
             {
-                if (proc.Id != currentId && proc.MainWindowTitle.Contains("Scanning"))
+                if (proc.Id != currentId)
                 {
                     proc.Kill();
                 }

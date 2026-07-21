@@ -2,6 +2,7 @@
 #include "ipc/PipeChannel.h"
 #include "utils/Logger.h"
 #include "utils/PathUtils.h"
+#include "utils/SpawnInUserSession.h"
 
 #include <windows.h>
 #include <shellapi.h>
@@ -12,6 +13,7 @@
 #include <algorithm>
 #include <chrono>
 #include <fstream>
+#include <TlHelp32.h>
 
 namespace ResolutePulse {
 
@@ -170,7 +172,7 @@ void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe,
             lineBuf.erase(0, pos + 1);
             if (!line.empty() && line.back() == '\r') line.pop_back();
             if (scanLogStream.is_open()) {
-                scanLogStream << line << "\n";
+                scanLogStream << line << std::endl;
             }
 
             if (line.find(": OK") != std::string::npos || line.find(": Empty file") != std::string::npos) {
@@ -303,6 +305,31 @@ void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe,
 
     LOG_INFO("AV scan complete: {} files scanned, {} threats", filesScanned, threats);
 
+    // Kill any lingering scanning popup before showing the result popup.
+    //
+    // NOTE: FindWindowA/TerminateProcess cannot cross Windows session boundaries.
+    // We use CreateToolhelp32Snapshot to find all ThreatNotification.exe processes
+    // globally across all sessions and terminate them via OpenProcess/TerminateProcess.
+    {
+        HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if (hSnap != INVALID_HANDLE_VALUE) {
+            PROCESSENTRY32 pe;
+            pe.dwSize = sizeof(PROCESSENTRY32);
+            if (Process32First(hSnap, &pe)) {
+                do {
+                    if (_stricmp(pe.szExeFile, "ThreatNotification.exe") == 0) {
+                        HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pe.th32ProcessID);
+                        if (hProcess) {
+                            TerminateProcess(hProcess, 0);
+                            CloseHandle(hProcess);
+                        }
+                    }
+                } while (Process32Next(hSnap, &pe));
+            }
+            CloseHandle(hSnap);
+        }
+    }
+
     // Non-blocking clean-scan notification (no threats found)
     if (threats == 0) {
         fs::path agentDir = PathUtils::getExecutableDir();
@@ -313,21 +340,17 @@ void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe,
             if (fileName.empty()) {
                 fileName = path; // e.g. "E:\" for USB drives
             }
+            // Strip trailing backslash: "E:\" becomes "E:" to avoid \" breaking
+            // the command-line quoting (backslash-quote is an escape sequence).
+            if (!fileName.empty() && fileName.back() == '\\') {
+                fileName.pop_back();
+            }
             std::string cmdStr = "\"" + notifierExe.string() + "\" --mode safe"
                                  " --file \"" + fileName + "\""
                                  " --timeout 5";
-                                 
-            STARTUPINFOA si2 = {};
-            si2.cb = sizeof(si2);
-            si2.dwFlags = STARTF_USESHOWWINDOW;
-            si2.wShowWindow = SW_SHOW;
-            PROCESS_INFORMATION pi2 = {};
-            if (CreateProcessA(nullptr, const_cast<char*>(cmdStr.c_str()),
-                               nullptr, nullptr, FALSE, 0,
-                               nullptr, nullptr, &si2, &pi2)) {
-                CloseHandle(pi2.hProcess);
-                CloseHandle(pi2.hThread);
-            }
+            // Use SpawnInUserSession so the popup appears in the user's desktop
+            // even though rp-antivirus runs under the service/SYSTEM account.
+            SpawnInUserSession(cmdStr);
         }
     }
 }

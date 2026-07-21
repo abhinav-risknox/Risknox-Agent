@@ -311,7 +311,7 @@ bool Agent::initialize(const std::string& configPath) {
                                 std::string cmdStr = "\"" + notifierExe.string() + "\""
                                     " --mode scanning"
                                     " --file \"" + baseName + "\""
-                                    " --timeout 120";
+                                    " --timeout 0";
                                 SpawnInUserSession(cmdStr);
                             }
                         }
@@ -442,18 +442,8 @@ bool Agent::initialize(const std::string& configPath) {
                 std::string cmdStr = "\"" + notifierExe.string() + "\""
                     " --mode scanning"
                     " --file \"" + driveLetter + "\""
-                    " --timeout 60";
-                STARTUPINFOA si = {};
-                si.cb = sizeof(si);
-                si.dwFlags = STARTF_USESHOWWINDOW;
-                si.wShowWindow = SW_SHOW;
-                PROCESS_INFORMATION pi = {};
-                if (CreateProcessA(nullptr, const_cast<char*>(cmdStr.c_str()),
-                                   nullptr, nullptr, FALSE, 0,
-                                   nullptr, nullptr, &si, &pi)) {
-                    CloseHandle(pi.hProcess);
-                    CloseHandle(pi.hThread);
-                }
+                    " --timeout 0";
+                SpawnInUserSession(cmdStr);
             }
         });
 

@@ -4,6 +4,7 @@
         Title="Risknox Threat" Width="520" Height="120"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         Topmost="True" ShowInTaskbar="False" ResizeMode="NoResize"
+        Cursor="Arrow"
         FontFamily="Segoe UI"
         UseLayoutRounding="True" SnapsToDevicePixels="True">
 
@@ -184,10 +185,10 @@
                 </InlineUIContainer>
             </TextBlock>
 
-            <!-- ── File Path ─────────────────────────────────── -->
+            <!-- ── File Path / Summary ─────────────────────────── -->
             <TextBlock x:Name="TxtPath" Canvas.Left="72" Canvas.Top="71"
-                       Width="310" FontSize="10.5" Foreground="#606066"
-                       TextTrimming="CharacterEllipsis"/>
+                       Width="310" Height="32" FontSize="10.5" Foreground="#606066"
+                       TextTrimming="CharacterEllipsis" TextWrapping="Wrap"/>
 
             <!-- ── Quarantine Button ─────────────────────────── -->
             <Button x:Name="BtnQuarantine" Content="Quarantine"
