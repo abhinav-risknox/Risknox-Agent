@@ -100,7 +100,12 @@ void BatchSender::senderLoop() {
         for (int retry = 0; retry < MAX_RETRIES && !stopRequested_.load(); ++retry) {
             if (retry > 0) {
                 LOG_DEBUG("Retry {} of {}", retry, MAX_RETRIES);
-                std::this_thread::sleep_for(std::chrono::milliseconds(RETRY_DELAY_MS * retry));
+                // Interruptible sleep: wake up every 100ms to check stop flag
+                int delayMs = RETRY_DELAY_MS * retry;
+                for (int elapsed = 0; elapsed < delayMs && !stopRequested_.load(); elapsed += 100) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+                if (stopRequested_.load()) break;
             }
             
             SendResult result = sender_.sendBatch(events);

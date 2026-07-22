@@ -1,0 +1,145 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="Risknox Pulse" Manufacturer="Risknox" Version="1.0.0" UpgradeCode="8F9A2B3C-4D5E-6F7A-8B9C-0D1E2F3A4B5D" Scope="perMachine">
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <Icon Id="risknox.ico" SourceFile="installer_assets\risknox.ico" />
+    <Property Id="ARPPRODUCTICON" Value="risknox.ico" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Risknox Pulse">
+        
+        <Component Id="CoreAgent" Guid="3E46716E-10DB-40D9-9134-807CBBA223D1">
+          <File Source="build\ResolutePulse.exe" />
+          <ServiceInstall Id="ServiceInstaller" Type="ownProcess" Name="ResolutePulse" DisplayName="Risknox Pulse Agent Service" Description="Risknox Pulse Agent Service" Start="auto" ErrorControl="normal" />
+          <ServiceControl Id="ServiceControl" Name="ResolutePulse" Start="install" Stop="both" Remove="uninstall" Wait="yes" />
+        </Component>
+
+        <Component Id="Workers" Guid="1C2607DD-0414-411B-AE96-3A81878BC8A2">
+          <File Source="build\rp-webblock.exe" />
+          <File Source="build\rp-softblock.exe" />
+          <File Source="build\rp-patch.exe" />
+          <File Source="build\rp-antivirus.exe" />
+          <File Source="build\ThreatNotification.exe" />
+        </Component>
+
+        <Component Id="OpenSSL" Guid="E6300486-A066-417A-BDE7-A3288BB6BA7E">
+          <File Source="vendor\clamav\libcrypto-3-x64.dll" />
+          <File Source="vendor\clamav\libssl-3-x64.dll" />
+        </Component>
+
+        <Component Id="MSVC" Guid="ACF6CA84-E23B-4435-8AF4-C178D346C0CD">
+          <File Source="vendor\clamav\vcruntime140.dll" />
+          <File Source="vendor\clamav\vcruntime140_1.dll" />
+          <File Source="vendor\clamav\msvcp140.dll" />
+          <File Source="vendor\clamav\msvcp140_1.dll" />
+        </Component>
+
+        <Component Id="UI" Guid="BEEF389A-0DDB-49A4-BDCA-D6236DF06604">
+          <File Source="src\gui\RiskNoXMonitor\bin\Release\net10.0-windows\win-x64\publish\D3DCompiler_47_cor3.dll" />
+          <File Source="src\gui\RiskNoXMonitor\bin\Release\net10.0-windows\win-x64\publish\PenImc_cor3.dll" />
+          <File Source="src\gui\RiskNoXMonitor\bin\Release\net10.0-windows\win-x64\publish\PresentationNative_cor3.dll" />
+          <File Source="src\gui\RiskNoXMonitor\bin\Release\net10.0-windows\win-x64\publish\RisknoxMonitor.exe" />
+          <File Source="src\gui\RiskNoXMonitor\bin\Release\net10.0-windows\win-x64\publish\RisknoxMonitor.pdb" />
+          <File Source="src\gui\RiskNoXMonitor\bin\Release\net10.0-windows\win-x64\publish\vcruntime140_cor3.dll" />
+          <File Source="src\gui\RiskNoXMonitor\bin\Release\net10.0-windows\win-x64\publish\wpfgfx_cor3.dll" />
+        </Component>
+
+        <Component Id="Branding" Guid="71F7A3E7-0466-44EE-A216-B0892B155B7B">
+          <File Source="installer_assets\risknox.ico" />
+        </Component>
+
+        <Directory Id="CLAMAVFOLDER" Name="clamav">
+          <Component Id="ClamAV" Guid="803CE913-2895-4DE8-BBCC-72B9110B8D97">
+            <File Source="vendor\clamav\clambc.exe" />
+            <File Source="vendor\clamav\clamconf.exe" />
+            <File Source="vendor\clamav\clamd.exe" />
+            <File Source="vendor\clamav\clamdscan.exe" />
+            <File Source="vendor\clamav\clamdtop.exe" />
+            <File Source="vendor\clamav\clamscan.exe" />
+            <File Source="vendor\clamav\clamsubmit.exe" />
+            <File Source="vendor\clamav\concrt140.dll" />
+            <File Source="vendor\clamav\COPYING.txt" />
+            <File Source="vendor\clamav\freshclam.exe" />
+            <File Source="vendor\clamav\json-c.dll" />
+            <File Source="vendor\clamav\libbz2.dll" />
+            <File Source="vendor\clamav\libclamav.dll" />
+            <File Source="vendor\clamav\libclammspack.dll" />
+            <File Source="vendor\clamav\libclamunrar.dll" />
+            <File Source="vendor\clamav\libclamunrar_iface.dll" />
+            <File Source="vendor\clamav\libcurl.dll" />
+            <File Source="vendor\clamav\libfreshclam.dll" />
+            <File Source="vendor\clamav\libssh2.dll" />
+            <File Source="vendor\clamav\libxml2.dll" />
+            <File Source="vendor\clamav\manifest.json" />
+            <File Source="vendor\clamav\msvcp140_2.dll" />
+            <File Source="vendor\clamav\msvcp140_atomic_wait.dll" />
+            <File Source="vendor\clamav\msvcp140_codecvt_ids.dll" />
+            <File Source="vendor\clamav\NEWS.md" />
+            <File Source="vendor\clamav\nghttp2.dll" />
+            <File Source="vendor\clamav\pcre2-8.dll" />
+            <File Source="vendor\clamav\pdcurses.dll" />
+            <File Source="vendor\clamav\pthreadVC3.dll" />
+            <File Source="vendor\clamav\README.md" />
+            <File Source="vendor\clamav\sigtool.exe" />
+          </Component>
+          <Component Id="ClamAVScripts" Guid="34FDEAE5-9F7E-464A-A94E-520B3037E90B">
+            <File Source="installer_assets\update_definitions.bat" />
+            <File Source="installer_assets\freshclam.conf" />
+          </Component>
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="CommonAppDataFolder">
+      <Directory Id="ProgramDataFolder_Risknox" Name="Risknox Pulse">
+        <Component Id="ConfigFile" Guid="F962F74D-E46F-4859-9944-77EED7B7DDA7">
+          <File Source="config.json" />
+        </Component>
+        <Directory Id="ProgramDataFolder_Antivirus" Name="antivirus">
+          <Directory Id="ProgramDataFolder_Database" Name="database">
+            <Component Id="VirusDatabases" Guid="8F9F3351-BCFE-4B34-AA15-4CBBD158C72B">
+              <File Source="vendor\clamav\database\main.cvd" />
+              <File Source="vendor\clamav\database\daily.cvd" />
+              <File Source="vendor\clamav\database\bytecode.cvd" />
+            </Component>
+          </Directory>
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="DesktopFolder" />
+    <StandardDirectory Id="ProgramMenuFolder" />
+    <StandardDirectory Id="StartupFolder" />
+
+    <Component Id="UIShortcuts" Guid="6EE76F32-BB60-44F4-A0C3-D0F55BDDAEE1" Directory="INSTALLFOLDER">
+      <Shortcut Id="DesktopShortcut" Name="Pulse Monitor" Directory="DesktopFolder" WorkingDirectory="INSTALLFOLDER" Icon="risknox.ico" Target="[INSTALLFOLDER]RisknoxMonitor.exe" />
+      <Shortcut Id="StartMenuShortcut" Name="Pulse Monitor" Directory="ProgramMenuFolder" WorkingDirectory="INSTALLFOLDER" Icon="risknox.ico" Target="[INSTALLFOLDER]RisknoxMonitor.exe" />
+      <Shortcut Id="StartupShortcut" Name="Pulse Monitor" Directory="StartupFolder" WorkingDirectory="INSTALLFOLDER" Icon="risknox.ico" Target="[INSTALLFOLDER]RisknoxMonitor.exe" />
+      <RegistryValue Root="HKCU" Key="Software\Risknox\Pulse" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <CustomAction Id="CreateScheduledTask" Directory="INSTALLFOLDER" ExeCommand="&quot;[System64Folder]schtasks.exe&quot; /Create /F /SC DAILY /TN &quot;RisknoxClamAVUpdate&quot; /TR &quot;\&quot;[INSTALLFOLDER]clamav\update_definitions.bat\&quot;&quot; /ST 03:00 /RL HIGHEST" Execute="deferred" Impersonate="no" Return="ignore" />
+    <CustomAction Id="DeleteScheduledTask" Directory="INSTALLFOLDER" ExeCommand="&quot;[System64Folder]schtasks.exe&quot; /Delete /F /TN &quot;RisknoxClamAVUpdate&quot;" Execute="deferred" Impersonate="no" Return="ignore" />
+
+    <InstallExecuteSequence>
+      <Custom Action="CreateScheduledTask" Before="InstallFinalize" Condition="NOT Installed" />
+      <Custom Action="DeleteScheduledTask" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot;" />
+    </InstallExecuteSequence>
+
+    <Feature Id="Main">
+      <ComponentRef Id="CoreAgent" />
+      <ComponentRef Id="Workers" />
+      <ComponentRef Id="OpenSSL" />
+      <ComponentRef Id="MSVC" />
+      <ComponentRef Id="UI" />
+      <ComponentRef Id="Branding" />
+      <ComponentRef Id="ClamAV" />
+      <ComponentRef Id="ClamAVScripts" />
+      <ComponentRef Id="ConfigFile" />
+      <ComponentRef Id="VirusDatabases" />
+      <ComponentRef Id="UIShortcuts" />
+    </Feature>
+
+  </Package>
+</Wix>

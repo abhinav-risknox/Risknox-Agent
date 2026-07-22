@@ -1,0 +1,14 @@
+{
+  "ports": {
+    "agent_port": 1535,
+    "api_port": 8080,
+    "command_port": 1536
+  },
+  "ca_dir": "/app/ca",
+  "database": {
+    "connection_string": "host=127.0.0.1 port=5432 dbname=risknox user=postgres password=postgres"
+  },
+  "logging": {
+    "level": "info"
+  }
+}

@@ -4,12 +4,15 @@
 #include "manager/registry/AgentRegistry.h"
 #include "manager/registry/LicenseManager.h"
 #include "manager/api/RestApi.h"
+#include "manager/config/ManagerConfig.h"
 #include "utils/Logger.h"
 
 #include <iostream>
 #include <csignal>
 #include <string>
 #include <cstdlib>
+#include <thread>
+#include <chrono>
 
 using namespace ResolutePulse;
 
@@ -27,66 +30,21 @@ void signalHandler(int signum) {
 }
 
 int main(int argc, char* argv[]) {
+    // Load configuration (defaults -> JSON config file -> env vars -> CLI flags)
+    ManagerConfig configMgr;
+    if (!configMgr.load(argc, argv)) {
+        // Returned false (e.g. --help was displayed or invalid args)
+        return 0;
+    }
+
+    const auto& config = configMgr.get();
+
     // Initialize logger
-    Logger::initialize("info");
+    Logger::initialize(config.logLevel);
 
     LOG_INFO("===========================================");
     LOG_INFO("ResolutePulse Manager Server");
     LOG_INFO("===========================================");
-
-    // Configuration defaults
-    std::string dbConnString = "host=127.0.0.1 port=5432 dbname=risknox user=postgres password=abhi1243";
-
-    // Append password from environment variable to avoid hardcoding
-    const char* envDbPass = std::getenv("DB_PASSWORD");
-    if (envDbPass) {
-        dbConnString += " password=";
-        dbConnString += envDbPass;
-    }
-    
-    std::string caDir = "ca";
-    int port = 1514;
-    int apiPort = 8080;
-
-    // Parse command line arguments
-    for (int i = 1; i < argc; i++) {
-        std::string arg = argv[i];
-        if ((arg == "--db" || arg == "-d") && i + 1 < argc) {
-            dbConnString = argv[++i];
-            // If the caller didn't include a password, still append from env
-            if (dbConnString.find("password") == std::string::npos && envDbPass) {
-                dbConnString += " password=";
-                dbConnString += envDbPass;
-            }
-        } else if ((arg == "--ca-dir") && i + 1 < argc) {
-            caDir = argv[++i];
-        } else if ((arg == "--port" || arg == "-p") && i + 1 < argc) {
-            port = std::stoi(argv[++i]);
-        } else if ((arg == "--api-port") && i + 1 < argc) {
-            apiPort = std::stoi(argv[++i]);
-        } else if (arg == "--help" || arg == "-h") {
-            std::cout << "ResolutePulse Manager Server" << std::endl;
-            std::cout << "Usage: " << argv[0] << " [options]" << std::endl;
-            std::cout << "Options:" << std::endl;
-            std::cout << "  --db, -d CONN      PostgreSQL connection string" << std::endl;
-            std::cout << "                     (DB_PASSWORD env var appended if password= absent)" << std::endl;
-            std::cout << "  --ca-dir DIR       CA directory (default: ca)" << std::endl;
-            std::cout << "  --port, -p PORT    mTLS listen port (default: 1514)" << std::endl;
-            std::cout << "  --api-port PORT    REST API port (default: 8080)" << std::endl;
-            std::cout << "  --help, -h         Show this help" << std::endl;
-            return 0;
-        }
-    }
-
-    // Environment variable overrides
-    const char* envDb = std::getenv("RPLS_DB_CONN");
-    if (envDb) dbConnString = envDb;
-
-    const char* envPort = std::getenv("RPLS_PORT");
-    if (envPort) port = std::stoi(envPort);
-
-    const char* envApiPort = std::getenv("RPLS_API_PORT");
-    if (envApiPort) apiPort = std::stoi(envApiPort);
 
     // Set up signal handlers
     signal(SIGINT, signalHandler);
@@ -95,7 +53,7 @@ int main(int argc, char* argv[]) {
     // ─── Initialize Certificate Authority ───
     LOG_INFO("Initializing Certificate Authority...");
     CertificateAuthority ca;
-    if (!ca.initializeCA(caDir)) {
+    if (!ca.initializeCA(config.caDir)) {
         LOG_CRITICAL("Failed to initialize Certificate Authority");
         return 1;
     }
@@ -103,7 +61,7 @@ int main(int argc, char* argv[]) {
     // ─── Connect to PostgreSQL ───
     LOG_INFO("Connecting to PostgreSQL...");
     PostgresClient db;
-    if (!db.connect(dbConnString)) {
+    if (!db.connect(config.dbConnString)) {
         LOG_CRITICAL("Failed to connect to PostgreSQL");
         return 1;
     }
@@ -113,11 +71,12 @@ int main(int argc, char* argv[]) {
     LicenseManager licenseManager(db);
 
     // ─── Start Manager Server ───
-    LOG_INFO("Starting Manager Server on port {}...", port);
+    LOG_INFO("Starting Manager Server on agent port {} (command port {})...",
+             config.ports.agentPort, config.ports.commandPort);
     ManagerServer server;
     g_server = &server;
 
-    if (!server.initialize(port, ca, db)) {
+    if (!server.initialize(config.ports.agentPort, ca, db, config.ports.commandPort)) {
         LOG_CRITICAL("Failed to initialize Manager Server");
         return 1;
     }
@@ -128,19 +87,19 @@ int main(int argc, char* argv[]) {
     }
 
     // ─── Start REST API ───
-    LOG_INFO("Starting REST API on port {}...", apiPort);
+    LOG_INFO("Starting REST API on port {}...", config.ports.apiPort);
     RestApi restApi(db, server);
     g_restApi = &restApi;
 
-    if (!restApi.start(apiPort)) {
+    if (!restApi.start(config.ports.apiPort)) {
         LOG_CRITICAL("Failed to start REST API");
         return 1;
     }
 
     LOG_INFO("Manager Server running.");
-    LOG_INFO("  mTLS Agent port: {}", port);
-    LOG_INFO("  REST API port:   {}", apiPort);
-    LOG_INFO("  Command ingest:  127.0.0.1:1515");
+    LOG_INFO("  mTLS Agent port: {}", config.ports.agentPort);
+    LOG_INFO("  REST API port:   {}", config.ports.apiPort);
+    LOG_INFO("  Command ingest:  127.0.0.1:{}", config.ports.commandPort);
     LOG_INFO("Press Ctrl+C to stop.");
 
     // Wait for server to stop (signal handler will call stop())
@@ -157,4 +116,3 @@ int main(int argc, char* argv[]) {
     LOG_INFO("Manager Server shut down cleanly");
     return 0;
 }
-

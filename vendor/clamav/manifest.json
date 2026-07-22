@@ -1,10 +1,10 @@
 ﻿{
-    "version":  "1.5.2",
-    "tag":  "clamav-1.5.2",
-    "source":  "https://github.com/Cisco-Talos/clamav/releases/tag/clamav-1.5.2",
-    "assetName":  "clamav-1.5.2.win.x64.zip",
-    "assetUrl":  "https://github.com/Cisco-Talos/clamav/releases/download/clamav-1.5.2/clamav-1.5.2.win.x64.zip",
-    "assetSha256":  "6f868ed7a7e5a15aced82c53a4fa9f3f42fa9d7f7de14a606ba8db0756518eed",
-    "updatedAtUtc":  "2026-06-11T10:29:47Z",
+    "version":  "1.5.3",
+    "tag":  "clamav-1.5.3",
+    "source":  "https://github.com/Cisco-Talos/clamav/releases/tag/clamav-1.5.3",
+    "assetName":  "clamav-1.5.3.win.x64.zip",
+    "assetUrl":  "https://github.com/Cisco-Talos/clamav/releases/download/clamav-1.5.3/clamav-1.5.3.win.x64.zip",
+    "assetSha256":  "e998b3b98c2812726ca7f4db06bf89c4b52a7eb7160ab93403c3ec790a9be6b6",
+    "updatedAtUtc":  "2026-07-22T08:29:04Z",
     "databasePolicy":  "preserved-existing-or-release"
 }

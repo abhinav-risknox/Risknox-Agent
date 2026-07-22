@@ -49,8 +49,13 @@ ThreatAction ThreatNotifier::notify(const ThreatNotification& info) const {
     // ── find active session ──────────────────────────────────────────────────
     DWORD sessionId = WTSGetActiveConsoleSessionId();
     HANDLE hUserToken = nullptr;
-    bool hasToken = (sessionId != 0xFFFFFFFF) &&
-                    WTSQueryUserToken(sessionId, &hUserToken);
+    if (sessionId != 0xFFFFFFFF) {
+        hUserToken = TryWTSToken(sessionId);
+        if (!hUserToken) {
+            hUserToken = TryExplorerToken(sessionId);
+        }
+    }
+    bool hasToken = (hUserToken != nullptr);
 
     LPVOID pEnv = nullptr;
     if (hasToken) CreateEnvironmentBlock(&pEnv, hUserToken, FALSE);

@@ -127,6 +127,35 @@ void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe,
         return;
     }
 
+    // ── Throttle clamscan via Windows Job Object ──────────────────────────
+    // Limits: 25% CPU rate on one logical core, 512 MB committed memory.
+    // Also drop priority to BELOW_NORMAL so foreground tasks stay responsive.
+    HANDLE hJob = CreateJobObjectA(nullptr, nullptr);
+    if (hJob) {
+        // CPU rate: expressed as a percentage * 100 (hundredths of a percent).
+        // 25% = 2500 out of 10000.
+        JOBOBJECT_CPU_RATE_CONTROL_INFORMATION cpuRate = {};
+        cpuRate.ControlFlags = JOB_OBJECT_CPU_RATE_CONTROL_ENABLE
+                             | JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP;
+        cpuRate.CpuRate = 2500;  // 25.00%
+        SetInformationJobObject(hJob,
+            JobObjectCpuRateControlInformation,
+            &cpuRate, sizeof(cpuRate));
+
+        // Memory limit: 2.5 GB (2560 MB) to support full 3.6M+ ClamAV signature database loading
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION memLimit = {};
+        memLimit.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_JOB_MEMORY;
+        memLimit.JobMemoryLimit = 2560ULL * 1024 * 1024;  // 2.5 GB
+        SetInformationJobObject(hJob,
+            JobObjectExtendedLimitInformation,
+            &memLimit, sizeof(memLimit));
+
+        AssignProcessToJobObject(hJob, pi.hProcess);
+    }
+
+    // Drop clamscan to below-normal priority so foreground tasks stay snappy.
+    SetPriorityClass(pi.hProcess, BELOW_NORMAL_PRIORITY_CLASS);
+
     // ── Stream stdout from clamscan line-by-line ──────────────────────────
     // clamscan output format:
     //   Scanning <path>
@@ -257,7 +286,44 @@ void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe,
     CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
 
+    // Release the Job Object now that the child has exited.
+    if (hJob) CloseHandle(hJob);
+
     if (exitCode != 0 && exitCode != 1) {
+        // ── Auto-Recovery for Corrupted Database ──
+        bool isDbCorrupt = false;
+        for (const auto& diag : diagnosticLines) {
+            if (diag.find("Malformed database") != std::string::npos ||
+                diag.find("Problem parsing database") != std::string::npos ||
+                diag.find("mpool_malloc") != std::string::npos ||
+                diag.find("Can't load") != std::string::npos) {
+                isDbCorrupt = true;
+                break;
+            }
+        }
+
+        if (isDbCorrupt) {
+            LOG_WARN("Corrupted or malformed ClamAV database detected in {}. Purging corrupt files and attempting auto-recovery...", database.string());
+            std::error_code ec;
+            if (fs::exists(database)) {
+                for (const auto& entry : fs::directory_iterator(database, ec)) {
+                    if (entry.is_regular_file()) {
+                        std::string ext = entry.path().extension().string();
+                        if (ext == ".cvd" || ext == ".cld" || ext == ".cdiff" || ext == ".ldb" || ext == ".ndb") {
+                            fs::remove(entry.path(), ec);
+                        }
+                    }
+                }
+            }
+            LOG_INFO("Triggering freshclam clean download for database auto-recovery...");
+            bool recovered = updateDefinitions();
+            if (recovered) {
+                LOG_INFO("Database auto-recovery successful. Please re-run the scan.");
+            } else {
+                LOG_ERROR("Database auto-recovery freshclam update failed.");
+            }
+        }
+
         if (scanLogStream.is_open()) {
             scanLogStream << "=== Risknox ClamAV scan failed exitCode="
                           << exitCode
@@ -267,7 +333,7 @@ void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe,
         }
         nlohmann::json error = {
             {"type", "error"},
-            {"message", "clamscan failed"},
+            {"message", isDbCorrupt ? "clamscan failed (corrupted database - auto-recovery initiated)" : "clamscan failed"},
             {"exitCode", exitCode},
             {"filesScanned", filesScanned},
             {"threats", threats},
@@ -305,12 +371,27 @@ void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe,
 
     LOG_INFO("AV scan complete: {} files scanned, {} threats", filesScanned, threats);
 
-    // Kill any lingering scanning popup before showing the result popup.
+    // ── Kill any lingering scanning popup, then show the result popup ────────
+    //
+    // Order matters: kill FIRST, spawn SECOND.
+    // This eliminates the race where the newly-spawned safe popup could be
+    // caught by the kill loop if the OS schedules the new process before
+    // TerminateProcess returns.
+    //
+    // For each terminated process we wait up to 200 ms so that the handle is
+    // fully gone before we launch the replacement popup.
     //
     // NOTE: FindWindowA/TerminateProcess cannot cross Windows session boundaries.
     // We use CreateToolhelp32Snapshot to find all ThreatNotification.exe processes
     // globally across all sessions and terminate them via OpenProcess/TerminateProcess.
     {
+        // Close scanning popups gracefully first via WM_CLOSE
+        HWND hwndScan = nullptr;
+        while ((hwndScan = FindWindowExW(nullptr, hwndScan, L"RisknoxNotifyV2", L"Risknox Scanning")) != nullptr) {
+            PostMessageW(hwndScan, WM_CLOSE, 0, 0);
+        }
+
+        // Cross-session process check: only terminate processes matching "Risknox Scanning" window
         HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
         if (hSnap != INVALID_HANDLE_VALUE) {
             PROCESSENTRY32 pe;
@@ -318,10 +399,25 @@ void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe,
             if (Process32First(hSnap, &pe)) {
                 do {
                     if (_stricmp(pe.szExeFile, "ThreatNotification.exe") == 0) {
-                        HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pe.th32ProcessID);
-                        if (hProcess) {
-                            TerminateProcess(hProcess, 0);
-                            CloseHandle(hProcess);
+                        // Check if this process owns a scanning window
+                        bool isScanningProc = false;
+                        HWND hProcWin = nullptr;
+                        while ((hProcWin = FindWindowExW(nullptr, hProcWin, L"RisknoxNotifyV2", L"Risknox Scanning")) != nullptr) {
+                            DWORD winPid = 0;
+                            GetWindowThreadProcessId(hProcWin, &winPid);
+                            if (winPid == pe.th32ProcessID) {
+                                isScanningProc = true;
+                                break;
+                            }
+                        }
+
+                        if (isScanningProc) {
+                            HANDLE hProcess = OpenProcess(PROCESS_TERMINATE | SYNCHRONIZE, FALSE, pe.th32ProcessID);
+                            if (hProcess) {
+                                TerminateProcess(hProcess, 0);
+                                WaitForSingleObject(hProcess, 200);
+                                CloseHandle(hProcess);
+                            }
                         }
                     }
                 } while (Process32Next(hSnap, &pe));
@@ -330,7 +426,8 @@ void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe,
         }
     }
 
-    // Non-blocking clean-scan notification (no threats found)
+    // Non-blocking clean-scan notification (no threats found).
+    // Spawned AFTER the kill loop so it cannot be caught by the loop above.
     if (threats == 0) {
         fs::path agentDir = PathUtils::getExecutableDir();
         fs::path notifierExe = agentDir / "ThreatNotification.exe";
@@ -348,10 +445,13 @@ void AntivirusWorker::runScan(const std::string& path, PipeServer& pipe,
             std::string cmdStr = "\"" + notifierExe.string() + "\" --mode safe"
                                  " --file \"" + fileName + "\""
                                  " --timeout 5";
+            LOG_INFO("AV scan clean — spawning safe popup for: {}", fileName);
             // Use SpawnInUserSession so the popup appears in the user's desktop
             // even though rp-antivirus runs under the service/SYSTEM account.
             SpawnInUserSession(cmdStr);
         }
+    } else {
+        LOG_INFO("AV scan found {} threat(s) — suppressing safe popup.", threats);
     }
 }
 

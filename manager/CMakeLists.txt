@@ -17,6 +17,7 @@ find_package(PostgreSQL REQUIRED)
 # =============================================================================
 set(MANAGER_SOURCES
     src/manager/main.cpp
+    src/manager/config/ManagerConfig.cpp
     src/manager/ca/CertificateAuthority.cpp
     src/manager/db/PostgresClient.cpp
     src/manager/server/ManagerServer.cpp
@@ -29,6 +30,7 @@ set(MANAGER_SOURCES
 )
 
 set(MANAGER_HEADERS
+    src/manager/config/ManagerConfig.h
     src/manager/ca/CertificateAuthority.h
     src/manager/db/PostgresClient.h
     src/manager/server/ManagerServer.h

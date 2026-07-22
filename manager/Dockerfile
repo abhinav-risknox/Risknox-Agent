@@ -47,10 +47,9 @@ WORKDIR /app
 # Copy the built binary
 COPY --from=builder /app/build/ResolutePulseManager .
 
-# Create CA directory (will be mounted as a volume)
-RUN mkdir -p /app/ca
+# Copy default configuration file
+COPY docker/manager_config.json /app/manager_config.json
 
-EXPOSE 1514
-EXPOSE 8080
+EXPOSE 1514 1515 1535 1536 8080
 
-ENTRYPOINT ["./ResolutePulseManager", "--ca-dir", "/app/ca"]
+ENTRYPOINT ["./ResolutePulseManager", "--config", "/app/manager_config.json"]

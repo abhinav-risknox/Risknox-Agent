@@ -240,6 +240,39 @@ bool Agent::initialize(const std::string& configPath) {
             }
         }
         
+        // Initialize MoTwWatcher for instant kernel stream notifications on Downloads
+        {
+            const auto& dlCfg = config.getDownloadScanConfig();
+            if (dlCfg.enabled && config.getAntivirusConfig().enabled) {
+                moTwWatcher_ = std::make_unique<MoTwWatcher>();
+                moTwWatcher_->setScanCallback([this](const std::string& scanPath) {
+                    LOG_INFO("MoTwWatcher: Zone.Identifier written \u2192 instant scan: {}", scanPath);
+                    if (policyManager_) {
+                        nlohmann::json policy;
+                        policy["action"] = "quick_scan";
+                        policy["path"]   = scanPath;
+                        policyManager_->handlePolicyUpdate("antivirus", policy, "");
+                    }
+                });
+
+                std::vector<std::string> watchDirs;
+                std::filesystem::path usersRoot = "C:\\Users";
+                std::error_code ec;
+                for (const auto& entry : std::filesystem::directory_iterator(usersRoot, ec)) {
+                    if (!entry.is_directory(ec)) continue;
+                    std::string name = entry.path().filename().string();
+                    if (name == "Public" || name == "Default" || name == "Default User" || name == "All Users") continue;
+                    std::filesystem::path dlPath = entry.path() / "Downloads";
+                    if (std::filesystem::exists(dlPath, ec)) {
+                        watchDirs.push_back(dlPath.string());
+                    }
+                }
+                if (!watchDirs.empty()) {
+                    moTwWatcher_->start(watchDirs);
+                }
+            }
+        }
+
         // Resolve FIM db_path to ProgramData directory
         std::string fimDbPath = fimCfg.db_path;
         {
@@ -293,10 +326,13 @@ bool Agent::initialize(const std::string& configPath) {
                     };
                     if (endsWith(lowerPath, ".crdownload") ||
                         endsWith(lowerPath, ".partial") ||
-                        endsWith(lowerPath, ".tmp")) {
+                        endsWith(lowerPath, ".tmp") ||
+                        endsWith(lowerPath, ".part") ||
+                        endsWith(lowerPath, ".idm") ||
+                        endsWith(lowerPath, ".opdownload") ||
+                        endsWith(lowerPath, ".download")) {
                         
                         if (fimEvent.changeType == FimChangeType::Created) {
-                            LOG_INFO("Download started: {} \u2014 showing scanning popup", fimEvent.path);
                             std::filesystem::path agentDir = PathUtils::getExecutableDir();
                             std::filesystem::path notifierExe = agentDir / "ThreatNotification.exe";
                             if (std::filesystem::exists(notifierExe)) {
@@ -307,12 +343,45 @@ bool Agent::initialize(const std::string& configPath) {
                                 if (endsWith(lowerBase, ".crdownload")) baseName = baseName.substr(0, baseName.size() - 11);
                                 else if (endsWith(lowerBase, ".partial")) baseName = baseName.substr(0, baseName.size() - 8);
                                 else if (endsWith(lowerBase, ".tmp")) baseName = baseName.substr(0, baseName.size() - 4);
+                                else if (endsWith(lowerBase, ".part")) baseName = baseName.substr(0, baseName.size() - 5);
+                                else if (endsWith(lowerBase, ".idm")) baseName = baseName.substr(0, baseName.size() - 4);
+                                else if (endsWith(lowerBase, ".opdownload")) baseName = baseName.substr(0, baseName.size() - 11);
+                                else if (endsWith(lowerBase, ".download")) baseName = baseName.substr(0, baseName.size() - 9);
 
-                                std::string cmdStr = "\"" + notifierExe.string() + "\""
-                                    " --mode scanning"
-                                    " --file \"" + baseName + "\""
-                                    " --timeout 0";
-                                SpawnInUserSession(cmdStr);
+                                // Skip initial Chrome/Edge placeholders like "Unconfirmed 976457".
+                                // Chrome renames it to "<real_filename>.crdownload" milliseconds later.
+                                std::string checkName = baseName;
+                                std::transform(checkName.begin(), checkName.end(), checkName.begin(), ::tolower);
+                                if (checkName.rfind("unconfirmed ", 0) == 0) {
+                                    LOG_DEBUG("Skipping scanning popup for initial placeholder: {}", baseName);
+                                    return;
+                                }
+
+                                // Deduplication check: only spawn if no popup for this file in last 15s
+                                std::string keyName = baseName;
+                                std::transform(keyName.begin(), keyName.end(), keyName.begin(), ::tolower);
+                                auto now = std::chrono::steady_clock::now();
+                                bool shouldSpawn = false;
+                                {
+                                    std::lock_guard<std::mutex> lock(activeScanningMtx_);
+                                    auto it = activeScanningPopups_.find(keyName);
+                                    if (it == activeScanningPopups_.end() ||
+                                        std::chrono::duration_cast<std::chrono::seconds>(now - it->second).count() > 15) {
+                                        activeScanningPopups_[keyName] = now;
+                                        shouldSpawn = true;
+                                    }
+                                }
+
+                                if (shouldSpawn) {
+                                    LOG_INFO("Download started: {} \u2014 showing scanning popup ({})", fimEvent.path, baseName);
+                                    std::string cmdStr = "\"" + notifierExe.string() + "\""
+                                        " --mode scanning"
+                                        " --file \"" + baseName + "\""
+                                        " --timeout 0";
+                                    SpawnInUserSession(cmdStr);
+                                } else {
+                                    LOG_DEBUG("Download scanning popup already active for '{}' \u2014 skipping duplicate", baseName);
+                                }
                             }
                         }
                         return;
@@ -321,6 +390,11 @@ bool Agent::initialize(const std::string& configPath) {
                     bool inDownloads = lowerPath.find("\\downloads\\") != std::string::npos;
 
                     if (inDownloads) {
+                        // Register with MoTwWatcher so if MotW ADS is written, scan triggers instantly
+                        if (moTwWatcher_) {
+                            moTwWatcher_->addPending(fimEvent.path);
+                        }
+
                         // Extension filter (empty list = scan all)
                         bool extOk = dlCfg.scan_extensions.empty();
                         if (!extOk) {
@@ -335,40 +409,51 @@ bool Agent::initialize(const std::string& configPath) {
                         }
 
                         if (extOk) {
-                            // Browsers rename .crdownload to the final file, which triggers the FIM event instantly,
-                            // but they take an extra few milliseconds to append the :Zone.Identifier stream.
-                            // We must debounce before checking MOTW to avoid a race condition.
                             std::string path = fimEvent.path;
                             bool motwOnly = dlCfg.motw_only;
-                            int debounce = dlCfg.debounce_seconds;
 
-                            std::thread([this, path, motwOnly, debounce]() {
-                                if (debounce > 0) {
-                                    std::this_thread::sleep_for(std::chrono::seconds(debounce));
+                            // Smart File Lock Check (replaces arbitrary 5-second sleep)
+                            std::thread([this, path, motwOnly]() {
+                                // Poll CreateFileA every 50ms up to 1.5s max for file write handle release
+                                bool unlocked = false;
+                                for (int ms = 0; ms < 1500; ms += 50) {
+                                    if (!std::filesystem::exists(path)) return;
+                                    HANDLE hFile = CreateFileA(path.c_str(), GENERIC_READ, FILE_SHARE_READ,
+                                                               nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+                                    if (hFile != INVALID_HANDLE_VALUE) {
+                                        CloseHandle(hFile);
+                                        unlocked = true;
+                                        break;
+                                    }
+                                    std::this_thread::sleep_for(std::chrono::milliseconds(50));
                                 }
 
-                                // Skip files that no longer exist (race with browser rename)
-                                if (!std::filesystem::exists(path)) {
-                                    LOG_DEBUG("Skipping vanished file: {}", path);
-                                    return;
-                                }
+                                if (!std::filesystem::exists(path)) return;
 
-                                // MotW check (after debounce gives browser time to write Zone.Identifier)
-                                if (motwOnly) {
-                                    auto motw = checkMotw(path);
-                                    if (!motw.hasMotw) {
-                                        LOG_INFO("Skipping (no MotW): {}", path);
+                                // MotW check
+                                auto motw = checkMotw(path);
+                                if (motwOnly && !motw.hasMotw) {
+                                    // Smart fallback for non-MotW downloads (CLI downloads, 7zip extractions, etc.)
+                                    std::string ext = std::filesystem::path(path).extension().string();
+                                    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                                    bool isExecOrArchive = (ext == ".exe" || ext == ".msi" || ext == ".zip" ||
+                                                            ext == ".rar" || ext == ".7z"  || ext == ".iso" ||
+                                                            ext == ".bat" || ext == ".ps1" || ext == ".vbs" ||
+                                                            ext == ".cmd" || ext == ".dll" || ext == ".sys" ||
+                                                            ext == ".scr" || ext == ".com");
+                                    if (!isExecOrArchive) {
+                                        LOG_DEBUG("Download scan: skipping non-exec file without MotW: {}", path);
                                         return;
                                     }
-                                    LOG_INFO("MotW confirmed (Zone {}): {}", motw.zoneId, path);
+                                    LOG_INFO("Download scan: non-MotW executable/archive detected: {}", path);
                                 }
 
-                                LOG_INFO("Download detected, requesting scan: {}", path);
+                                LOG_INFO("Download detected (lock released={}), requesting scan: {}", unlocked, path);
                                 if (policyManager_) {
                                     nlohmann::json policy;
                                     policy["action"] = "quick_scan";
                                     policy["path"]   = path;
-                                    policyManager_->handlePolicyUpdate("antivirus", policy,"");
+                                    policyManager_->handlePolicyUpdate("antivirus", policy, "");
                                 }
                             }).detach();
                         }
@@ -888,6 +973,9 @@ int Agent::run() {
     if (fimMonitor_) {
         fimMonitor_->stop();
     }
+    if (moTwWatcher_) {
+        moTwWatcher_->stop();
+    }
     collector_->stop();
     batchSender_->stop();
     
@@ -907,6 +995,26 @@ int Agent::run() {
 
 void Agent::stop() {
     stopRequested_ = true;
+
+    // Immediately kill worker subprocesses so long-running scans/updates don't delay shutdown
+    if (workerManager_) {
+        workerManager_->stopAll();
+    }
+
+    // Abort management sender network connection to unblock any select/read calls
+    if (managementSender_) {
+        auto* tlsSender = dynamic_cast<TlsSender*>(managementSender_.get());
+        if (tlsSender) {
+            tlsSender->disconnect();
+        }
+    }
+
+    // Immediately abort the batch sender's send/retry loops so shutdown
+    // doesn't block for ~20s waiting for failed network retries to exhaust.
+    // The full batchSender_->stop() (thread join) still happens in run() teardown.
+    if (batchSender_) {
+        batchSender_->stop();
+    }
 
     // Stop USB monitor
     if (usbMonitor_) {

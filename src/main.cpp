@@ -12,6 +12,9 @@ using namespace ResolutePulse;
 // Global agent pointer for signal handler
 static Agent* g_agent = nullptr;
 
+// One-shot guard — SCM can re-send STOP/SHUTDOWN multiple times during slow shutdown
+static std::atomic<bool> g_shutdownOnce{false};
+
 // Console Ctrl handler
 BOOL WINAPI consoleCtrlHandler(DWORD ctrlType) {
     switch (ctrlType) {
@@ -19,9 +22,11 @@ BOOL WINAPI consoleCtrlHandler(DWORD ctrlType) {
         case CTRL_BREAK_EVENT:
         case CTRL_CLOSE_EVENT:
         case CTRL_SHUTDOWN_EVENT:
-            std::cout << "\nShutdown signal received..." << std::endl;
-            if (g_agent) {
-                g_agent->stop();
+            if (!g_shutdownOnce.exchange(true)) {
+                std::cout << "\nShutdown signal received..." << std::endl;
+                if (g_agent) {
+                    g_agent->stop();
+                }
             }
             return TRUE;
     }

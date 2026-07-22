@@ -231,6 +231,7 @@ if(EXISTS "${LIBPQ_DLL}" AND LIBPQ_INCLUDE_DIR
    AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/manager/ca/CertificateAuthority.cpp")
     set(MANAGER_SOURCES
         src/manager/main.cpp
+        src/manager/config/ManagerConfig.cpp
         src/manager/ca/CertificateAuthority.cpp
         src/manager/db/PostgresClient.cpp
         src/manager/server/ManagerServer.cpp
@@ -243,6 +244,7 @@ if(EXISTS "${LIBPQ_DLL}" AND LIBPQ_INCLUDE_DIR
     )
 
     set(MANAGER_HEADERS
+        src/manager/config/ManagerConfig.h
         src/manager/ca/CertificateAuthority.h
         src/manager/db/PostgresClient.h
         src/manager/server/ManagerServer.h
@@ -347,6 +349,25 @@ target_compile_definitions(test_postgres_client PRIVATE
 target_link_libraries(test_postgres_client PRIVATE
     ws2_32
     advapi32
+)
+
+# =============================================================================
+# Test: Manager Config (Unit - port hierarchy & configuration loading)
+# =============================================================================
+add_executable(test_manager_config
+    tests/test_manager_config.cpp
+    src/manager/config/ManagerConfig.cpp
+    src/utils/Logger.cpp
+)
+
+target_include_directories(test_manager_config PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
+)
+
+target_compile_definitions(test_manager_config PRIVATE
+    SPDLOG_HEADER_ONLY
+    FMT_HEADER_ONLY
 )
 
 # =============================================================================
@@ -615,4 +636,14 @@ target_compile_definitions(rp-antivirus PRIVATE ${WORKER_COMPILE_DEFS})
 target_link_libraries(rp-antivirus PRIVATE ws2_32 advapi32 shell32 wtsapi32 userenv)
 install(TARGETS rp-antivirus DESTINATION bin)
 strip_target(rp-antivirus)
+
+# ── ThreatNotification.exe ────────────────────────────────────────────────────
+# Professional GDI+ dark popup — enterprise security aesthetic
+add_executable(ThreatNotification WIN32 src/notification/ThreatNotificationNative/main.cpp)
+target_include_directories(ThreatNotification PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(ThreatNotification PRIVATE
+    user32 gdi32 gdiplus dwmapi shell32 winmm
+)
+install(TARGETS ThreatNotification DESTINATION bin)
+strip_target(ThreatNotification)
 

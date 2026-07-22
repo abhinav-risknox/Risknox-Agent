@@ -46,9 +46,11 @@ namespace ResolutePulse
         // @param port        - Port to listen on (default 1514)
         // @param ca          - Certificate Authority for issuing certs
         // @param db          - PostgreSQL client for persistence
+        // @param commandPort - Command ingest port (default 1515)
         bool initialize(int port,
                         CertificateAuthority &ca,
-                        PostgresClient &db);
+                        PostgresClient &db,
+                        int commandPort = 1515);
 
         // Start the server (blocks in accept loop)
         bool start();
@@ -127,6 +129,7 @@ namespace ResolutePulse
                                    const nlohmann::json &params);
 
         int port_ = 1514;
+        int commandPort_ = 1515;
         CertificateAuthority *ca_ = nullptr;
         PostgresClient *db_ = nullptr;
         SSL_CTX *sslCtx_ = nullptr;

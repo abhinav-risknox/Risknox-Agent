@@ -50,16 +50,18 @@ namespace ResolutePulse
 
     bool ManagerServer::initialize(int port,
                                    CertificateAuthority &ca,
-                                   PostgresClient &db)
+                                   PostgresClient &db,
+                                   int commandPort)
     {
         port_ = port;
+        commandPort_ = commandPort;
         ca_ = &ca;
         db_ = &db;
 
         // Create the geo worker (started later in start())
         geoWorker_ = std::make_unique<GeoWorker>(db);
 
-        LOG_INFO("Initializing Manager Server on port {}", port_);
+        LOG_INFO("Initializing Manager Server on port {} (command port {})", port_, commandPort_);
 
 #ifdef _WIN32
         WSADATA wsaData;
@@ -607,7 +609,7 @@ namespace ResolutePulse
     }
 
     // ─────────────────────────────────────────────────────────────
-    // Command ingest socket (127.0.0.1:1515)
+    // Command ingest socket (127.0.0.1:commandPort_)
     // ─────────────────────────────────────────────────────────────
 
     void ManagerServer::commandIngestLoop()
@@ -626,18 +628,18 @@ namespace ResolutePulse
         struct sockaddr_in addr = {};
         addr.sin_family = AF_INET;
         addr.sin_addr.s_addr = inet_addr("127.0.0.1"); // loopback ONLY
-        addr.sin_port = htons(1515);
+        addr.sin_port = htons(static_cast<uint16_t>(commandPort_));
 
         if (bind(commandSocket_, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)) == SOCKET_ERROR)
         {
-            LOG_ERROR("Failed to bind command ingest socket on 127.0.0.1:1515");
+            LOG_ERROR("Failed to bind command ingest socket on 127.0.0.1:{}", commandPort_);
             closesocket(commandSocket_);
             commandSocket_ = INVALID_SOCKET;
             return;
         }
 
         listen(commandSocket_, 8);
-        LOG_INFO("Command ingest socket listening on 127.0.0.1:1515");
+        LOG_INFO("Command ingest socket listening on 127.0.0.1:{}", commandPort_);
 
         while (running_.load())
         {

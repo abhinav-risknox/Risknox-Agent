@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  risknox-all-in-one:
+    build:
+      context: .
+      dockerfile: Dockerfile.all-in-one
+    image: abhinavrisknox/fssi-all-in-one:latest
+    container_name: risknox-single-container
+    environment:
+      - OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=Opensearch@123
+    ports:
+      - "80:80"        # Dashboard UI & Nginx Web Server
+      - "1535:1535"    # Risknox Manager mTLS Agent Port
+      - "1536:1536"    # Risknox Manager Command Loopback Port
+      - "8080:8080"    # Risknox Manager REST API
+      - "5433:5432"    # PostgreSQL 16 (Exposed externally on 5433)
+      - "5170:5170"    # Fluent Bit Syslog / Agent Ingestion Port
+      - "5601:5601"    # OpenSearch Dashboards UI
+      - "9200:9200"    # OpenSearch REST API
+    volumes:
+      - risknox-data:/var/lib/risknox
+      - manager-ca-data:/app/ca
+    restart: unless-stopped
+
+volumes:
+  risknox-data:
+  manager-ca-data:

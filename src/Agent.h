@@ -69,6 +69,10 @@ private:
     std::unique_ptr<UsbMonitor>     usbMonitor_;
     std::unique_ptr<MoTwWatcher>    moTwWatcher_;
     
+    // Deduplication tracking for scanning notifications (prevents duplicate popups per download)
+    std::unordered_map<std::string, std::chrono::steady_clock::time_point> activeScanningPopups_;
+    std::mutex activeScanningMtx_;
+    
     // Registration components
     std::unique_ptr<CertificateStore> certStore_;
     

@@ -1,0 +1,128 @@
+# =============================================================================
+# Risknox All-In-One (Single Container Architecture)
+# Consolidates: Manager, Postgres, OpenSearch, Data Prepper, Fluent Bit,
+#               OpenSearch Dashboards, Nginx (Dashboard), Sigma Loader
+# =============================================================================
+
+# ── Stage 1: Build Manager (C++) ─────────────────────────────────────────────
+FROM ubuntu:22.04 AS manager-builder
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    g++ cmake make libssl-dev libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY manager/CMakeLists.txt ./CMakeLists.txt
+COPY src/manager/          ./src/manager/
+COPY src/utils/            ./src/utils/
+COPY src/common/           ./src/common/
+COPY thirdparty/spdlog/    ./thirdparty/spdlog/
+COPY thirdparty/nlohmann/  ./thirdparty/nlohmann/
+COPY thirdparty/httplib/   ./thirdparty/httplib/
+
+RUN cmake -B build -DCMAKE_BUILD_TYPE=Release \
+    && cmake --build build --parallel $(nproc)
+
+# ── Stage 2: Build Dashboard (Node.js) ───────────────────────────────────────
+FROM node:20-alpine AS dashboard-builder
+WORKDIR /app
+COPY manager/dashboard/package*.json ./
+RUN npm install --legacy-peer-deps
+COPY manager/dashboard/ ./
+RUN npm run build
+
+# ── Stage 3: Runtime Base (Ubuntu 22.04) ────────────────────────────────────
+FROM ubuntu:22.04 AS runtime
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install core system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    gnupg \
+    lsb-release \
+    ca-certificates \
+    supervisor \
+    nginx \
+    openjdk-17-jre-headless \
+    python3 \
+    python3-pip \
+    libssl3 \
+    libpq5 \
+    sudo \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install PostgreSQL 16
+RUN echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - \
+    && apt-get update && apt-get install -y postgresql-16 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create opensearch system user
+RUN useradd -ms /bin/bash opensearch
+
+# Install OpenSearch
+ENV OPENSEARCH_VERSION=2.13.0
+RUN curl -fsSL https://artifacts.opensearch.org/releases/bundle/opensearch/${OPENSEARCH_VERSION}/opensearch-${OPENSEARCH_VERSION}-linux-x64.tar.gz -o /tmp/opensearch.tar.gz \
+    && mkdir -p /usr/share/opensearch \
+    && tar -xzf /tmp/opensearch.tar.gz -C /usr/share/opensearch --strip-components=1 \
+    && rm /tmp/opensearch.tar.gz \
+    && chown -R opensearch:opensearch /usr/share/opensearch
+
+# Disable security plugin by default for single-node setup
+RUN echo "plugins.security.disabled: true" >> /usr/share/opensearch/config/opensearch.yml \
+    && echo "discovery.type: single-node" >> /usr/share/opensearch/config/opensearch.yml
+
+# Install OpenSearch Dashboards
+RUN curl -fsSL https://artifacts.opensearch.org/releases/bundle/opensearch-dashboards/${OPENSEARCH_VERSION}/opensearch-dashboards-${OPENSEARCH_VERSION}-linux-x64.tar.gz -o /tmp/opensearch-dashboards.tar.gz \
+    && mkdir -p /usr/share/opensearch-dashboards \
+    && tar -xzf /tmp/opensearch-dashboards.tar.gz -C /usr/share/opensearch-dashboards --strip-components=1 \
+    && rm /tmp/opensearch-dashboards.tar.gz \
+    && echo "opensearch.hosts: [\"http://127.0.0.1:9200\"]" >> /usr/share/opensearch-dashboards/config/opensearch_dashboards.yml \
+    && echo "opensearch.security.disabled: true" >> /usr/share/opensearch-dashboards/config/opensearch_dashboards.yml
+
+# Install Data Prepper
+ENV DATA_PREPPER_VERSION=2.8.0
+RUN curl -fsSL https://artifacts.opensearch.org/data-prepper/${DATA_PREPPER_VERSION}/opensearch-data-prepper-${DATA_PREPPER_VERSION}-linux-x64.tar.gz -o /tmp/data-prepper.tar.gz \
+    && mkdir -p /usr/share/data-prepper \
+    && tar -xzf /tmp/data-prepper.tar.gz -C /usr/share/data-prepper --strip-components=1 \
+    && rm /tmp/data-prepper.tar.gz
+
+# Install Fluent Bit
+RUN curl -fsSL https://packages.fluentbit.io/fluentbit.key | gpg --dearmor -o /usr/share/keyrings/fluentbit-keyring.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/fluentbit-keyring.gpg] https://packages.fluentbit.io/ubuntu/jammy jammy main" > /etc/apt/sources.list.d/fluentbit.list \
+    && apt-get update && apt-get install -y fluent-bit \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy Manager binary & configuration
+COPY --from=manager-builder /app/build/ResolutePulseManager /app/ResolutePulseManager
+COPY docker/manager_config.json /app/manager_config.json
+RUN mkdir -p /app/ca
+
+# Copy DB migration schema
+COPY db/migrations/schema.sql /app/db/schema.sql
+
+# Copy Dashboard static files & Nginx config
+COPY --from=dashboard-builder /app/dist /usr/share/nginx/html
+COPY docker/nginx-aio.conf /etc/nginx/conf.d/default.conf
+
+# Copy Data Prepper & Fluent Bit configurations
+COPY docker/pipelines.aio.yaml /usr/share/data-prepper/pipelines/pipelines.yaml
+COPY data-prepper/data-prepper-config.yaml /usr/share/data-prepper/config/data-prepper-config.yaml
+COPY docker/fluent-bit.aio.conf /etc/fluent-bit/fluent-bit.conf
+
+# Copy Sigma provisioner scripts
+COPY sigma-loader/scripts/ /etc/sigma/
+RUN pip3 install --no-cache-dir requests opensearch-py
+
+# Copy Supervisord & Entrypoint
+COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY docker/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh /etc/sigma/provision.sh
+
+# Open ports
+EXPOSE 80 1535 1536 8080 5432 5170 5601 9200
+
+ENTRYPOINT ["/app/entrypoint.sh"]

@@ -1,0 +1,41 @@
+# Data Prepper Pipeline: Single Container (All-In-One)
+
+rp-events-pipeline:
+  source:
+    http:
+      port: 2021
+      path: "/log/ingest"
+      authentication:
+        unauthenticated:
+
+  processor:
+    - windows_xml_parser:
+        source_field: "data"
+        drop_raw_xml: true
+
+  route:
+    - fim_route: '/channel == "fim" or /channel == "FIM"'
+    - other_route: '/channel != "fim" and /channel != "FIM"'
+
+  sink:
+    # FIM Events → dedicated index
+    - opensearch:
+        hosts: [ "http://127.0.0.1:9200" ]
+        insecure: true
+        username: "${OPENSEARCH_USERNAME}"
+        password: "${OPENSEARCH_PASSWORD}"
+        index: "rp-events-fim"
+        index_type: "management_disabled"
+        routes:
+          - fim_route
+
+    # All other Windows Events → standard index
+    - opensearch:
+        hosts: [ "http://127.0.0.1:9200" ]
+        insecure: true
+        username: "${OPENSEARCH_USERNAME}"
+        password: "${OPENSEARCH_PASSWORD}"
+        index: "rp-events"
+        index_type: "management_disabled"
+        routes:
+          - other_route

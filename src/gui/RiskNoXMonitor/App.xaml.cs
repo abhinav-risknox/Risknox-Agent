@@ -18,6 +18,7 @@ public partial class App : Application
             MessageBox.Show(args.Exception.ToString(), "Risknox Monitor Error", MessageBoxButton.OK, MessageBoxImage.Error);
             args.Handled = true;
         };
+
         base.OnStartup(e);
     }
 }
